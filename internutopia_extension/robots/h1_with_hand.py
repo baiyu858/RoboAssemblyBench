@@ -38,7 +38,10 @@ class H1WithHandRobot(BaseRobot):
             scale=self._robot_scale,
         )
 
-        self.articulation.set_enabled_self_collisions(False)
+        try:
+            self.articulation.set_enabled_self_collisions(False)
+        except Exception as exc:
+            log.warning(f'failed to set self collisions for {config.name}: {exc}')
 
     def post_reset(self):
         super().post_reset()

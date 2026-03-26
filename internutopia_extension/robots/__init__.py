@@ -5,6 +5,7 @@ from internutopia_extension.robots import (
     gr1,
     h1,
     h1_with_hand,
+    humanoidbench_h1,
     jetbot,
     mocap_controlled_franka,
 )
