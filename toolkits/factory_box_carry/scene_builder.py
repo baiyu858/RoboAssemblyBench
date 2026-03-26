@@ -8,10 +8,12 @@ from internutopia.macros import gm
 from internutopia_extension.configs.objects import DynamicCubeCfg, VisualCubeCfg
 from internutopia_extension.configs.robots.humanoidbench_h1 import (
     HumanoidBenchH1RobotCfg,
+    humanoidbench_arm_pose_cfg,
     humanoidbench_reach_single_cfg,
     humanoidbench_recover_cfg,
     humanoidbench_rotate_cfg,
     humanoidbench_walk_to_cfg,
+    humanoidbench_wholebody_pose_cfg,
 )
 from internutopia_extension.configs.tasks.factory_box_carry_task import (
     FactoryBoxCarryTaskCfg,
@@ -28,12 +30,14 @@ def build_humanoidbench_carrier(
     name: str,
     prim_path: str,
     position,
-    enable_reach: bool = True,
+    enable_reach: bool = False,
 ) -> HumanoidBenchH1RobotCfg:
     controllers: List = [
         humanoidbench_walk_to_cfg.update(),
         humanoidbench_rotate_cfg.update(),
         humanoidbench_recover_cfg.update(),
+        humanoidbench_arm_pose_cfg.update(),
+        humanoidbench_wholebody_pose_cfg.update(),
     ]
     if enable_reach and _humanoidbench_reach_available():
         controllers.append(humanoidbench_reach_single_cfg.update())
@@ -50,6 +54,11 @@ def build_humanoidbench_carrier(
 def build_factory_box_carry_episode(seed: int, episode_idx: int = 0) -> FactoryBoxCarryTaskCfg:
     rng = random.Random(seed)
 
+    formation_half_width = 0.34
+    pickup_distance = 0.86
+    grasp_distance = 0.60
+    carry_forward_offset = 0.62
+
     box_scale = (0.55, 0.35, 0.30)
     box_position = (
         rng.uniform(2.2, 2.8),
@@ -62,8 +71,8 @@ def build_factory_box_carry_episode(seed: int, episode_idx: int = 0) -> FactoryB
         box_scale[2] * 0.5,
     )
 
-    left_start = (box_position[0] - 1.1, box_position[1] - 0.9, 1.05)
-    right_start = (box_position[0] - 1.1, box_position[1] + 0.9, 1.05)
+    left_start = (box_position[0] - 1.45, box_position[1] - formation_half_width, 1.05)
+    right_start = (box_position[0] - 1.45, box_position[1] + formation_half_width, 1.05)
 
     robots = [
         build_humanoidbench_carrier(
@@ -119,9 +128,17 @@ def build_factory_box_carry_episode(seed: int, episode_idx: int = 0) -> FactoryB
         box_name='carry_box',
         robot_names=('carrier_left', 'carrier_right'),
         goal_position=goal_position,
-        standoff_distance=0.72,
-        attach_distance=0.38,
+        standoff_distance=pickup_distance,
+        attach_distance=grasp_distance,
+        formation_half_width=formation_half_width,
+        carry_forward_offset=carry_forward_offset,
+        squat_carry_height=0.74,
         carry_height=1.02,
-        goal_tolerance=0.32,
+        goal_tolerance=0.24,
+        box_goal_tolerance=0.42,
+        grasp_settle_steps=20,
+        squat_steps=28,
+        lift_steps=30,
+        place_steps=16,
         episode_idx=episode_idx,
     )

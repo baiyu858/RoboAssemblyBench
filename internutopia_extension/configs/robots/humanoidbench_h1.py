@@ -6,6 +6,8 @@ from internutopia_extension.configs.robots.h1_with_hand import (
     recover_cfg,
     right_arm_ik_controller_cfg,
     rotate_cfg,
+    upper_body_pose_controller_cfg,
+    whole_body_pose_controller_cfg,
 )
 
 # Reuse Isaac Sim compatible H1-with-hand embodiment, but expose HumanoidBench-style
@@ -14,6 +16,8 @@ humanoidbench_walk_to_cfg = move_to_point_cfg.update(name='humanoidbench_walk_to
 humanoidbench_rotate_cfg = rotate_cfg.update(name='humanoidbench_rotate')
 humanoidbench_reach_single_cfg = right_arm_ik_controller_cfg.update(name='humanoidbench_reach_single')
 humanoidbench_recover_cfg = recover_cfg.update(name='humanoidbench_recover')
+humanoidbench_arm_pose_cfg = upper_body_pose_controller_cfg.update(name='humanoidbench_arm_pose')
+humanoidbench_wholebody_pose_cfg = whole_body_pose_controller_cfg.update(name='humanoidbench_wholebody_pose')
 
 
 class HumanoidBenchH1RobotCfg(H1WithHandRobotCfg):

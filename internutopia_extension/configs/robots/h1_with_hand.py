@@ -103,6 +103,41 @@ right_arm_joint_controller_cfg = JointControllerCfg(
     ],
 )
 
+upper_body_pose_controller_cfg = JointControllerCfg(
+    name='upper_body_pose_controller',
+    joint_names=[
+        'left_shoulder_pitch_joint',
+        'right_shoulder_pitch_joint',
+        'left_shoulder_roll_joint',
+        'right_shoulder_roll_joint',
+        'left_shoulder_yaw_joint',
+        'right_shoulder_yaw_joint',
+        'left_elbow_joint',
+        'right_elbow_joint',
+    ],
+)
+
+whole_body_pose_controller_cfg = JointControllerCfg(
+    name='whole_body_pose_controller',
+    joint_names=[
+        'torso_joint',
+        'left_hip_pitch_joint',
+        'right_hip_pitch_joint',
+        'left_knee_joint',
+        'right_knee_joint',
+        'left_ankle_joint',
+        'right_ankle_joint',
+        'left_shoulder_pitch_joint',
+        'right_shoulder_pitch_joint',
+        'left_shoulder_roll_joint',
+        'right_shoulder_roll_joint',
+        'left_shoulder_yaw_joint',
+        'right_shoulder_yaw_joint',
+        'left_elbow_joint',
+        'right_elbow_joint',
+    ],
+)
+
 right_arm_ik_controller_cfg = InverseKinematicsControllerCfg(
     name='right_arm_ik_controller',
     robot_description_path=gm.ASSET_PATH + '/robots/h1_with_hand/right_arm_descriptor.yaml',

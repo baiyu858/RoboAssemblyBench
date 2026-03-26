@@ -6,6 +6,7 @@ import numpy as np
 
 from internutopia.core.scene.scene import IScene
 from internutopia.core.task import BaseTask
+from internutopia.core.util.physics import activate_collider, deactivate_collider
 from internutopia_extension.configs.tasks.factory_box_carry_task import (
     FactoryBoxCarryTaskCfg,
 )
@@ -27,9 +28,12 @@ class FactoryBoxCarryTask(BaseTask):
         self.max_steps = config.max_steps
         self.phase = 'approach_pickup'
         self.phase_history = [self.phase]
+        self.phase_step_counter = 0
         self.success = False
         self.attached = False
         self._box = None
+        self._box_prim = None
+        self._box_collision_enabled = True
         self._box_half_height = 0.15
 
     @property
@@ -40,14 +44,28 @@ class FactoryBoxCarryTask(BaseTask):
         if phase != self.phase:
             self.phase = phase
             self.phase_history.append(phase)
+            self.phase_step_counter = 0
 
     def _resolve_box(self):
         if self._box is not None:
             return
+        from isaacsim.core.utils.prims import get_prim_at_path
+
         box_obj = self.objects[self.cfg.box_name]
         self._box = self._scene.get(box_obj.name)
+        self._box_prim = get_prim_at_path(self._box.unwrap().prim_path)
         if box_obj.config.scale is not None and len(box_obj.config.scale) >= 3:
             self._box_half_height = float(box_obj.config.scale[2]) * 0.5
+
+    def _set_box_collision(self, enabled: bool):
+        self._resolve_box()
+        if self._box_prim is None or self._box_collision_enabled == enabled:
+            return
+        if enabled:
+            activate_collider(self._box_prim)
+        else:
+            deactivate_collider(self._box_prim)
+        self._box_collision_enabled = enabled
 
     def _get_box_pose(self):
         self._resolve_box()
@@ -57,23 +75,32 @@ class FactoryBoxCarryTask(BaseTask):
         left_name, right_name = self.cfg.robot_names
         return self.robots[left_name], self.robots[right_name]
 
-    def _compute_standoff_targets(self, center: np.ndarray):
-        left_target = np.array([center[0], center[1] - self.cfg.standoff_distance, 0.0], dtype=float)
-        right_target = np.array([center[0], center[1] + self.cfg.standoff_distance, 0.0], dtype=float)
+    def _compute_team_targets(self, center: np.ndarray, rear_offset: float):
+        left_target = np.array(
+            [center[0] - rear_offset, center[1] - self.cfg.formation_half_width, 0.0],
+            dtype=float,
+        )
+        right_target = np.array(
+            [center[0] - rear_offset, center[1] + self.cfg.formation_half_width, 0.0],
+            dtype=float,
+        )
         return left_target, right_target
 
     def get_pickup_targets(self):
         box_position, _ = self._get_box_pose()
-        return self._compute_standoff_targets(np.array(box_position))
+        return self._compute_team_targets(np.array(box_position), self.cfg.standoff_distance)
+
+    def get_grasp_targets(self):
+        box_position, _ = self._get_box_pose()
+        return self._compute_team_targets(np.array(box_position), self.cfg.attach_distance)
 
     def get_drop_targets(self):
-        return self._compute_standoff_targets(np.array(self.cfg.goal_position))
+        return self._compute_team_targets(np.array(self.cfg.goal_position), self.cfg.carry_forward_offset)
 
-    def get_reach_targets(self):
-        box_position, _ = self._get_box_pose()
-        left_target = np.array([box_position[0], box_position[1] - self.cfg.attach_distance, self.cfg.carry_height])
-        right_target = np.array([box_position[0], box_position[1] + self.cfg.attach_distance, self.cfg.carry_height])
-        return left_target, right_target
+    def _phase_alpha(self, duration_steps: int) -> float:
+        if duration_steps <= 0:
+            return 1.0
+        return min(float(self.phase_step_counter + 1) / float(duration_steps), 1.0)
 
     def _xy_distance(self, a: np.ndarray, b: np.ndarray) -> float:
         return float(np.linalg.norm(np.array(a[:2]) - np.array(b[:2])))
@@ -87,20 +114,27 @@ class FactoryBoxCarryTask(BaseTask):
             and self._xy_distance(right_position, targets[1]) < self.cfg.goal_tolerance
         )
 
-    def _lift_box_with_team(self):
+    def _box_reached_goal(self) -> bool:
+        box_position, _ = self._get_box_pose()
+        return self._xy_distance(box_position, self.cfg.goal_position) < self.cfg.box_goal_tolerance
+
+    def _get_team_box_pose(self, box_height: float):
         left_robot, right_robot = self._get_robot_pair()
         left_position, _ = left_robot.get_pose()
         right_position, _ = right_robot.get_pose()
 
         midpoint = (np.array(left_position) + np.array(right_position)) * 0.5
-        box_position = np.array(
+        return np.array(
             [
-                midpoint[0],
+                midpoint[0] + self.cfg.carry_forward_offset,
                 midpoint[1],
-                max(self.cfg.carry_height, self._box_half_height + 0.05),
+                max(box_height, self._box_half_height),
             ],
             dtype=float,
         )
+
+    def _set_box_pose(self, box_height: float):
+        box_position = self._get_team_box_pose(box_height)
         self._box.set_linear_velocity(np.zeros(3))
         self._box.set_pose(box_position, np.array([1.0, 0.0, 0.0, 0.0]))
 
@@ -110,13 +144,35 @@ class FactoryBoxCarryTask(BaseTask):
         if self.success:
             return
 
-        if self.phase == 'approach_pickup' and self._robots_reached(self.get_pickup_targets()):
+        if self.phase == 'approach_pickup':
+            if self._robots_reached(self.get_pickup_targets()):
+                self._set_phase('grasp_setup')
+        elif self.phase == 'grasp_setup':
+            if self._robots_reached(self.get_grasp_targets()) and self.phase_step_counter >= self.cfg.grasp_settle_steps:
+                self._set_phase('squat_grasp')
+        elif self.phase == 'squat_grasp':
+            if self.phase_step_counter >= self.cfg.squat_steps:
+                self.attached = True
+                self._set_box_collision(False)
+                self._set_phase('stand_lift')
+        elif self.phase == 'stand_lift':
             self.attached = True
-            self._set_phase('co_carry')
-
-        if self.attached:
-            self._lift_box_with_team()
-            if self._robots_reached(self.get_drop_targets()):
+            lift_alpha = self._phase_alpha(self.cfg.lift_steps)
+            current_height = self.cfg.squat_carry_height + lift_alpha * (self.cfg.carry_height - self.cfg.squat_carry_height)
+            self._set_box_pose(current_height)
+            if lift_alpha >= 1.0:
+                self._set_phase('co_carry')
+        elif self.phase == 'co_carry':
+            self.attached = True
+            self._set_box_pose(self.cfg.carry_height)
+            if self._robots_reached(self.get_drop_targets()) or self._box_reached_goal():
+                self._set_phase('lower_place')
+        elif self.phase == 'lower_place':
+            self.attached = True
+            place_alpha = self._phase_alpha(self.cfg.place_steps)
+            current_height = self.cfg.carry_height + place_alpha * (self._box_half_height - self.cfg.carry_height)
+            self._set_box_pose(current_height)
+            if place_alpha >= 1.0:
                 placed_position = np.array(
                     [self.cfg.goal_position[0], self.cfg.goal_position[1], self._box_half_height],
                     dtype=float,
@@ -124,21 +180,31 @@ class FactoryBoxCarryTask(BaseTask):
                 self._box.set_linear_velocity(np.zeros(3))
                 self._box.set_pose(placed_position, np.array([1.0, 0.0, 0.0, 0.0]))
                 self.attached = False
+                self._set_box_collision(True)
                 self.success = True
                 self._set_phase('complete')
+
+        self.phase_step_counter += 1
 
     def get_observations(self):
         self._update_task_state()
         obs: OrderedDict = super().get_observations()
         box_position, _ = self._get_box_pose()
         pickup_targets = self.get_pickup_targets()
+        grasp_targets = self.get_grasp_targets()
         drop_targets = self.get_drop_targets()
 
         for robot_index, robot_name in enumerate(self.cfg.robot_names):
             if robot_name not in obs:
                 continue
-            target = pickup_targets[robot_index] if self.phase == 'approach_pickup' else drop_targets[robot_index]
+            if self.phase == 'approach_pickup':
+                target = pickup_targets[robot_index]
+            elif self.phase in {'grasp_setup', 'squat_grasp', 'stand_lift'}:
+                target = grasp_targets[robot_index]
+            else:
+                target = drop_targets[robot_index]
             obs[robot_name]['task_phase'] = self.phase
+            obs[robot_name]['phase_step'] = self.phase_step_counter
             obs[robot_name]['box_position'] = np.array(box_position)
             obs[robot_name]['goal_position'] = np.array(self.cfg.goal_position)
             obs[robot_name]['task_target'] = np.array(target)
