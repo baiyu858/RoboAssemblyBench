@@ -36,6 +36,10 @@ class IsaacsimCamera(ICamera):
         position: Optional[Tuple[float, float, float]] = None,
         translation: Optional[Tuple[float, float, float]] = None,
         orientation: Optional[Tuple[float, float, float, float]] = None,
+        focal_length: Optional[float] = None,
+        horizontal_aperture: Optional[float] = None,
+        vertical_aperture: Optional[float] = None,
+        clipping_range: Optional[Tuple[float, float]] = None,
     ):
         self.name = name
         self.rgba = rgba
@@ -51,7 +55,52 @@ class IsaacsimCamera(ICamera):
             self.prim.set_world_pose(position, orientation)
         if translation is not None:
             self.prim.set_local_pose(translation, orientation)
+        self._apply_camera_intrinsics(
+            prim_path=prim_path,
+            focal_length=focal_length,
+            horizontal_aperture=horizontal_aperture,
+            vertical_aperture=vertical_aperture,
+            clipping_range=clipping_range,
+        )
         self.init_rp_annotators()
+
+    @staticmethod
+    def _apply_camera_intrinsics(
+        *,
+        prim_path: str,
+        focal_length: Optional[float] = None,
+        horizontal_aperture: Optional[float] = None,
+        vertical_aperture: Optional[float] = None,
+        clipping_range: Optional[Tuple[float, float]] = None,
+    ) -> None:
+        if (
+            focal_length is None
+            and horizontal_aperture is None
+            and vertical_aperture is None
+            and clipping_range is None
+        ):
+            return
+
+        import omni.usd
+        from pxr import Gf, UsdGeom
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            return
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim or not prim.IsValid():
+            return
+
+        camera = UsdGeom.Camera(prim)
+        if focal_length is not None:
+            camera.CreateFocalLengthAttr().Set(float(focal_length))
+        if horizontal_aperture is not None:
+            camera.CreateHorizontalApertureAttr().Set(float(horizontal_aperture))
+        if vertical_aperture is not None:
+            camera.CreateVerticalApertureAttr().Set(float(vertical_aperture))
+        if clipping_range is not None:
+            near, far = clipping_range
+            camera.CreateClippingRangeAttr().Set(Gf.Vec2f(float(near), float(far)))
 
     def init_rp_annotators(self):
         if self.rgba:

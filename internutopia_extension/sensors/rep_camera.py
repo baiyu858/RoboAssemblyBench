@@ -29,6 +29,9 @@ class RepCamera(BaseSensor):
     def restore_sensor_info(self):
         self.cleanup()
         self.camera_prim_path = self.create_camera()
+        self._ensure_camera_prim(self.camera_prim_path)
+        position = self.config.position
+        translation = self.config.translation
         _camera = ICamera.create(
             name=self.name,
             prim_path=self.camera_prim_path,
@@ -37,8 +40,41 @@ class RepCamera(BaseSensor):
             distance_to_image_plane=self.config.depth or self.config.pointcloud,
             camera_params=self.config.camera_params or self.config.pointcloud,
             resolution=self.resolution,
+            position=position,
+            translation=translation,
+            orientation=self.config.orientation,
+            focal_length=self.config.focal_length,
+            horizontal_aperture=self.config.horizontal_aperture,
+            vertical_aperture=self.config.vertical_aperture,
+            clipping_range=self.config.clipping_range,
         )
         self._camera: ICamera = _camera
+        eye = position
+        # For world-mounted cameras configured via an absolute prim path, allow
+        # translation to act as the world-space eye position used by look-at
+        # without also applying an extra world pose during camera creation.
+        if eye is None and self.config.look_at is not None and self.camera_prim_path.startswith('/'):
+            eye = translation
+        if self.config.look_at is not None and eye is not None:
+            from isaacsim.core.utils.viewports import set_camera_view
+
+            set_camera_view(
+                eye=np.asarray(eye, dtype=float),
+                target=np.asarray(self.config.look_at, dtype=float),
+                camera_prim_path=self.camera_prim_path,
+            )
+
+    @staticmethod
+    def _ensure_camera_prim(prim_path: str):
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            return
+        prim = stage.GetPrimAtPath(prim_path)
+        if prim and prim.IsValid():
+            return
+        stage.DefinePrim(prim_path, 'Camera')
 
     def create_camera(self) -> str:
         """Create an isaac-sim camera object.
@@ -54,7 +90,10 @@ class RepCamera(BaseSensor):
         if self.config.resolution is not None:
             self.resolution = self.config.resolution
 
-        prim_path = self._robot.config.prim_path + '/' + self.config.prim_path
+        if self.config.prim_path and self.config.prim_path.startswith('/'):
+            prim_path = self.config.prim_path
+        else:
+            prim_path = self._robot.config.prim_path + '/' + self.config.prim_path
         log.debug('================ create camera ===============')
         log.debug('camera_prim_path: ' + prim_path)
         log.debug('name            : ' + self.config.name)

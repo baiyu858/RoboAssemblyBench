@@ -22,5 +22,7 @@ class DynamicCube(BaseObject):
                 orientation=np.array(self._config.orientation),
                 scale=np.array(self._config.scale),
                 color=np.array(self._config.color),
+                mass=self._config.mass,
+                density=self._config.density,
             )
         )

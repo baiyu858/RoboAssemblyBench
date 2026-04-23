@@ -1,0 +1,67 @@
+extends: _base.yaml
+task_name: handover_fastener_then_insert
+title: Handover fastener then insert
+summary: Two Franka arms hand over a fastener and insert it into the receiver.
+task_description: >-
+  Two Franka arms first place the receiver into the shared fixture, then perform a mid-air handoff of the fastener
+  before the receiving arm inserts and locks it into place.
+metadata:
+  tags:
+    - handoff
+    - fastener
+    - insertion
+    - dual-arm
+  object_roles:
+    receiver_block:
+      role: receiver
+      owner: franka_left
+      summary: Left arm places and locks the receiver block in the fixture.
+    fastener_pin:
+      role: fastener
+      owner: franka_right
+      summary: Right arm initially grasps the fastener before handing it to the left arm.
+    handoff_fixture:
+      role: handoff_fixture
+      summary: Shared fixture supporting the receiver placement and handoff/insertion region.
+  target_roles:
+    receiver_pick:
+      object: receiver_block
+      phase: left_approach_receiver
+      summary: Hover pose above the receiver before grasp.
+    receiver_hold:
+      object: receiver_block
+      phase: left_place_receiver
+      summary: Pose used to place the receiver in the fixture.
+    receiver_locked:
+      object: receiver_block
+      phase: lock_receiver_and_release
+      summary: Final locked pose for the receiver.
+    fastener_pick:
+      object: fastener_pin
+      phase: right_approach_fastener
+      summary: Hover pose above the fastener before the initial right-arm grasp.
+    fastener_handoff:
+      object: fastener_pin
+      phase: handover_fastener_to_left
+      summary: Shared handoff waypoint where both arms meet.
+    fastener_insert:
+      object: fastener_pin
+      phase: left_insert_fastener
+      summary: Final insertion pose after the handoff.
+    fastener_locked:
+      object: fastener_pin
+      phase: finalize_insert
+      summary: Final locked pose for the fastener.
+  phase_notes:
+    - name: lock_receiver_and_release
+      summary: Receiver is fixed in the fixture before the fastener workflow begins.
+      focus_objects: [receiver_block]
+      focus_targets: [receiver_locked]
+    - name: handover_fastener_to_left
+      summary: Both arms converge to the handoff waypoint and transfer the fastener.
+      focus_objects: [fastener_pin]
+      focus_targets: [fastener_handoff]
+    - name: left_insert_fastener
+      summary: Left arm inserts the handed-off fastener into the receiver.
+      focus_objects: [fastener_pin, receiver_block]
+      focus_targets: [fastener_insert]

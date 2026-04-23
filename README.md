@@ -161,3 +161,23 @@ InternUtopia's simulation platform is [MIT licensed](LICENSE). The open-sourced 
 - [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO): We use Grounding DINO in our benchmark baselines.
 - [YOLOv7](https://github.com/WongKinYiu/yolov7): We use YOLOv7 in our benchmark baselines.
 - [MobileSAM](https://github.com/ChaoningZhang/MobileSAM): We use MobileSAM in our benchmark baselines.
+tail -f /tmp/internutopia_full_assets_download.logdu -sh /home/baiyu24/model/InternUtopia/internutopia/assets
+
+
+python toolkits/factory_dual_franka_assembly/export_lerobot.py \
+  --input-dir toolkits/factory_dual_franka_assembly/outputs/factory_dual_franka_assembly \
+  --output-dir toolkits/factory_dual_franka_assembly/outputs/factory_dual_franka_assembly_lerobot_live \
+  --video-mode live_rollout
+
+
+  third person front 
+  translate :x:4.5 y:0.0 z:0.4
+  orient: x:90.0 y:90.0 z:0.0
+
+  left
+  translate :x:-0.1 y:-0.0 z:-0.03
+  orient: x:180.0 y:-5.0 z:0
+
+  right
+  translate :x:-0.1 y:-0.0 z:-0.03
+  orient: x:180.0 y:-5.0 z:0

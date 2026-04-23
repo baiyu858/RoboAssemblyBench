@@ -64,6 +64,10 @@ class ICamera(PoseMixin):
         position: Optional[Tuple[float, float, float]] = None,
         translation: Optional[Tuple[float, float, float]] = None,
         orientation: Optional[Tuple[float, float, float, float]] = None,
+        focal_length: Optional[float] = None,
+        horizontal_aperture: Optional[float] = None,
+        vertical_aperture: Optional[float] = None,
+        clipping_range: Optional[Tuple[float, float]] = None,
     ) -> 'ICamera':
         """Factory method to create ICamera instances based on simulator_type.
 
@@ -79,6 +83,10 @@ class ICamera(PoseMixin):
             position (Optional[Tuple[float, float, float]], optional): position in the world frame of the prim. shape is (3, ). Defaults to None, which means left unchanged.
             translation (Optional[Tuple[float, float, float]], optional): translation in the local frame of the prim (with respect to its parent prim). shape is (3, ). Defaults to None, which means left unchanged.
             orientation (Optional[Tuple[float, float, float, float]], optional): quaternion orientation in the world/ local frame of the prim (depends if translation or position is specified). quaternion is scalar-first (w, x, y, z). shape is (4, ). Defaults to None, which means left unchanged.
+            focal_length (Optional[float], optional): Camera focal length in USD camera units.
+            horizontal_aperture (Optional[float], optional): Camera horizontal aperture in USD camera units.
+            vertical_aperture (Optional[float], optional): Camera vertical aperture in USD camera units.
+            clipping_range (Optional[Tuple[float, float]], optional): Near/far clipping range.
         """
         if simulator_type == Simulator.ISAACSIM.value:
             from internutopia.core.sensor.isaacsim.camera import IsaacsimCamera
@@ -94,6 +102,10 @@ class ICamera(PoseMixin):
                 position=position,
                 translation=translation,
                 orientation=orientation,
+                focal_length=focal_length,
+                horizontal_aperture=horizontal_aperture,
+                vertical_aperture=vertical_aperture,
+                clipping_range=clipping_range,
             )
         else:
             raise ValueError(f'Invalid simulator_type: {simulator_type}')

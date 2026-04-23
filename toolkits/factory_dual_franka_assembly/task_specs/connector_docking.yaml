@@ -1,0 +1,178 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: connector_docking
+prompt: Two Franka arms dock a connector body and socket into the shared fixture.
+
+metadata:
+  tags:
+    - connector
+  runtime_note: Current runtime approximates connector docking with staged alignment and lock targets.
+
+objects:
+  - name: connector_body
+    kind: dynamic_cube
+    prim_path: /connector_body
+    position: [0.55, -0.22, 0.025]
+    random_xy: [0.04, 0.03]
+    scale: [0.16, 0.06, 0.05]
+    color: [0.25, 0.58, 0.84]
+  - name: socket_housing
+    kind: dynamic_cube
+    prim_path: /socket_housing
+    position: [0.56, 0.22, 0.035]
+    random_xy: [0.04, 0.03]
+    scale: [0.05, 0.05, 0.09]
+    color: [0.86, 0.55, 0.20]
+  - name: dock_fixture
+    kind: visual_cube
+    prim_path: /dock_fixture
+    position: [0.82, 0.0, 0.07]
+    scale: [0.20, 0.18, 0.14]
+    color: [0.21, 0.30, 0.35]
+    tracked: false
+  - name: assembly_station
+    kind: visual_cube
+    prim_path: /assembly_station
+    position: [0.82, 0.0, 0.005]
+    scale: [0.40, 0.54, 0.01]
+    color: [0.18, 0.18, 0.18]
+    tracked: false
+
+targets:
+  - name: connector_pick
+    reference: connector_body
+    offset: [0.0, 0.0, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: socket_pick
+    reference: socket_housing
+    offset: [0.0, 0.0, 0.14]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: socket_hold
+    reference: dock_fixture
+    offset: [0.0, 0.0, 0.13]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: connector_pre_dock
+    reference: dock_fixture
+    offset: [0.015, 0.0, 0.20]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: connector_dock
+    reference: dock_fixture
+    offset: [0.015, 0.0, 0.14]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: connector_locked
+    reference: dock_fixture
+    offset: [0.015, 0.0, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: socket_locked
+    reference: dock_fixture
+    offset: [0.0, 0.0, 0.09]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: left_approach_socket
+    robot_targets:
+      franka_left: socket_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: left_grasp_socket
+    robot_targets:
+      franka_left: socket_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    attach:
+      - object: socket_housing
+        robot: franka_left
+    advance:
+      type: timer
+      min_steps: 16
+  - name: left_present_socket
+    robot_targets:
+      franka_left: socket_hold
+      franka_right: connector_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_connector
+    robot_targets:
+      franka_left: socket_hold
+      franka_right: connector_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    attach:
+      - object: connector_body
+        robot: franka_right
+    advance:
+      type: timer
+      min_steps: 16
+  - name: right_pre_dock_connector
+    robot_targets:
+      franka_left: socket_hold
+      franka_right: connector_pre_dock
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.035
+  - name: right_dock_connector
+    robot_targets:
+      franka_left: socket_hold
+      franka_right: connector_dock
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 14
+      tolerance: 0.03
+  - name: finalize_connector_docking
+    robot_targets:
+      franka_left: socket_hold
+      franka_right: connector_dock
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - socket_housing
+      - connector_body
+    lock:
+      - object: socket_housing
+        target: socket_locked
+      - object: connector_body
+        target: connector_locked
+    advance:
+      type: timer
+      min_steps: 20
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.05
+
+success:
+  - object: socket_housing
+    target: socket_locked
+    position_tolerance: 0.03
+  - object: connector_body
+    target: connector_locked
+    position_tolerance: 0.025

@@ -1,6 +1,19 @@
 import os
 
-from addict import Dict
+try:
+    from addict import Dict
+except ImportError:
+    class Dict(dict):
+        def __missing__(self, key):
+            value = Dict()
+            self[key] = value
+            return value
+
+        def __getattr__(self, item):
+            return self[item]
+
+        def __setattr__(self, key, value):
+            self[key] = value
 
 
 class MacroDict(Dict):

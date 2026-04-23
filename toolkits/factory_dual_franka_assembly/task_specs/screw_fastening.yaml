@@ -1,0 +1,374 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: screw_fastening
+prompt: Two Franka arms assemble a bracket and fasten the screw at the shared fixture.
+scene_profile: taoyuan_tabletop
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+max_steps: 1800
+phase_timeout_steps: 320
+phase_timeout_action: fail
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.08, -0.62, 0.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.08, 0.62, 0.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+objects:
+  - name: assembly_part
+    kind: dynamic_cube
+    prim_path: /assembly_part
+    position: [0.47, -0.24, 0.02]
+    random_xy: [0.01, 0.01]
+    scale: [0.13, 0.05, 0.04]
+    color: [0.83, 0.47, 0.18]
+    mass: 0.10
+  - name: screw
+    kind: dynamic_cube
+    prim_path: /screw
+    position: [0.47, 0.22, 0.035]
+    random_xy: [0.01, 0.01]
+    scale: [0.025, 0.025, 0.07]
+    color: [0.74, 0.74, 0.74]
+    mass: 0.03
+  - name: fixture
+    kind: visual_cube
+    prim_path: /fixture
+    position: [0.47, -0.04, 0.07]
+    scale: [0.02, 0.02, 0.02]
+    color: [0.22, 0.31, 0.36]
+    tracked: false
+  - name: fixture_left_guide
+    kind: static_cube
+    prim_path: /fixture_left_guide
+    position: [0.47, -0.12, 0.06]
+    scale: [0.18, 0.02, 0.12]
+    color: [0.18, 0.25, 0.29]
+    tracked: false
+  - name: fixture_right_guide
+    kind: static_cube
+    prim_path: /fixture_right_guide
+    position: [0.47, 0.04, 0.06]
+    scale: [0.18, 0.02, 0.12]
+    color: [0.18, 0.25, 0.29]
+    tracked: false
+  - name: assembly_station
+    kind: static_cube
+    prim_path: /assembly_station
+    position: [0.47, -0.04, 0.005]
+    scale: [0.40, 0.54, 0.01]
+    color: [0.18, 0.18, 0.18]
+    tracked: false
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.24, -0.44, 0.52]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.24, 0.44, 0.52]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.16, -0.66, 0.56]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.16, 0.66, 0.56]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_pick
+    reference: assembly_part
+    offset: [0.0, 0.0, 0.085]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_grasp
+    reference: assembly_part
+    offset: [0.0, 0.0, 0.006]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_carry_lift
+    reference: assembly_part
+    offset: [0.0, 0.0, 0.24]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_fixture_lane
+    reference: fixture
+    offset: [0.0, -0.16, 0.24]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_fixture_hover
+    reference: fixture
+    offset: [0.0, -0.06, 0.17]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_fixture_preseat
+    reference: fixture
+    offset: [0.0, -0.02, 0.145]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_fixture_hold
+    reference: fixture
+    offset: [0.0, 0.0, 0.122]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: part_locked
+    reference: fixture
+    offset: [0.0, 0.0, 0.09]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: screw_pick
+    reference: screw
+    offset: [0.0, 0.0, 0.105]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: screw_grasp
+    reference: screw
+    offset: [0.0, 0.0, 0.022]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: screw_preinsert
+    reference: fixture
+    offset: [0.03, 0.12, 0.20]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: screw_preinsert_lane
+    reference: fixture
+    offset: [0.03, 0.22, 0.22]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: screw_insert_lane
+    reference: fixture
+    offset: [0.03, 0.18, 0.18]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: screw_insert
+    reference: fixture
+    offset: [0.03, 0.12, 0.155]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: screw_locked
+    reference: fixture
+    offset: [0.03, 0.12, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: left_approach_part
+    robot_targets:
+      franka_left:
+        target: part_pick
+        position_tolerance: 0.06
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: left_grasp_part
+    timeout_steps: 320
+    robot_targets:
+      franka_left:
+        target: part_grasp
+        position_tolerance: 0.03
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    attach:
+      - object: assembly_part
+        robot: franka_left
+        target: part_grasp
+        position_tolerance: 0.025
+        attachment_mode: contact_fixed_joint
+        disable_collision_on_attach: false
+        support_height_tolerance: 0.03
+        top_clearance: 0.02
+        gripper_closed_threshold: 0.010
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
+        require_physical_contact: true
+        physical_attach_surface_gap: 0.006
+        hold_position_slip_tolerance: 0.035
+    advance:
+      type: timer
+      min_steps: 16
+  - name: move_part_to_fixture
+    robot_targets:
+      franka_left:
+        target: part_fixture_lane
+        via:
+          - part_carry_lift
+        position_tolerance: 0.08
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: seat_part_in_fixture
+    timeout_steps: 320
+    timeout_action: advance
+    robot_targets:
+      franka_left:
+        target: part_fixture_hold
+        via:
+          - part_fixture_hover
+          - part_fixture_preseat
+        position_tolerance: 0.07
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: all_of
+      min_steps: 12
+      conditions:
+        - type: robot_targets_reached
+          tolerance: 0.07
+        - type: object_targets_reached
+          tolerance: 0.03
+          objects:
+            - object: assembly_part
+              target: part_locked
+              position_tolerance: 0.03
+  - name: release_part_in_fixture
+    robot_targets:
+      franka_left:
+        target: part_fixture_hold
+        position_tolerance: 0.05
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - assembly_part
+    lock:
+      - object: assembly_part
+        target: part_locked
+    advance:
+      type: timer
+      min_steps: 10
+  - name: right_approach_screw
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: screw_pick
+        position_tolerance: 0.06
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_screw
+    timeout_steps: 320
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: screw_grasp
+        position_tolerance: 0.03
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    attach:
+      - object: screw
+        robot: franka_right
+        target: screw_grasp
+        position_tolerance: 0.025
+        attachment_mode: contact_fixed_joint
+        disable_collision_on_attach: false
+        support_height_tolerance: 0.03
+        top_clearance: 0.02
+        gripper_closed_threshold: 0.009
+        allow_top_contact_fallback: false
+        require_target_reached_for_attach: true
+        finger_contact_distance: 0.002
+        physical_attach_surface_gap: 0.0025
+        slender_lateral_threshold: 0.04
+        hold_position_slip_tolerance: 0.02
+    advance:
+      type: timer
+      min_steps: 16
+  - name: right_preinsert_screw
+    timeout_steps: 320
+    timeout_action: advance
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: screw_preinsert
+        via:
+          - screw_preinsert_lane
+        position_tolerance: 0.11
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.11
+  - name: right_insert_screw
+    timeout_steps: 240
+    timeout_action: advance
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: screw_insert
+        via:
+          - screw_insert_lane
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 14
+      tolerance: 0.08
+  - name: finalize_fastening
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right: screw_insert
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - screw
+    lock:
+      - object: screw
+        target: screw_locked
+    advance:
+      type: timer
+      min_steps: 20
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.08
+
+success:
+  - object: assembly_part
+    target: part_locked
+    position_tolerance: 0.03
+  - object: screw
+    target: screw_locked
+    position_tolerance: 0.025

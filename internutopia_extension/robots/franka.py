@@ -45,7 +45,7 @@ class Franka(IsaacsimArticulation):
         self._gripper = None
         self._end_effector_prim_name = end_effector_prim_name
         if self._end_effector_prim_name is None:
-            self._end_effector_prim_path = prim_path + '/panda_rightfinger'
+            self._end_effector_prim_path = prim_path + '/panda_hand'
         else:
             self._end_effector_prim_path = prim_path + '/' + end_effector_prim_name
         if gripper_dof_names is None:
@@ -63,14 +63,13 @@ class Franka(IsaacsimArticulation):
             scale=scale,
         )
         if gripper_dof_names is not None:
-            if deltas is None:
-                deltas = np.array([0.05, 0.05]) / get_stage_units()
             self._gripper = ParallelGripper(
                 end_effector_prim_path=self._end_effector_prim_path,
                 joint_prim_names=gripper_dof_names,
                 joint_opened_positions=gripper_open_position,
                 joint_closed_positions=gripper_closed_position,
                 action_deltas=deltas,
+                use_mimic_joints=True,
             )
         return
 
@@ -98,12 +97,8 @@ class Franka(IsaacsimArticulation):
     def post_reset(self) -> None:
         self.unwrap().post_reset()
         self._gripper.post_reset()
-        self._articulation_controller.switch_dof_control_mode(
-            dof_index=self.gripper.joint_dof_indicies[0], mode='position'
-        )
-        self._articulation_controller.switch_dof_control_mode(
-            dof_index=self.gripper.joint_dof_indicies[1], mode='position'
-        )
+        for dof_index in self.gripper.active_joint_indices:
+            self._articulation_controller.switch_dof_control_mode(dof_index=dof_index, mode='position')
         return
 
 
@@ -131,6 +126,7 @@ class FrankaRobot(BaseRobot):
             position=self._start_position,
             orientation=self._start_orientation,
             usd_path=os.path.abspath(usd_path),
+            end_effector_prim_name=config.end_effector_prim_name,
             scale=self._robot_scale,
         )
 
@@ -145,6 +141,50 @@ class FrankaRobot(BaseRobot):
     def post_reset(self):
         super().post_reset()
         self._robot_ik_base = self._rigid_body_map[self.config.prim_path + '/panda_link0']
+        try:
+            self.articulation.set_solver_position_iteration_count(32)
+            self.articulation.set_solver_velocity_iteration_count(16)
+        except Exception:
+            pass
+
+        finger_joint_names = ['panda_finger_joint1', 'panda_finger_joint2']
+        try:
+            finger_indices = np.asarray(
+                [self.articulation.get_dof_index(name) for name in finger_joint_names],
+                dtype=np.int64,
+            )
+        except Exception:
+            finger_indices = None
+        if finger_indices is not None and finger_indices.size == 2:
+            try:
+                self.articulation.set_gains(
+                    kps=np.asarray([2.5e4, 2.5e4], dtype=float),
+                    kds=np.asarray([1.2e3, 1.2e3], dtype=float),
+                    joint_indices=finger_indices,
+                )
+            except Exception:
+                pass
+            try:
+                physics_view = self.articulation._articulation_view._physics_view
+                max_forces = np.asarray(physics_view.get_dof_max_forces(), dtype=float)
+                if max_forces.ndim == 1:
+                    max_forces = np.expand_dims(max_forces, axis=0)
+                max_forces[0, finger_indices] = np.maximum(max_forces[0, finger_indices], 250.0)
+                physics_view.set_dof_max_forces(data=max_forces, indices=[0])
+
+                friction_coefficients = np.asarray(
+                    physics_view.get_dof_friction_coefficients(),
+                    dtype=float,
+                )
+                if friction_coefficients.ndim == 1:
+                    friction_coefficients = np.expand_dims(friction_coefficients, axis=0)
+                friction_coefficients[0, finger_indices] = np.maximum(
+                    friction_coefficients[0, finger_indices],
+                    5.0,
+                )
+                physics_view.set_dof_friction_coefficients(data=friction_coefficients, indices=[0])
+            except Exception:
+                pass
 
     @staticmethod
     def action_to_dict(action):
@@ -164,14 +204,23 @@ class FrankaRobot(BaseRobot):
             action (dict): inputs for controllers.
         """
         self.last_action = []
+        deferred_controls = []
+        has_joint_override = 'arm_joint_controller' in action and 'arm_ik_controller' in action
         for controller_name, controller_action in action.items():
             if controller_name not in self.controllers:
                 log.warn(f'unknown controller {controller_name} in action')
                 continue
             controller = self.controllers[controller_name]
             control = controller.action_to_control(controller_action)
-            self.articulation.apply_action(control)
+            if has_joint_override and controller_name == 'arm_ik_controller':
+                # Keep IK solver state / controller observations fresh, but let the joint
+                # controller own the actual arm execution to avoid conflicting commands.
+                self.last_action.append(self.action_to_dict(control))
+                continue
+            deferred_controls.append(control)
             self.last_action.append(self.action_to_dict(control))
+        for control in deferred_controls:
+            self.articulation.apply_action(control)
 
     def get_last_action(self):
         return self.last_action
@@ -189,8 +238,15 @@ class FrankaRobot(BaseRobot):
         }
 
         eef_pose = self.articulation.end_effector.get_pose()
-        obs['eef_position'] = eef_pose[0]
-        obs['eef_orientation'] = eef_pose[1]
+        obs['eef_body_position'] = eef_pose[0]
+        obs['eef_body_orientation'] = eef_pose[1]
+        if 'arm_ik_controller' in self.controllers:
+            ik_obs = self.controllers['arm_ik_controller'].get_obs()
+            obs['eef_position'] = ik_obs.get('eef_position', eef_pose[0])
+            obs['eef_orientation'] = ik_obs.get('eef_orientation', eef_pose[1])
+        else:
+            obs['eef_position'] = eef_pose[0]
+            obs['eef_orientation'] = eef_pose[1]
 
         # common
         for c_obs_name, controller_obs in self.controllers.items():

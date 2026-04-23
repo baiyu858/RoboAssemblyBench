@@ -184,6 +184,47 @@ def remove_dir(dir_path):
         shutil.rmtree(dir_path)
 
 
+def _list_multipart_zip_parts(zip_path):
+    root = os.path.dirname(zip_path)
+    filename = os.path.basename(zip_path)
+    stem, ext = os.path.splitext(filename)
+    if ext.lower() != '.zip' or not os.path.isdir(root):
+        return []
+
+    parts = []
+    for name in os.listdir(root):
+        if name == filename:
+            parts.append(os.path.join(root, name))
+            continue
+        if not name.startswith(f'{stem}.z'):
+            continue
+        suffix = name[len(stem) + 2 :]
+        if suffix.isdigit():
+            parts.append(os.path.join(root, name))
+    return sorted(parts)
+
+
+def _extract_regular_zip(zip_path, output_dir):
+    subprocess.check_call(['unzip', '-o', zip_path, '-d', output_dir])
+
+
+def _extract_multipart_zip(zip_path, output_dir):
+    root = os.path.dirname(zip_path)
+    filename = os.path.basename(zip_path)
+    stem, _ = os.path.splitext(filename)
+    repaired_filename = f'.{stem}_combined.zip'
+    repaired_path = os.path.join(root, repaired_filename)
+    parts = _list_multipart_zip_parts(zip_path)
+    latest_part_mtime = max(os.path.getmtime(part) for part in parts)
+
+    if (not os.path.exists(repaired_path)) or os.path.getmtime(repaired_path) < latest_part_mtime:
+        if os.path.exists(repaired_path):
+            os.remove(repaired_path)
+        subprocess.check_call(['zip', '-FF', filename, '--out', repaired_filename], cwd=root)
+
+    _extract_regular_zip(repaired_path, output_dir)
+
+
 def delete_conda_env():
     try:
         print(f"Deleting Conda environment '{DEFAULT_ENV_NAME}'...")
@@ -201,9 +242,16 @@ def unzip_all(dir_path):
         for file in files:
             if file.endswith('.zip'):
                 zip_path = os.path.join(root, file)
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(root)
-                print(f'Extracted: {zip_path} to {root}')
+                multipart_parts = _list_multipart_zip_parts(zip_path)
+                try:
+                    if any(part.endswith('.z01') for part in multipart_parts):
+                        _extract_multipart_zip(zip_path, root)
+                    else:
+                        _extract_regular_zip(zip_path, root)
+                    print(f'Extracted: {zip_path} to {root}')
+                except (subprocess.CalledProcessError, zipfile.BadZipFile) as exc:
+                    print(f'{RED}WARNING{END}: Failed to extract {zip_path}: {exc}')
+                    print('Skipping this archive for now. You can rerun the downloader after the remaining parts arrive.')
 
     # Rename directory target_69_new to home_scenes, target_30_new to commercial_scenes
     print('Renaming...')

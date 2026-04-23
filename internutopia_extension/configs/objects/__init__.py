@@ -16,7 +16,13 @@ class VisualCubeCfg(ObjectCfg):
     color: Optional[List[float]] = None
 
 
+class StaticCubeCfg(ObjectCfg):
+    type: Optional[str] = 'StaticCube'
+    color: Optional[List[float]] = None
+
+
 class UsdObjCfg(ObjectCfg):
     type: Optional[str] = 'UsdObject'
     usd_path: str
     collider: Optional[bool] = True
+    rigid_body: Optional[bool] = True

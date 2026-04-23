@@ -1,0 +1,43 @@
+profile_name: taoyuan_grscenes_tabletop
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+workspace_offset: [0.0, 0.0, 0.0]
+camera_specs: []
+
+metadata:
+  scene_family: taoyuan_grscenes
+  description: InternUtopia asset-backed tabletop workcell using a real GRScenes-100 non-articulated table USD anchor, aligned to the proxy benchmark workspace footprint and height.
+  asset_references:
+    - name: empty_scene
+      kind: scene
+      path: ${ASSET_PATH}/scenes/empty.usd
+    - name: grscenes_table_anchor
+      kind: usd
+      path: ${ASSET_PATH}/scenes/GRScenes-100/home_scenes/models/object/others/table/bc1e96d5d9ec6a4925d8c5741576af04/instance.usd
+
+objects:
+  - name: taoyuan_table
+    kind: usd
+    prim_path: /taoyuan_table
+    usd_path: ${ASSET_PATH}/scenes/GRScenes-100/home_scenes/models/object/others/table/bc1e96d5d9ec6a4925d8c5741576af04/instance.usd
+    position: [0.78, 0.0, -0.406]
+    apply_workspace_offset: false
+    scale: [0.001, 0.001, 0.001]
+    collider: false
+    rigid_body: false
+    tracked: false
+  - name: taoyuan_left_buffer
+    kind: static_cube
+    prim_path: /taoyuan_left_buffer
+    position: [0.68, -0.38, 0.03]
+    apply_workspace_offset: false
+    scale: [0.10, 0.10, 0.06]
+    color: [0.22, 0.29, 0.33]
+    tracked: false
+  - name: taoyuan_right_buffer
+    kind: static_cube
+    prim_path: /taoyuan_right_buffer
+    position: [0.68, 0.38, 0.03]
+    apply_workspace_offset: false
+    scale: [0.10, 0.10, 0.06]
+    color: [0.22, 0.29, 0.33]
+    tracked: false

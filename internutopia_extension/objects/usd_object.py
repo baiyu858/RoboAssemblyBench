@@ -71,8 +71,11 @@ class UsdObject(BaseObject):
                 visible: Optional[bool] = None,
                 color: Optional[np.ndarray] = None,
                 size: Optional[float] = None,
+                collider: Optional[bool] = False,
             ) -> None:
-                add_reference_to_stage(usd_path, prim_path)
+                prim = add_reference_to_stage(os.path.abspath(usd_path), prim_path)
+                if collider:
+                    utils.setCollider(prim, approximationShape=None)
                 self.size = size
                 self.color = color
                 GeometryPrim.__init__(
@@ -84,10 +87,10 @@ class UsdObject(BaseObject):
                     orientation=orientation,
                     scale=scale,
                     visible=visible,
-                    collision=False,
+                    collision=collider,
                 )
 
-        if self._config.collider:
+        if self._config.rigid_body:
             scene.add(
                 RigidObject(
                     usd_path=self._config.usd_path,
@@ -96,6 +99,7 @@ class UsdObject(BaseObject):
                     position=self._config.position,
                     orientation=self._config.orientation,
                     scale=self._config.scale,
+                    collider=self._config.collider,
                 )
             )
         else:
@@ -107,5 +111,6 @@ class UsdObject(BaseObject):
                     position=self._config.position,
                     orientation=self._config.orientation,
                     scale=self._config.scale,
+                    collider=self._config.collider,
                 )
             )

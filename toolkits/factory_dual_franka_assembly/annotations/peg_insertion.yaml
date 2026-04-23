@@ -1,0 +1,99 @@
+extends: _base.yaml
+task_name: peg_insertion
+title: Peg insertion
+summary: Two Franka arms align the housing and insert the peg into the shared jig.
+task_description: >-
+  Two Franka arms align the housing, hold it against the insertion jig, insert the peg, and retreat once the peg is
+  locked in place.
+metadata:
+  tags:
+    - peg
+    - insertion
+    - jig
+    - dual-arm
+  object_roles:
+    housing:
+      role: workpiece
+      owner: franka_left
+      summary: Left arm carries the housing into the jig.
+    peg:
+      role: insertion_pin
+      owner: franka_right
+      summary: Right arm grasps and inserts the peg.
+    insertion_jig:
+      role: alignment_fixture
+      summary: Shared jig that accepts the peg.
+    workbench:
+      role: support_surface
+      summary: Static tabletop surface for the jig and parts.
+  target_roles:
+    left_wait:
+      phase: left_approach_housing
+      summary: Left-arm staging pose before the first grasp.
+    right_wait:
+      phase: left_approach_housing
+      summary: Right-arm waiting pose before the handoff.
+    left_retreat:
+      phase: retreat
+      summary: Left-arm retreat pose after insertion.
+    right_retreat:
+      phase: retreat
+      summary: Right-arm retreat pose after insertion.
+    housing_pick:
+      object: housing
+      phase: left_approach_housing
+      summary: Hover above the housing for the first grasp.
+    housing_hold:
+      object: housing
+      phase: left_present_housing
+      summary: Hold the housing against the jig during insertion.
+    peg_pick:
+      object: peg
+      phase: right_grasp_peg
+      summary: Hover above the peg before the right-arm grasp.
+    peg_insert:
+      object: peg
+      phase: right_insert_peg
+      summary: Right-arm insertion pose over the jig.
+    housing_locked:
+      object: housing
+      phase: finalize_insertion
+      summary: Final locked pose for the housing.
+    peg_locked:
+      object: peg
+      phase: finalize_insertion
+      summary: Final locked pose for the peg.
+  phase_notes:
+    - name: left_approach_housing
+      summary: Left arm approaches the housing while the right arm waits.
+      focus_objects:
+        - housing
+      focus_targets:
+        - housing_pick
+        - right_wait
+    - name: left_present_housing
+      summary: Left arm holds the housing up to the insertion jig.
+      focus_objects:
+        - housing
+      focus_targets:
+        - housing_hold
+    - name: right_grasp_peg
+      summary: Right arm grasps the peg while the housing stays fixed.
+      focus_objects:
+        - peg
+      focus_targets:
+        - peg_pick
+    - name: right_insert_peg
+      summary: Right arm inserts the peg into the jig.
+      focus_objects:
+        - peg
+      focus_targets:
+        - peg_insert
+    - name: finalize_insertion
+      summary: Both parts are locked in place before retreat.
+      focus_objects:
+        - housing
+        - peg
+      focus_targets:
+        - housing_locked
+        - peg_locked

@@ -1,0 +1,205 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: panel_alignment
+prompt: Two Franka arms align a panel and insert a locating pin at the shared fixture.
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+max_steps: 1800
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.0, -0.72, 0.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.0, 0.72, 0.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+objects:
+  - name: panel
+    kind: dynamic_cube
+    prim_path: /panel
+    position: [0.55, -0.22, 0.025]
+    random_xy: [0.05, 0.03]
+    scale: [0.18, 0.08, 0.05]
+    color: [0.29, 0.62, 0.82]
+  - name: locating_pin
+    kind: dynamic_cube
+    prim_path: /locating_pin
+    position: [0.56, 0.22, 0.035]
+    random_xy: [0.04, 0.03]
+    scale: [0.03, 0.03, 0.08]
+    color: [0.91, 0.79, 0.20]
+  - name: alignment_fixture
+    kind: visual_cube
+    prim_path: /alignment_fixture
+    position: [0.82, 0.0, 0.08]
+    scale: [0.20, 0.20, 0.16]
+    color: [0.18, 0.35, 0.30]
+    tracked: false
+  - name: workbench
+    kind: visual_cube
+    prim_path: /workbench
+    position: [0.82, 0.0, 0.005]
+    scale: [0.40, 0.54, 0.01]
+    color: [0.18, 0.18, 0.18]
+    tracked: false
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.34, -0.28, 0.42]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.34, 0.28, 0.42]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.20, -0.52, 0.48]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.20, 0.52, 0.48]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: panel_pick
+    reference: panel
+    offset: [0.0, 0.0, 0.16]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: panel_fixture_hover
+    reference: alignment_fixture
+    offset: [0.0, 0.0, 0.18]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: panel_fixture_hold
+    reference: alignment_fixture
+    offset: [0.0, 0.0, 0.13]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: panel_locked
+    reference: alignment_fixture
+    offset: [0.0, 0.0, 0.09]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: pin_pick
+    reference: locating_pin
+    offset: [0.0, 0.0, 0.12]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: pin_preinsert
+    reference: alignment_fixture
+    offset: [0.03, 0.0, 0.20]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: pin_insert
+    reference: alignment_fixture
+    offset: [0.03, 0.0, 0.14]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: pin_locked
+    reference: alignment_fixture
+    offset: [0.03, 0.0, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: left_approach_panel
+    robot_targets:
+      franka_left: panel_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: left_grasp_panel
+    robot_targets:
+      franka_left: panel_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    attach:
+      - object: panel
+        robot: franka_left
+    advance:
+      type: timer
+      min_steps: 16
+  - name: left_present_panel
+    robot_targets:
+      franka_left: panel_fixture_hover
+      franka_right: pin_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_pin
+    robot_targets:
+      franka_left: panel_fixture_hover
+      franka_right: pin_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    attach:
+      - object: locating_pin
+        robot: franka_right
+    advance:
+      type: timer
+      min_steps: 16
+  - name: right_preinsert_pin
+    robot_targets:
+      franka_left: panel_fixture_hold
+      franka_right: pin_preinsert
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.035
+  - name: right_insert_pin
+    robot_targets:
+      franka_left: panel_fixture_hold
+      franka_right: pin_insert
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 14
+      tolerance: 0.03
+  - name: finalize_alignment
+    robot_targets:
+      franka_left: panel_fixture_hold
+      franka_right: pin_insert
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - panel
+      - locating_pin
+    lock:
+      - object: panel
+        target: panel_locked
+      - object: locating_pin
+        target: pin_locked
+    advance:
+      type: timer
+      min_steps: 20
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.05
+
+success:
+  - object: panel
+    target: panel_locked
+    position_tolerance: 0.03
+  - object: locating_pin
+    target: pin_locked
+    position_tolerance: 0.025

@@ -23,9 +23,11 @@ def create_joint(
         body1 (str or None): absolute path to the second body's prim. At least @body0 or @body1 must be specified.
         enabled (bool): whether to enable this joint or not.
         joint_frame_in_parent_frame_pos (np.ndarray or None): relative position of the joint frame to the parent frame (body0).
-        joint_frame_in_parent_frame_quat (np.ndarray or None): relative orientation of the joint frame to the parent frame (body0).
+        joint_frame_in_parent_frame_quat (np.ndarray or None): relative orientation of the joint frame to the parent frame
+            (body0), expressed as (w, x, y, z).
         joint_frame_in_child_frame_pos (np.ndarray or None): relative position of the joint frame to the child frame (body1).
-        joint_frame_in_child_frame_quat (np.ndarray or None): relative orientation of the joint frame to the child frame (body1).
+        joint_frame_in_child_frame_quat (np.ndarray or None): relative orientation of the joint frame to the child frame
+            (body1), expressed as (w, x, y, z).
         break_force (float or None): break force for linear dofs, unit is Newton.
         break_torque (float or None): break torque for angular dofs, unit is Newton-meter.
 
@@ -64,11 +66,11 @@ def create_joint(
     if joint_frame_in_parent_frame_pos is not None:
         joint_prim.GetAttribute('physics:localPos0').Set(pxr.Gf.Vec3f(*joint_frame_in_parent_frame_pos))
     if joint_frame_in_parent_frame_quat is not None:
-        joint_prim.GetAttribute('physics:localRot0').Set(pxr.Gf.Quatf(*joint_frame_in_parent_frame_quat[[3, 0, 1, 2]]))
+        joint_prim.GetAttribute('physics:localRot0').Set(pxr.Gf.Quatf(*joint_frame_in_parent_frame_quat))
     if joint_frame_in_child_frame_pos is not None:
         joint_prim.GetAttribute('physics:localPos1').Set(pxr.Gf.Vec3f(*joint_frame_in_child_frame_pos))
     if joint_frame_in_child_frame_quat is not None:
-        joint_prim.GetAttribute('physics:localRot1').Set(pxr.Gf.Quatf(*joint_frame_in_child_frame_quat[[3, 0, 1, 2]]))
+        joint_prim.GetAttribute('physics:localRot1').Set(pxr.Gf.Quatf(*joint_frame_in_child_frame_quat))
 
     if break_force is not None:
         joint_prim.GetAttribute('physics:breakForce').Set(break_force)
