@@ -135,3 +135,8 @@ internutopia/default_config.py
 
 toolkits/factory_dual_franka_assembly/outputs
 toolkits/factory_box_carry/outputs
+none
+third_part/RoboFactory/.git
+third_part/RoboFactory/**/__pycache__/
+third_part/RoboFactory/robofactory/logs/
+third_part/RoboFactory/robofactory/assets/assets.zip

@@ -120,6 +120,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._locked_targets = {}
         self._object_collision_enabled = {}
         self._contact_probes = {}
+        self._contact_sensors = {}
         self._handoff_history = []
         self._recovery_history = []
         self._object_metadata_map = {
@@ -660,8 +661,127 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             )
         except Exception:
             return None
+        try:
+            from isaacsim.core.simulation_manager import SimulationManager
+
+            simulation_view = SimulationManager.get_physics_sim_view()
+            if simulation_view is not None and hasattr(probe, 'initialize'):
+                if not getattr(probe, 'is_physics_handle_valid', lambda: False)():
+                    probe.initialize(physics_sim_view=simulation_view)
+        except Exception:
+            pass
         self._contact_probes[key] = probe
         return probe
+
+    def _get_contact_sensor(self, prim_path: str):
+        from omni.isaac.core.utils.prims import is_prim_path_valid
+
+        if not is_prim_path_valid(prim_path):
+            return None
+
+        sensor_path = f'{prim_path}/assembly_contact_sensor'
+        sensor = self._contact_sensors.get(sensor_path)
+        if sensor is not None:
+            return sensor
+
+        try:
+            from isaacsim.core.simulation_manager import SimulationManager
+            from isaacsim.sensors.physics import ContactSensor
+        except Exception:
+            return None
+
+        try:
+            sensor = ContactSensor(
+                prim_path=sensor_path,
+                name=sensor_path.split('/')[-1],
+                dt=self._CONTACT_FORCE_DT,
+                translation=np.zeros(3, dtype=float),
+                min_threshold=0.0,
+                max_threshold=1_000_000.0,
+                radius=-1,
+            )
+            sensor.add_raw_contact_data_to_frame()
+            simulation_view = SimulationManager.get_physics_sim_view()
+            if simulation_view is not None:
+                sensor.initialize(physics_sim_view=simulation_view)
+        except Exception:
+            return None
+
+        self._contact_sensors[sensor_path] = sensor
+        return sensor
+
+    @staticmethod
+    def _contact_body_matches(body_name: str | None, filter_prim_path: str) -> bool:
+        if body_name is None:
+            return False
+        body_name = str(body_name)
+        filter_prim_path = str(filter_prim_path)
+        return bool(
+            body_name == filter_prim_path
+            or body_name.startswith(filter_prim_path + '/')
+            or filter_prim_path.startswith(body_name + '/')
+        )
+
+    def _contact_observation_between(self, prim_path: str, filter_prim_path: str) -> dict:
+        sensor = self._get_contact_sensor(prim_path)
+        if sensor is not None:
+            try:
+                frame = sensor.get_current_frame()
+            except Exception:
+                frame = None
+            if isinstance(frame, dict):
+                contacts = frame.get('contacts') or []
+                matching_contact = any(
+                    self._contact_body_matches(contact.get('body0'), filter_prim_path)
+                    or self._contact_body_matches(contact.get('body1'), filter_prim_path)
+                    for contact in contacts
+                    if isinstance(contact, dict)
+                )
+                sensor_in_contact = bool(frame.get('in_contact', False))
+                if matching_contact or (sensor_in_contact and not contacts):
+                    return {
+                        'force': float(frame.get('force', 0.0) or 0.0),
+                        'valid': True,
+                        'source': 'contact_sensor',
+                    }
+
+        probe = self._get_contact_probe(prim_path, filter_prim_path)
+        probe_valid = bool(
+            probe is not None and getattr(probe, 'is_physics_handle_valid', lambda: False)()
+        )
+        if not probe_valid:
+            return {
+                'force': 0.0,
+                'valid': False,
+                'source': None,
+            }
+        try:
+            force_matrix = probe.get_contact_force_matrix(dt=self._CONTACT_FORCE_DT)
+        except Exception:
+            return {
+                'force': 0.0,
+                'valid': False,
+                'source': 'contact_probe',
+            }
+        force_matrix = self._tensor_to_numpy(force_matrix)
+        if force_matrix is None or force_matrix.size == 0:
+            return {
+                'force': 0.0,
+                'valid': True,
+                'source': 'contact_probe',
+            }
+        flattened = np.asarray(force_matrix, dtype=float).reshape(-1, 3)
+        if flattened.size == 0:
+            return {
+                'force': 0.0,
+                'valid': True,
+                'source': 'contact_probe',
+            }
+        return {
+            'force': float(np.max(np.linalg.norm(flattened, axis=1))),
+            'valid': True,
+            'source': 'contact_probe',
+        }
 
     @staticmethod
     def _tensor_to_numpy(value):
@@ -678,22 +798,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         return np.asarray(value)
 
     def _contact_force_between(self, prim_path: str, filter_prim_path: str) -> float:
-        probe = self._get_contact_probe(prim_path, filter_prim_path)
-        if probe is None:
-            return 0.0
-        if hasattr(probe, 'is_physics_handle_valid') and not probe.is_physics_handle_valid():
-            return 0.0
-        try:
-            force_matrix = probe.get_contact_force_matrix(dt=self._CONTACT_FORCE_DT)
-        except Exception:
-            return 0.0
-        force_matrix = self._tensor_to_numpy(force_matrix)
-        if force_matrix is None or force_matrix.size == 0:
-            return 0.0
-        flattened = np.asarray(force_matrix, dtype=float).reshape(-1, 3)
-        if flattened.size == 0:
-            return 0.0
-        return float(np.max(np.linalg.norm(flattened, axis=1)))
+        return float(self._contact_observation_between(prim_path, filter_prim_path).get('force', 0.0))
 
     @staticmethod
     def _point_to_world_aabb_gap(point: np.ndarray, center: np.ndarray, half_extents: np.ndarray) -> float:
@@ -851,13 +956,20 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'best_surface_gap': None,
                 'axes': {},
             }
-            force = self._contact_force_between(rigid_body.unwrap().prim_path, object_prim_path)
+            contact_observation = self._contact_observation_between(
+                rigid_body.unwrap().prim_path,
+                object_prim_path,
+            )
+            force = float(contact_observation.get('force', 0.0))
+            probe_valid = bool(contact_observation.get('valid', False))
             force_contact = force >= contact_force_threshold
             has_contact = force_contact or geometric_contact
             contact_available = contact_available or force_contact
             finger_metrics[finger_name] = {
                 'prim_path': rigid_body.unwrap().prim_path,
                 'force': force,
+                'force_probe_valid': probe_valid,
+                'force_source': contact_observation.get('source'),
                 'surface_gap': surface_gap,
                 'origin_gap': origin_gap,
                 'fingertip_gap': None
@@ -1063,6 +1175,62 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return None
         return float(np.max(np.abs(gripper_positions)))
 
+    @staticmethod
+    def _contact_axis_for_gripper_limit(contact_metrics: dict | None) -> str | None:
+        if not isinstance(contact_metrics, dict):
+            return None
+        axis = contact_metrics.get('pinch_axis') or contact_metrics.get('caging_axis')
+        if axis in {'x', 'y', 'z'}:
+            return axis
+        return None
+
+    def _gripper_opening_limit(
+        self,
+        object_name: str,
+        attach_spec: dict,
+        *,
+        contact_metrics: dict | None = None,
+        hold_phase: bool = False,
+        within_grace: bool = False,
+    ) -> float:
+        base_threshold = float(
+            attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD)
+        )
+        default_margin = 0.004 if hold_phase else 0.002
+        base_margin = float(attach_spec.get('gripper_closed_margin', default_margin))
+        opening_limit = base_threshold + base_margin
+
+        contact_axis = self._contact_axis_for_gripper_limit(contact_metrics)
+        if contact_axis is not None:
+            axis_index = {'x': 0, 'y': 1, 'z': 2}[contact_axis]
+            object_scale = self._get_object_scale(object_name)
+            if object_scale.size > axis_index:
+                object_half_extent = max(float(object_scale[axis_index]) * 0.5, 0.0)
+                object_margin_key = 'hold_gripper_object_margin' if hold_phase else 'attach_gripper_object_margin'
+                default_object_margin = 0.010 if hold_phase else 0.008
+                opening_limit = max(
+                    opening_limit,
+                    object_half_extent + float(attach_spec.get(object_margin_key, default_object_margin)),
+                )
+
+        if within_grace:
+            opening_limit += float(attach_spec.get('hold_grace_extra_opening', 0.008))
+
+        return opening_limit
+
+    def _physical_hold_within_grace(self, attachment_state: dict, attach_spec: dict) -> bool:
+        attach_step = attachment_state.get('attach_step')
+        if attach_step is None:
+            return False
+        try:
+            attach_step = int(attach_step)
+        except Exception:
+            return False
+        hold_grace_steps = max(int(attach_spec.get('hold_grace_steps', 12)), 0)
+        if hold_grace_steps <= 0:
+            return False
+        return int(self.step_counter) - attach_step <= hold_grace_steps
+
     def _get_object_scale(self, object_name: str) -> np.ndarray:
         metadata = self._object_metadata_map.get(object_name, {})
         return np.asarray(metadata.get('scale', [1.0, 1.0, 1.0]), dtype=float)
@@ -1218,7 +1386,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         contact_metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
         attach_mode = self._attachment_mode(attach_spec)
         uses_joint_attachment = attach_mode in self._JOINT_ATTACHMENT_MODES
-        if attach_mode in {'physical_hold', 'physical', 'contact_hold'}:
+        if attach_mode in {'physical_hold', 'physical', 'contact_hold', 'physical_grasp', 'contact_physical_grasp'}:
             self._attachments[object_name] = {
                 'robot_name': robot_name,
                 'position': relative_position.tolist(),
@@ -1288,12 +1456,17 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return False
 
         attach_spec = attachment_state.get('attach_spec') or {}
+        contact_metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
+        within_grace = self._physical_hold_within_grace(attachment_state, attach_spec)
         gripper_opening = self._get_robot_gripper_opening(robot_name)
-        gripper_closed_threshold = float(
-            attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD)
+        gripper_opening_limit = self._gripper_opening_limit(
+            object_name,
+            attach_spec,
+            contact_metrics=contact_metrics,
+            hold_phase=True,
+            within_grace=within_grace,
         )
-        gripper_closed_margin = float(attach_spec.get('gripper_closed_margin', 0.004))
-        if gripper_opening is not None and gripper_opening > gripper_closed_threshold + gripper_closed_margin:
+        if gripper_opening is not None and gripper_opening > gripper_opening_limit:
             return False
 
         relative_position, relative_orientation = self._current_relative_pose(object_name, robot_name)
@@ -1312,8 +1485,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         max_orientation_slip = float(
             attach_spec.get('hold_orientation_slip_tolerance', self._PHYSICAL_HOLD_ORIENTATION_SLIP)
         )
-
-        contact_metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
+        if within_grace:
+            max_position_slip = max(
+                max_position_slip,
+                float(attach_spec.get('hold_grace_position_slip_tolerance', max_position_slip * 2.0)),
+            )
+            max_orientation_slip = max(
+                max_orientation_slip,
+                float(attach_spec.get('hold_grace_orientation_slip_tolerance', max_orientation_slip * 1.5)),
+            )
         strict_contact = bool(contact_metrics.get('pinch_axis')) or bool(contact_metrics.get('dual_finger_contact'))
         return bool(
             position_slip <= max_position_slip
@@ -1364,10 +1544,6 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'object': object_name,
             'robot': robot_name,
         }
-        gripper_closed_threshold = float(
-            attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD)
-        )
-        gripper_closed_margin = float(attach_spec.get('gripper_closed_margin', 0.002))
         gripper_opening = self._get_robot_gripper_opening(robot_name)
         debug_payload.update(
             {
@@ -1377,14 +1553,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 if target_info['orientation_error'] is None
                 else float(target_info['orientation_error']),
                 'gripper_opening': None if gripper_opening is None else float(gripper_opening),
-                'gripper_closed_threshold': gripper_closed_threshold,
-                'gripper_closed_margin': gripper_closed_margin,
             }
         )
-        if gripper_opening is not None and gripper_opening > gripper_closed_threshold + gripper_closed_margin:
-            debug_payload['blocked_by'] = 'gripper_open'
-            self._maybe_write_attach_debug(debug_payload)
-            return False
         min_gripper_opening = attach_spec.get('min_gripper_opening')
         if min_gripper_opening is not None and gripper_opening is not None:
             if float(gripper_opening) < float(min_gripper_opening):
@@ -1408,8 +1578,16 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         allow_top_contact_fallback = bool(
             attach_spec.get('allow_top_contact_fallback', not slender_attach)
         )
+        attach_mode = str(attach_spec.get('attachment_mode', 'fixed_joint')).lower()
+        default_require_target_reached = slender_attach or attach_mode in {
+            'physical_hold',
+            'physical',
+            'contact_hold',
+            'physical_grasp',
+            'contact_physical_grasp',
+        }
         require_target_reached = bool(
-            attach_spec.get('require_target_reached_for_attach', slender_attach)
+            attach_spec.get('require_target_reached_for_attach', default_require_target_reached)
         )
         top_contact_ready = False
         max_top_clearance = attach_spec.get('top_clearance', self._ATTACH_TOP_CLEARANCE)
@@ -1429,8 +1607,19 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             top_contact_ready = top_clearance <= min(max_top_clearance, 0.003)
         contact_metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
         debug_payload['contact_metrics'] = copy.deepcopy(contact_metrics)
+        gripper_opening_limit = self._gripper_opening_limit(
+            object_name,
+            attach_spec,
+            contact_metrics=contact_metrics,
+            hold_phase=False,
+            within_grace=False,
+        )
+        debug_payload['gripper_opening_limit'] = gripper_opening_limit
+        if gripper_opening is not None and gripper_opening > gripper_opening_limit:
+            debug_payload['blocked_by'] = 'gripper_open'
+            self._maybe_write_attach_debug(debug_payload)
+            return False
         contact_ready = bool(contact_metrics['contact_ready'])
-        attach_mode = str(attach_spec.get('attachment_mode', 'fixed_joint')).lower()
         uses_physical_joint = attach_mode in self._JOINT_ATTACHMENT_MODES
         left_finger_metrics = contact_metrics.get('left_finger') or {}
         right_finger_metrics = contact_metrics.get('right_finger') or {}
@@ -1788,6 +1977,44 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 return False
         return True
 
+    def _object_lifted(self, lift_specs: list[dict], *, default_min_lift: float = 0.04) -> bool:
+        for lift_spec in lift_specs:
+            if not isinstance(lift_spec, dict):
+                object_name = self._extract_object_name(lift_spec)
+                lift_spec = {'object': object_name}
+            object_name = lift_spec.get('object')
+            if object_name is None:
+                return False
+
+            attachment_state = self._attachments.get(object_name)
+            if bool(lift_spec.get('require_attached', True)):
+                if attachment_state is None:
+                    return False
+                robot_name = lift_spec.get('robot')
+                if robot_name is not None and attachment_state.get('robot_name') != robot_name:
+                    return False
+                if attachment_state.get('mode') == 'physical_hold' and not self._physical_hold_valid(
+                    object_name,
+                    attachment_state,
+                ):
+                    return False
+
+            sampled_position = self._sampled_object_position(object_name)
+            object_position, _ = self._resolve_object(object_name).get_pose()
+            object_position = np.asarray(object_position, dtype=float)
+            if sampled_position is None:
+                baseline_z = float(lift_spec.get('baseline_z', object_position[2]))
+            else:
+                baseline_z = float(np.asarray(sampled_position, dtype=float)[2])
+
+            min_height = lift_spec.get('min_height')
+            if min_height is not None and float(object_position[2]) < float(min_height):
+                return False
+            min_lift = float(lift_spec.get('min_lift', default_min_lift))
+            if float(object_position[2] - baseline_z) < min_lift:
+                return False
+        return True
+
     def _advance_condition_met(self, phase_spec: dict) -> bool:
         if not self._phase_interactions_complete(phase_spec):
             return False
@@ -1832,6 +2059,22 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 object_targets=advance.get('objects', []),
                 tolerance=float(advance.get('tolerance', 0.04)),
                 orientation_tolerance=orientation_tolerance,
+            )
+        if advance_type in {'object_lifted', 'objects_lifted'}:
+            object_specs = advance.get('objects')
+            if object_specs is None:
+                object_specs = [
+                    {
+                        'object': advance.get('object'),
+                        'robot': advance.get('robot'),
+                        'min_lift': advance.get('min_lift'),
+                        'min_height': advance.get('min_height'),
+                        'require_attached': advance.get('require_attached', True),
+                    }
+                ]
+            return self._object_lifted(
+                object_specs,
+                default_min_lift=float(advance.get('min_lift', 0.04)),
             )
         if advance_type == 'success_criteria_met':
             return self._check_success()

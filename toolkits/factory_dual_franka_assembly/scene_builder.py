@@ -120,6 +120,9 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
             mass=object_spec.get('mass'),
             density=object_spec.get('density'),
             collider=object_spec.get('collider', True),
+            static_friction=object_spec.get('static_friction'),
+            dynamic_friction=object_spec.get('dynamic_friction'),
+            restitution=object_spec.get('restitution'),
             **common_kwargs,
         )
     if kind == 'visual_cube':

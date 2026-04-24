@@ -185,6 +185,38 @@ class FrankaRobot(BaseRobot):
                 physics_view.set_dof_friction_coefficients(data=friction_coefficients, indices=[0])
             except Exception:
                 pass
+        self._apply_gripper_contact_material()
+
+    def _apply_gripper_contact_material(self):
+        """Give the Franka fingers enough surface friction for real PhysX grasps."""
+        try:
+            from isaacsim.core.api.materials import PhysicsMaterial
+        except Exception:
+            try:
+                from omni.isaac.core.materials import PhysicsMaterial
+            except Exception:
+                return
+
+        try:
+            material_name = f'{self.config.name}_finger_high_friction'
+            physics_material = PhysicsMaterial(
+                prim_path=f'/World/Physics_Materials/{material_name}',
+                name=material_name,
+                static_friction=3.0,
+                dynamic_friction=2.5,
+                restitution=0.0,
+            )
+        except Exception:
+            return
+
+        for link_name in ('panda_leftfinger', 'panda_rightfinger'):
+            rigid_body = self._rigid_body_map.get(f'{self.config.prim_path}/{link_name}')
+            if rigid_body is None:
+                continue
+            try:
+                rigid_body.unwrap().apply_physics_material(physics_material)
+            except Exception:
+                pass
 
     @staticmethod
     def action_to_dict(action):
