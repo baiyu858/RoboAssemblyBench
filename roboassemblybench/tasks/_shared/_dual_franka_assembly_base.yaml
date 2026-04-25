@@ -1,0 +1,95 @@
+# Shared scaffold for the first batch of dual-arm assembly recipes.
+# The runtime supports RoboFactory-style physical grasp phases for data collection.
+# Recipes can still opt into explicit lock phases for synthetic scaffolding, but
+# physical-grasp recipes should rely on contact, release, and settle checks.
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+max_steps: 1800
+phase_timeout_steps: 72
+phase_timeout_action: retry
+supported_scene_profiles:
+  - taoyuan_tabletop
+  - taoyuan_grscenes_tabletop
+  - proxy_factory_cell
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.0, -0.72, 0.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.0, 0.72, 0.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+camera_specs:
+  - name: third_person_front
+    owner: franka_left
+    prim_path: /World/env_0/cameras/third_person_front
+    view_type: front
+    video_key: observation.images.isaac_3d
+    description: Forward-facing third-person camera looking at both Franka arms and the shared fixture.
+    resolution: [960, 540]
+    rgba: false
+    attach_runtime_sensor: false
+    translation: [4.5, 0.0, 0.4]
+    orientation_euler: [1.5707963268, 1.5707963268, 0.0]
+  - name: left_wrist
+    owner: franka_left
+    prim_path: panda_hand/left_wrist_camera
+    view_type: wrist
+    robot: franka_left
+    video_key: observation.images.left_wrist
+    description: Left wrist camera following the left end effector toward its current task target.
+    resolution: [640, 480]
+    rgba: false
+    attach_runtime_sensor: false
+    translation: [-0.1, 0.0, -0.03]
+    orientation_euler: [3.1415926536, -0.0872664626, 0.0]
+    focal_length: 12.0
+    horizontal_aperture: 20.955
+    clipping_range: [0.01, 10.0]
+    mount_offset: [-0.1, 0.0, -0.03]
+    look_offset: [0.16, 0.0, -0.05]
+    target_source: task_target
+  - name: right_wrist
+    owner: franka_right
+    prim_path: panda_hand/right_wrist_camera
+    view_type: wrist
+    robot: franka_right
+    video_key: observation.images.right_wrist
+    description: Right wrist camera following the right end effector toward its current task target.
+    resolution: [640, 480]
+    rgba: false
+    attach_runtime_sensor: false
+    translation: [-0.1, 0.0, -0.03]
+    orientation_euler: [3.1415926536, -0.0872664626, 0.0]
+    focal_length: 12.0
+    horizontal_aperture: 20.955
+    clipping_range: [0.01, 10.0]
+    mount_offset: [-0.1, 0.0, -0.03]
+    look_offset: [0.16, 0.0, -0.05]
+    target_source: task_target
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.34, -0.28, 0.42]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.34, 0.28, 0.42]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.20, -0.52, 0.48]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.20, 0.52, 0.48]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+
+metadata:
+  tags:
+    - assembly
+  migration_batch: first_batch
+  runtime_note: Physical-grasp recipes use contact-gated grasping and post-release settling checks.

@@ -36,6 +36,9 @@ class UsdObject(BaseObject):
                 linear_velocity: Optional[Sequence[float]] = None,
                 angular_velocity: Optional[Sequence[float]] = None,
                 collider: Optional[bool] = True,
+                static_friction: Optional[float] = None,
+                dynamic_friction: Optional[float] = None,
+                restitution: Optional[float] = None,
             ) -> None:
                 if not is_prim_path_valid(prim_path):
                     if mass is None:
@@ -57,6 +60,37 @@ class UsdObject(BaseObject):
                     linear_velocity=linear_velocity,
                     angular_velocity=angular_velocity,
                 )
+                self._apply_optional_physics_material(
+                    name=name,
+                    static_friction=static_friction,
+                    dynamic_friction=dynamic_friction,
+                    restitution=restitution,
+                )
+
+            def _apply_optional_physics_material(
+                self,
+                *,
+                name: str,
+                static_friction: Optional[float],
+                dynamic_friction: Optional[float],
+                restitution: Optional[float],
+            ) -> None:
+                if static_friction is None and dynamic_friction is None and restitution is None:
+                    return
+                try:
+                    from isaacsim.core.api.materials import PhysicsMaterial
+
+                    material_name = name.replace('/', '_')
+                    physics_material = PhysicsMaterial(
+                        prim_path=f'/World/Physics_Materials/{material_name}_physics_material',
+                        name=f'{material_name}_physics_material',
+                        static_friction=static_friction,
+                        dynamic_friction=dynamic_friction,
+                        restitution=restitution,
+                    )
+                    self.apply_physics_material(physics_material)
+                except Exception:
+                    return
 
         class GeometryObject(GeometryPrim):
             def __init__(
@@ -72,6 +106,9 @@ class UsdObject(BaseObject):
                 color: Optional[np.ndarray] = None,
                 size: Optional[float] = None,
                 collider: Optional[bool] = False,
+                static_friction: Optional[float] = None,
+                dynamic_friction: Optional[float] = None,
+                restitution: Optional[float] = None,
             ) -> None:
                 prim = add_reference_to_stage(os.path.abspath(usd_path), prim_path)
                 if collider:
@@ -89,6 +126,25 @@ class UsdObject(BaseObject):
                     visible=visible,
                     collision=collider,
                 )
+                if collider and (
+                    static_friction is not None
+                    or dynamic_friction is not None
+                    or restitution is not None
+                ):
+                    try:
+                        from isaacsim.core.api.materials import PhysicsMaterial
+
+                        material_name = name.replace('/', '_')
+                        physics_material = PhysicsMaterial(
+                            prim_path=f'/World/Physics_Materials/{material_name}_physics_material',
+                            name=f'{material_name}_physics_material',
+                            static_friction=static_friction,
+                            dynamic_friction=dynamic_friction,
+                            restitution=restitution,
+                        )
+                        self.apply_physics_material(physics_material)
+                    except Exception:
+                        pass
 
         if self._config.rigid_body:
             scene.add(
@@ -100,6 +156,9 @@ class UsdObject(BaseObject):
                     orientation=self._config.orientation,
                     scale=self._config.scale,
                     collider=self._config.collider,
+                    static_friction=self._config.static_friction,
+                    dynamic_friction=self._config.dynamic_friction,
+                    restitution=self._config.restitution,
                 )
             )
         else:
@@ -112,5 +171,8 @@ class UsdObject(BaseObject):
                     orientation=self._config.orientation,
                     scale=self._config.scale,
                     collider=self._config.collider,
+                    static_friction=self._config.static_friction,
+                    dynamic_friction=self._config.dynamic_friction,
+                    restitution=self._config.restitution,
                 )
             )

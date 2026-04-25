@@ -49,6 +49,24 @@ def test_scene_builder_builds_peg_insertion_episode():
     assert len(task_cfg.camera_metadata) == 3
 
 
+def test_peg_insertion_uses_physical_grasp_and_release_success():
+    task_cfg = build_dual_franka_assembly_episode(recipe='peg_insertion', seed=7, episode_idx=1)
+    attach_specs = [
+        attach_spec
+        for phase_spec in task_cfg.phase_specs
+        for attach_spec in phase_spec.get('attach', [])
+        if isinstance(attach_spec, dict)
+    ]
+    assert attach_specs
+    assert {attach_spec['attachment_mode'] for attach_spec in attach_specs} == {'pure_physical_grasp'}
+    assert all(not phase_spec.get('lock') for phase_spec in task_cfg.phase_specs)
+    assert all(success_spec.get('require_released') for success_spec in task_cfg.success_criteria)
+    assert all(success_spec.get('require_static') for success_spec in task_cfg.success_criteria)
+    assert {'static_friction', 'dynamic_friction', 'restitution'}.issubset(
+        set(next(obj for obj in task_cfg.object_metadata if obj['name'] == 'workbench'))
+    )
+
+
 @pytest.mark.parametrize(
     ('recipe', 'required_target_names', 'required_object_names'),
     [

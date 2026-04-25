@@ -1,0 +1,69 @@
+extends: _base.yaml
+task_name: connector_docking
+title: Connector docking
+summary: Two Franka arms dock a connector body and socket into the shared fixture.
+task_description: >-
+  Two Franka arms stabilize the socket housing, align the connector body, dock the pair into the fixture, and retreat
+  after the connection is locked.
+metadata:
+  tags:
+    - connector
+    - docking
+    - dual-arm
+  object_roles:
+    connector_body:
+      role: plug
+      owner: franka_right
+      summary: Right arm inserts the connector body into the stabilized socket.
+    socket_housing:
+      role: socket
+      owner: franka_left
+      summary: Left arm holds the socket against the dock fixture.
+    dock_fixture:
+      role: alignment_fixture
+      summary: Shared fixture that constrains the docking geometry.
+    assembly_station:
+      role: support_surface
+      summary: Static tabletop surface that anchors the docking fixture.
+  target_roles:
+    connector_pick:
+      object: connector_body
+      phase: right_grasp_connector
+      summary: Hover pose above the connector body before grasp.
+    socket_pick:
+      object: socket_housing
+      phase: left_approach_socket
+      summary: Hover pose above the socket housing before grasp.
+    socket_hold:
+      object: socket_housing
+      phase: left_present_socket
+      summary: Left-arm staging pose while the socket is stabilized.
+    connector_pre_dock:
+      object: connector_body
+      phase: right_pre_dock_connector
+      summary: Pre-docking pose that aligns the connector with the socket opening.
+    connector_dock:
+      object: connector_body
+      phase: right_dock_connector
+      summary: Final docking pose before the connector is locked.
+    socket_locked:
+      object: socket_housing
+      phase: finalize_connector_docking
+      summary: Final locked pose for the socket housing.
+    connector_locked:
+      object: connector_body
+      phase: finalize_connector_docking
+      summary: Final locked pose for the connector body.
+  phase_notes:
+    - name: left_present_socket
+      summary: Left arm holds the socket in the dock fixture while the right arm approaches the connector.
+      focus_objects: [socket_housing, connector_body]
+      focus_targets: [socket_hold, connector_pick]
+    - name: right_pre_dock_connector
+      summary: Right arm performs the final alignment before docking.
+      focus_objects: [connector_body]
+      focus_targets: [connector_pre_dock]
+    - name: finalize_connector_docking
+      summary: Both halves are released and locked into the dock fixture.
+      focus_objects: [socket_housing, connector_body]
+      focus_targets: [socket_locked, connector_locked]

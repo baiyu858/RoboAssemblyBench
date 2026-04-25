@@ -1,0 +1,99 @@
+extends: _base.yaml
+task_name: bracket_latching
+title: Bracket latching
+summary: Two Franka arms seat a bracket and latch it into the shared fixture.
+task_description: >-
+  Two Franka arms seat the bracket, hold it against the latch fixture, insert the latch, and retreat once the bracket
+  is locked.
+metadata:
+  tags:
+    - bracket
+    - latch
+    - fastening
+    - dual-arm
+  object_roles:
+    bracket:
+      role: workpiece
+      owner: franka_left
+      summary: Left arm carries the bracket into the latch fixture.
+    latch:
+      role: fastening_element
+      owner: franka_right
+      summary: Right arm grasps and inserts the latch.
+    latch_fixture:
+      role: alignment_fixture
+      summary: Shared fixture that constrains the bracket and latch.
+    assembly_station:
+      role: support_surface
+      summary: Static tabletop surface that anchors the fixture.
+  target_roles:
+    left_wait:
+      phase: left_approach_bracket
+      summary: Left-arm staging pose before the first grasp.
+    right_wait:
+      phase: left_approach_bracket
+      summary: Right-arm waiting pose before the handoff.
+    left_retreat:
+      phase: retreat
+      summary: Left-arm retreat pose after latching.
+    right_retreat:
+      phase: retreat
+      summary: Right-arm retreat pose after latching.
+    bracket_pick:
+      object: bracket
+      phase: left_approach_bracket
+      summary: Hover above the bracket for the first grasp.
+    bracket_fixture_hold:
+      object: bracket
+      phase: right_preinsert_latch
+      summary: Hold the bracket against the fixture during latch insertion.
+    latch_pick:
+      object: latch
+      phase: right_grasp_latch
+      summary: Hover above the latch before grasping.
+    latch_insert:
+      object: latch
+      phase: right_insert_latch
+      summary: Right-arm insertion pose over the fixture.
+    bracket_locked:
+      object: bracket
+      phase: finalize_latching
+      summary: Final locked pose for the bracket.
+    latch_locked:
+      object: latch
+      phase: finalize_latching
+      summary: Final locked pose for the latch.
+  phase_notes:
+    - name: left_approach_bracket
+      summary: Left arm approaches the bracket while the right arm waits.
+      focus_objects:
+        - bracket
+      focus_targets:
+        - bracket_pick
+        - right_wait
+    - name: left_present_bracket
+      summary: Left arm presents the bracket to the latch fixture.
+      focus_objects:
+        - bracket
+      focus_targets:
+        - bracket_fixture_hover
+    - name: right_grasp_latch
+      summary: Right arm grasps the latch while the bracket stays supported.
+      focus_objects:
+        - latch
+      focus_targets:
+        - latch_pick
+    - name: right_insert_latch
+      summary: Right arm inserts the latch into the fixture.
+      focus_objects:
+        - latch
+      focus_targets:
+        - latch_insert
+    - name: finalize_latching
+      summary: Both parts are locked in place before retreat.
+      focus_objects:
+        - bracket
+        - latch
+      focus_targets:
+        - bracket_locked
+        - latch_locked

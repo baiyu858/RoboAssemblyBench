@@ -17,7 +17,7 @@ class GripperController(BaseController):
         super().__init__(config, robot, scene)
 
     @staticmethod
-    def _normalize_action(action: Any) -> str:
+    def _normalize_action(action: Any) -> str | float:
         if isinstance(action, str):
             lowered = action.strip().lower()
             if lowered in {'open', '1', '1.0', 'true'}:
@@ -31,15 +31,34 @@ class GripperController(BaseController):
         if isinstance(action, (int, float, np.integer, np.floating)):
             value = float(action)
             if 0.0 <= value <= 1.0:
-                return 'open' if value >= 0.5 else 'close'
+                if value <= 1e-6:
+                    return 'close'
+                if value >= 1.0 - 1e-6:
+                    return 'open'
+                return value
 
         raise AssertionError(
-            'gripper action must be one of "open"/"close" or a binary scalar '
+            'gripper action must be one of "open"/"close" or a scalar in [0, 1] '
             f'where 1=open and 0=close, but got {action!r}'
         )
 
+    def _continuous_forward(self, openness: float) -> ArticulationAction:
+        opened_positions = np.asarray(self._gripper.joint_opened_positions, dtype=float)
+        closed_positions = np.asarray(self._gripper.joint_closed_positions, dtype=float)
+        openness = float(np.clip(openness, 0.0, 1.0))
+        joint_positions = closed_positions + openness * (opened_positions - closed_positions)
+        joint_indices = getattr(self._gripper, 'active_joint_indices', None)
+        if joint_indices is not None:
+            joint_indices = np.asarray(joint_indices, dtype=np.int64)
+            if joint_positions.shape[0] != joint_indices.shape[0]:
+                joint_positions = joint_positions[: joint_indices.shape[0]]
+        return ArticulationAction(joint_positions=joint_positions, joint_indices=joint_indices)
+
     def forward(self, action: Any) -> ArticulationAction:
-        return self._gripper.forward(self._normalize_action(action))
+        normalized_action = self._normalize_action(action)
+        if isinstance(normalized_action, str):
+            return self._gripper.forward(normalized_action)
+        return self._continuous_forward(normalized_action)
 
     def action_to_control(self, action: List | np.ndarray) -> ArticulationAction:
         """

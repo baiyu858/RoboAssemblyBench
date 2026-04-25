@@ -1,0 +1,11 @@
+schema_version: 1
+metadata:
+  authoring_stack: RoboFactory/RoboTwin-style
+  benchmark_family: factory_dual_franka_assembly
+  annotation_batch: first
+  task_modality: dual_arm_manipulation
+  export_tags:
+    - dual-arm
+    - assembly
+    - franka
+    - factory

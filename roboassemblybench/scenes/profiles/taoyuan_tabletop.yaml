@@ -1,0 +1,50 @@
+profile_name: taoyuan_tabletop
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+workspace_offset: [0.0, 0.0, 0.78]
+
+metadata:
+  scene_family: taoyuan
+  description: InternUtopia asset-backed tabletop workcell using the bundled white table USD as the Taoyuan assembly bench anchor.
+  asset_references:
+    - name: empty_scene
+      kind: scene
+      path: ${ASSET_PATH}/scenes/empty.usd
+    - name: taoyuan_white_big_table
+      kind: usd
+      path: ${ASSET_PATH}/objects/table/white_big/instance.usd
+
+objects:
+  - name: taoyuan_table
+    kind: usd
+    prim_path: /taoyuan_table
+    usd_path: ${ASSET_PATH}/objects/table/white_big/instance.usd
+    position: [0.0, 0.0, 0.374]
+    apply_workspace_offset: false
+    scale: [0.001, 0.001, 0.001]
+    collider: true
+    static_friction: 2.5
+    dynamic_friction: 2.0
+    restitution: 0.0
+    tracked: false
+  - name: taoyuan_left_buffer
+    kind: static_cube
+    prim_path: /taoyuan_left_buffer
+    position: [0.68, -0.38, 0.81]
+    apply_workspace_offset: false
+    scale: [0.10, 0.10, 0.06]
+    color: [0.22, 0.29, 0.33]
+    static_friction: 2.5
+    dynamic_friction: 2.0
+    restitution: 0.0
+    tracked: false
+  - name: taoyuan_right_buffer
+    kind: static_cube
+    prim_path: /taoyuan_right_buffer
+    position: [0.68, 0.38, 0.81]
+    apply_workspace_offset: false
+    scale: [0.10, 0.10, 0.06]
+    color: [0.22, 0.29, 0.33]
+    static_friction: 2.5
+    dynamic_friction: 2.0
+    restitution: 0.0
+    tracked: false

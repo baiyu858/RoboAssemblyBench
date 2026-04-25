@@ -1,0 +1,189 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: nut_thread_after_hold
+prompt: Two Franka arms hold the bracket while the other threads the nut onto the stud.
+
+metadata:
+  tags:
+    - threading
+  runtime_note: Current runtime approximates nut threading with staged prethread and lock targets after the bracket is held.
+
+objects:
+  - name: bracket_block
+    kind: dynamic_cube
+    prim_path: /bracket_block
+    position: [0.55, -0.22, 0.022]
+    random_xy: [0.04, 0.03]
+    scale: [0.16, 0.07, 0.05]
+    color: [0.84, 0.51, 0.18]
+  - name: nut_fastener
+    kind: dynamic_cube
+    prim_path: /nut_fastener
+    position: [0.56, 0.22, 0.030]
+    random_xy: [0.04, 0.03]
+    scale: [0.035, 0.035, 0.04]
+    color: [0.74, 0.74, 0.76]
+  - name: thread_fixture
+    kind: visual_cube
+    prim_path: /thread_fixture
+    position: [0.82, 0.0, 0.07]
+    scale: [0.20, 0.18, 0.14]
+    color: [0.21, 0.28, 0.34]
+    tracked: false
+  - name: assembly_station
+    kind: visual_cube
+    prim_path: /assembly_station
+    position: [0.82, 0.0, 0.005]
+    scale: [0.40, 0.54, 0.01]
+    color: [0.18, 0.18, 0.18]
+    tracked: false
+
+targets:
+  - name: bracket_pick
+    reference: bracket_block
+    offset: [0.0, 0.0, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: bracket_hold
+    reference: thread_fixture
+    offset: [0.0, 0.0, 0.13]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: bracket_locked
+    reference: thread_fixture
+    offset: [0.0, 0.0, 0.09]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: nut_pick
+    reference: nut_fastener
+    offset: [0.0, 0.0, 0.12]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: nut_prethread
+    reference: thread_fixture
+    offset: [0.03, 0.0, 0.20]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: nut_thread
+    reference: thread_fixture
+    offset: [0.03, 0.0, 0.14]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: nut_locked
+    reference: thread_fixture
+    offset: [0.03, 0.0, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: left_approach_bracket
+    robot_targets:
+      franka_left: bracket_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: left_grasp_bracket
+    robot_targets:
+      franka_left: bracket_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    attach:
+      - object: bracket_block
+        robot: franka_left
+    advance:
+      type: timer
+      min_steps: 16
+  - name: left_hold_bracket
+    robot_targets:
+      franka_left: bracket_hold
+      franka_right: nut_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_approach_nut
+    robot_targets:
+      franka_left: bracket_hold
+      franka_right: nut_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_nut
+    robot_targets:
+      franka_left: bracket_hold
+      franka_right: nut_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    attach:
+      - object: nut_fastener
+        robot: franka_right
+    advance:
+      type: timer
+      min_steps: 16
+  - name: right_prethread_nut
+    robot_targets:
+      franka_left: bracket_hold
+      franka_right: nut_prethread
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.035
+  - name: right_thread_nut
+    robot_targets:
+      franka_left: bracket_hold
+      franka_right: nut_thread
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 14
+      tolerance: 0.03
+  - name: finalize_threading
+    robot_targets:
+      franka_left: bracket_hold
+      franka_right: nut_thread
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - bracket_block
+      - nut_fastener
+    lock:
+      - object: bracket_block
+        target: bracket_locked
+      - object: nut_fastener
+        target: nut_locked
+    advance:
+      type: timer
+      min_steps: 20
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.05
+
+success:
+  - object: bracket_block
+    target: bracket_locked
+    position_tolerance: 0.03
+  - object: nut_fastener
+    target: nut_locked
+    position_tolerance: 0.025

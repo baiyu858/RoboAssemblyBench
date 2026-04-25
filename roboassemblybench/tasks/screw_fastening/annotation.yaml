@@ -1,0 +1,101 @@
+extends: _base.yaml
+task_name: screw_fastening
+title: Screw fastening
+summary: Two Franka arms assemble a bracket and fasten the screw at the shared fixture.
+task_description: >-
+  Two Franka arms assemble the bracket, stabilize it against the shared fixture, insert the screw, and retreat once
+  the fastener is locked.
+metadata:
+  tags:
+    - screw
+    - fastening
+    - handoff
+    - dual-arm
+  object_roles:
+    assembly_part:
+      role: workpiece
+      owner: franka_left
+      summary: Left arm carries the bracket into the fixture.
+    screw:
+      role: fastener
+      owner: franka_right
+      summary: Right arm grasps, inserts, and locks the screw.
+    fixture:
+      role: alignment_fixture
+      summary: Shared fixture that constrains the part and screw.
+    assembly_station:
+      role: support_surface
+      summary: Static tabletop surface that anchors the fixture.
+  target_roles:
+    left_wait:
+      phase: left_approach_part
+      summary: Left-arm staging pose before the first grasp.
+    right_wait:
+      phase: left_approach_part
+      summary: Right-arm waiting pose before the handoff.
+    left_retreat:
+      phase: retreat
+      summary: Left-arm retreat pose after fastening.
+    right_retreat:
+      phase: retreat
+      summary: Right-arm retreat pose after fastening.
+    part_pick:
+      object: assembly_part
+      phase: left_approach_part
+      summary: Hover above the bracket for the first grasp.
+    part_fixture_hold:
+      object: assembly_part
+      phase: hold_part_and_approach_screw
+      summary: Hold the bracket against the fixture while the screw is inserted.
+    screw_pick:
+      object: screw
+      phase: right_grasp_screw
+      summary: Hover above the screw before the right-arm grasp.
+    screw_insert:
+      object: screw
+      phase: right_insert_screw
+      summary: Right-arm insertion pose over the fixture.
+    part_locked:
+      object: assembly_part
+      phase: finalize_fastening
+      summary: Final locked pose for the bracket.
+    screw_locked:
+      object: screw
+      phase: finalize_fastening
+      summary: Final locked pose for the screw.
+  phase_notes:
+    - name: left_approach_part
+      summary: Left arm approaches the bracket while the right arm waits.
+      focus_objects:
+        - assembly_part
+      focus_targets:
+        - part_pick
+        - right_wait
+    - name: left_grasp_part
+      summary: Left arm grasps the bracket and attaches it for transport.
+      focus_objects:
+        - assembly_part
+      focus_targets:
+        - part_pick
+    - name: hold_part_and_approach_screw
+      summary: Left arm holds the part in the fixture while the right arm moves to the screw.
+      focus_objects:
+        - assembly_part
+        - screw
+      focus_targets:
+        - part_fixture_hold
+        - screw_pick
+    - name: right_insert_screw
+      summary: Right arm drives the screw into the fixture stack-up.
+      focus_objects:
+        - screw
+      focus_targets:
+        - screw_insert
+    - name: finalize_fastening
+      summary: Both objects are locked in place before the robots retreat.
+      focus_objects:
+        - assembly_part
+        - screw
+      focus_targets:
+        - part_locked
+        - screw_locked

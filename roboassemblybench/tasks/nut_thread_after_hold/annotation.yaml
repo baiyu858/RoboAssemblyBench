@@ -1,0 +1,66 @@
+extends: _base.yaml
+task_name: nut_thread_after_hold
+title: Nut thread after hold
+summary: Two Franka arms hold the bracket while the other threads the nut onto the stud.
+task_description: >-
+  Two Franka arms stage a bracket in the thread fixture, hold it in place, guide a nut through pre-thread alignment,
+  and finish the threaded placement before retreating.
+metadata:
+  tags:
+    - threading
+    - fastener
+    - dual-arm
+  object_roles:
+    bracket_block:
+      role: workpiece
+      owner: franka_left
+      summary: Left arm holds the bracket in the fixture during threading.
+    nut_fastener:
+      role: nut
+      owner: franka_right
+      summary: Right arm brings the nut into threaded alignment and placement.
+    thread_fixture:
+      role: threading_fixture
+      summary: Shared fixture that constrains the bracket and nut.
+  target_roles:
+    bracket_pick:
+      object: bracket_block
+      phase: left_approach_bracket
+      summary: Hover pose above the bracket before grasp.
+    bracket_hold:
+      object: bracket_block
+      phase: left_hold_bracket
+      summary: Left-arm hold pose while the nut is threaded.
+    nut_pick:
+      object: nut_fastener
+      phase: right_approach_nut
+      summary: Hover pose above the nut before grasp.
+    nut_prethread:
+      object: nut_fastener
+      phase: right_prethread_nut
+      summary: Alignment pose before final threading.
+    nut_thread:
+      object: nut_fastener
+      phase: right_thread_nut
+      summary: Final threading pose over the stud location.
+    bracket_locked:
+      object: bracket_block
+      phase: finalize_threading
+      summary: Final locked pose for the bracket.
+    nut_locked:
+      object: nut_fastener
+      phase: finalize_threading
+      summary: Final locked pose for the nut.
+  phase_notes:
+    - name: left_hold_bracket
+      summary: Left arm holds the bracket while the right arm moves to the nut.
+      focus_objects: [bracket_block, nut_fastener]
+      focus_targets: [bracket_hold, nut_pick]
+    - name: right_prethread_nut
+      summary: Right arm performs the fine pre-thread alignment.
+      focus_objects: [nut_fastener]
+      focus_targets: [nut_prethread]
+    - name: finalize_threading
+      summary: The nut and bracket are released and locked in their final threaded placement.
+      focus_objects: [bracket_block, nut_fastener]
+      focus_targets: [bracket_locked, nut_locked]

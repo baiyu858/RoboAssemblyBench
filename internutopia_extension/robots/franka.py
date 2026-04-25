@@ -54,6 +54,10 @@ class Franka(IsaacsimArticulation):
             gripper_open_position = np.array([0.05, 0.05]) / get_stage_units()
         if gripper_closed_position is None:
             gripper_closed_position = np.array([0.0, 0.0])
+        if deltas is None:
+            # Match RoboFactory's visible multi-step open/close behavior instead of
+            # snapping the fingers directly to the final command on a single step.
+            deltas = np.array([0.0025, 0.0025]) / get_stage_units()
         super().__init__(
             usd_path=usd_path,
             prim_path=prim_path,
@@ -69,8 +73,14 @@ class Franka(IsaacsimArticulation):
                 joint_opened_positions=gripper_open_position,
                 joint_closed_positions=gripper_closed_position,
                 action_deltas=deltas,
-                use_mimic_joints=True,
+                # The bundled Franka USD exposes both finger joints directly. Driving only
+                # the first mimic/drive joint clamps the observed opening to ~3mm.
+                use_mimic_joints=False,
             )
+            try:
+                self._gripper.set_default_state(np.asarray(gripper_open_position, dtype=float))
+            except Exception:
+                pass
         return
 
     @property
@@ -158,8 +168,8 @@ class FrankaRobot(BaseRobot):
         if finger_indices is not None and finger_indices.size == 2:
             try:
                 self.articulation.set_gains(
-                    kps=np.asarray([2.5e4, 2.5e4], dtype=float),
-                    kds=np.asarray([1.2e3, 1.2e3], dtype=float),
+                    kps=np.asarray([2.0e4, 2.0e4], dtype=float),
+                    kds=np.asarray([1.0e3, 1.0e3], dtype=float),
                     joint_indices=finger_indices,
                 )
             except Exception:
@@ -169,7 +179,7 @@ class FrankaRobot(BaseRobot):
                 max_forces = np.asarray(physics_view.get_dof_max_forces(), dtype=float)
                 if max_forces.ndim == 1:
                     max_forces = np.expand_dims(max_forces, axis=0)
-                max_forces[0, finger_indices] = np.maximum(max_forces[0, finger_indices], 250.0)
+                max_forces[0, finger_indices] = np.maximum(max_forces[0, finger_indices], 300.0)
                 physics_view.set_dof_max_forces(data=max_forces, indices=[0])
 
                 friction_coefficients = np.asarray(

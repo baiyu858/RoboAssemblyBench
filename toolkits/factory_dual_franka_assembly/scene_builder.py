@@ -128,12 +128,21 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
     if kind == 'visual_cube':
         return VisualCubeCfg(color=list(object_spec['color']), **common_kwargs)
     if kind == 'static_cube':
-        return StaticCubeCfg(color=list(object_spec['color']), **common_kwargs)
+        return StaticCubeCfg(
+            color=list(object_spec['color']),
+            static_friction=object_spec.get('static_friction'),
+            dynamic_friction=object_spec.get('dynamic_friction'),
+            restitution=object_spec.get('restitution'),
+            **common_kwargs,
+        )
     if kind == 'usd':
         return UsdObjCfg(
             usd_path=object_spec['usd_path'],
             collider=bool(object_spec.get('collider', True)),
             rigid_body=bool(object_spec.get('rigid_body', True)),
+            static_friction=object_spec.get('static_friction'),
+            dynamic_friction=object_spec.get('dynamic_friction'),
+            restitution=object_spec.get('restitution'),
             **common_kwargs,
         )
     raise ValueError(f'Unsupported object kind: {kind}')

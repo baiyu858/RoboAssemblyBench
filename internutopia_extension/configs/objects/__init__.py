@@ -22,6 +22,9 @@ class VisualCubeCfg(ObjectCfg):
 class StaticCubeCfg(ObjectCfg):
     type: Optional[str] = 'StaticCube'
     color: Optional[List[float]] = None
+    static_friction: Optional[float] = None
+    dynamic_friction: Optional[float] = None
+    restitution: Optional[float] = None
 
 
 class UsdObjCfg(ObjectCfg):
@@ -29,3 +32,6 @@ class UsdObjCfg(ObjectCfg):
     usd_path: str
     collider: Optional[bool] = True
     rigid_body: Optional[bool] = True
+    static_friction: Optional[float] = None
+    dynamic_friction: Optional[float] = None
+    restitution: Optional[float] = None

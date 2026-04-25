@@ -1,0 +1,46 @@
+profile_name: proxy_factory_cell
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+workspace_offset: [0.0, 0.0, 0.0]
+
+metadata:
+  scene_family: procedural
+  description: Procedural fallback workcell for fast iteration without depending on full asset layouts.
+  asset_references:
+    - name: empty_scene
+      kind: scene
+      path: ${ASSET_PATH}/scenes/empty.usd
+
+objects:
+  - name: proxy_factory_pad
+    kind: static_cube
+    prim_path: /proxy_factory_pad
+    position: [0.78, 0.0, 0.005]
+    apply_workspace_offset: false
+    scale: [0.48, 0.64, 0.01]
+    color: [0.20, 0.20, 0.20]
+    static_friction: 2.5
+    dynamic_friction: 2.0
+    restitution: 0.0
+    tracked: false
+  - name: proxy_left_buffer
+    kind: static_cube
+    prim_path: /proxy_left_buffer
+    position: [0.58, -0.33, 0.03]
+    apply_workspace_offset: false
+    scale: [0.14, 0.14, 0.06]
+    color: [0.24, 0.30, 0.34]
+    static_friction: 2.5
+    dynamic_friction: 2.0
+    restitution: 0.0
+    tracked: false
+  - name: proxy_right_buffer
+    kind: static_cube
+    prim_path: /proxy_right_buffer
+    position: [0.58, 0.33, 0.03]
+    apply_workspace_offset: false
+    scale: [0.14, 0.14, 0.06]
+    color: [0.24, 0.30, 0.34]
+    static_friction: 2.5
+    dynamic_friction: 2.0
+    restitution: 0.0
+    tracked: false

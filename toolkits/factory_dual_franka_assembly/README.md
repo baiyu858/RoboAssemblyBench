@@ -1,5 +1,13 @@
 # Factory Dual Franka Assembly Toolkit
 
+Canonical benchmark structure now lives under `roboassemblybench/`.
+This toolkit remains as a compatibility layer so the existing commands and imports keep working while task authoring moves to:
+
+- `roboassemblybench/core/`
+- `roboassemblybench/scenes/profiles/`
+- `roboassemblybench/tasks/<task_name>/`
+- `roboassemblybench/scripts/`
+
 This toolkit now provides a multi-task dual-arm Franka assembly benchmark on top of `InternUtopia`:
 
 - `screw_fastening`: left arm aligns the part, right arm places and fastens the screw

@@ -1,0 +1,62 @@
+extends: _base.yaml
+task_name: gear_pair_mesh
+title: Gear pair mesh
+summary: Two Franka arms align a gear pair and settle the mesh at the shared fixture.
+task_description: >-
+  Two Franka arms bring a gear pair into the shared fixture, align both gears into a meshed configuration, and retreat
+  once the pair is locked in place.
+metadata:
+  tags:
+    - gear
+    - meshing
+    - dual-arm
+  object_roles:
+    gear_a:
+      role: driven_gear
+      owner: franka_left
+      summary: Left arm presents the first gear to the meshing fixture.
+    gear_b:
+      role: driving_gear
+      owner: franka_right
+      summary: Right arm brings the second gear into mesh.
+    mesh_fixture:
+      role: meshing_fixture
+      summary: Shared fixture that constrains the final gear mesh.
+  target_roles:
+    gear_a_pick:
+      object: gear_a
+      phase: left_approach_gear_a
+      summary: Left-arm grasp pose above the first gear.
+    gear_b_pick:
+      object: gear_b
+      phase: right_grasp_gear_b
+      summary: Right-arm grasp pose above the second gear.
+    gear_a_mesh:
+      object: gear_a
+      phase: left_present_gear_a
+      summary: Left-arm staging pose for the first gear at the mesh centerline.
+    gear_b_mesh:
+      object: gear_b
+      phase: right_pre_mesh
+      summary: Right-arm staging pose for the second gear before final mesh.
+    gear_a_locked:
+      object: gear_a
+      phase: finalize_mesh
+      summary: Final locked pose for the first gear.
+    gear_b_locked:
+      object: gear_b
+      phase: finalize_mesh
+      summary: Final locked pose for the second gear.
+  phase_notes:
+    - name: left_present_gear_a
+      summary: Left arm stabilizes the first gear while the right arm approaches the second.
+      focus_objects: [gear_a, gear_b]
+      focus_targets: [gear_a_mesh, gear_b_pick]
+    - name: right_set_mesh
+      summary: Right arm settles the second gear into the final meshed configuration.
+      focus_objects: [gear_b]
+      focus_targets: [gear_b_mesh]
+    - name: finalize_mesh
+      summary: Both gears are released and locked into the fixture mesh.
+      focus_objects: [gear_a, gear_b]
+      focus_targets: [gear_a_locked, gear_b_locked]

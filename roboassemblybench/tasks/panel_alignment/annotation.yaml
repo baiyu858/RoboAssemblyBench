@@ -1,0 +1,99 @@
+extends: _base.yaml
+task_name: panel_alignment
+title: Panel alignment
+summary: Two Franka arms align a panel and insert a locating pin at the shared fixture.
+task_description: >-
+  Two Franka arms align the panel, hold it against the alignment fixture, insert the locating pin, and retreat once
+  the panel is locked.
+metadata:
+  tags:
+    - panel
+    - alignment
+    - pin
+    - dual-arm
+  object_roles:
+    panel:
+      role: workpiece
+      owner: franka_left
+      summary: Left arm carries the panel into the alignment fixture.
+    locating_pin:
+      role: locating_element
+      owner: franka_right
+      summary: Right arm grasps and inserts the pin.
+    alignment_fixture:
+      role: alignment_fixture
+      summary: Shared fixture that constrains the panel and pin.
+    workbench:
+      role: support_surface
+      summary: Static tabletop surface that anchors the fixture.
+  target_roles:
+    left_wait:
+      phase: left_approach_panel
+      summary: Left-arm staging pose before the first grasp.
+    right_wait:
+      phase: left_approach_panel
+      summary: Right-arm waiting pose before the handoff.
+    left_retreat:
+      phase: retreat
+      summary: Left-arm retreat pose after alignment.
+    right_retreat:
+      phase: retreat
+      summary: Right-arm retreat pose after alignment.
+    panel_pick:
+      object: panel
+      phase: left_approach_panel
+      summary: Hover above the panel for the first grasp.
+    panel_fixture_hold:
+      object: panel
+      phase: right_preinsert_pin
+      summary: Hold the panel against the fixture during pin insertion.
+    pin_pick:
+      object: locating_pin
+      phase: right_grasp_pin
+      summary: Hover above the locating pin before grasping.
+    pin_insert:
+      object: locating_pin
+      phase: right_insert_pin
+      summary: Right-arm insertion pose over the fixture.
+    panel_locked:
+      object: panel
+      phase: finalize_alignment
+      summary: Final locked pose for the panel.
+    pin_locked:
+      object: locating_pin
+      phase: finalize_alignment
+      summary: Final locked pose for the locating pin.
+  phase_notes:
+    - name: left_approach_panel
+      summary: Left arm approaches the panel while the right arm waits.
+      focus_objects:
+        - panel
+      focus_targets:
+        - panel_pick
+        - right_wait
+    - name: left_present_panel
+      summary: Left arm presents the panel to the alignment fixture.
+      focus_objects:
+        - panel
+      focus_targets:
+        - panel_fixture_hover
+    - name: right_grasp_pin
+      summary: Right arm grasps the locating pin while the panel stays supported.
+      focus_objects:
+        - locating_pin
+      focus_targets:
+        - pin_pick
+    - name: right_insert_pin
+      summary: Right arm inserts the pin into the fixture.
+      focus_objects:
+        - locating_pin
+      focus_targets:
+        - pin_insert
+    - name: finalize_alignment
+      summary: Both parts are locked in place before retreat.
+      focus_objects:
+        - panel
+        - locating_pin
+      focus_targets:
+        - panel_locked
+        - pin_locked

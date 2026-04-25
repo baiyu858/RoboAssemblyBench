@@ -1,0 +1,174 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: gear_pair_mesh
+prompt: Two Franka arms align a gear pair and settle the mesh at the shared fixture.
+
+metadata:
+  tags:
+    - meshing
+  runtime_note: Current runtime approximates gear meshing with staged alignment and lock targets.
+
+objects:
+  - name: gear_a
+    kind: dynamic_cube
+    prim_path: /gear_a
+    position: [0.55, -0.22, 0.028]
+    random_xy: [0.04, 0.03]
+    scale: [0.10, 0.10, 0.05]
+    color: [0.26, 0.61, 0.84]
+  - name: gear_b
+    kind: dynamic_cube
+    prim_path: /gear_b
+    position: [0.56, 0.22, 0.028]
+    random_xy: [0.04, 0.03]
+    scale: [0.10, 0.10, 0.05]
+    color: [0.90, 0.77, 0.22]
+  - name: mesh_fixture
+    kind: visual_cube
+    prim_path: /mesh_fixture
+    position: [0.82, 0.0, 0.07]
+    scale: [0.22, 0.22, 0.14]
+    color: [0.20, 0.26, 0.32]
+    tracked: false
+  - name: assembly_station
+    kind: visual_cube
+    prim_path: /assembly_station
+    position: [0.82, 0.0, 0.005]
+    scale: [0.40, 0.54, 0.01]
+    color: [0.18, 0.18, 0.18]
+    tracked: false
+
+targets:
+  - name: gear_a_pick
+    reference: gear_a
+    offset: [0.0, 0.0, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: gear_b_pick
+    reference: gear_b
+    offset: [0.0, 0.0, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: gear_a_mesh
+    reference: mesh_fixture
+    offset: [-0.015, 0.0, 0.16]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: gear_b_mesh
+    reference: mesh_fixture
+    offset: [0.015, 0.0, 0.16]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: gear_a_locked
+    reference: mesh_fixture
+    offset: [-0.015, 0.0, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: gear_b_locked
+    reference: mesh_fixture
+    offset: [0.015, 0.0, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: left_approach_gear_a
+    robot_targets:
+      franka_left: gear_a_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: left_grasp_gear_a
+    robot_targets:
+      franka_left: gear_a_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    attach:
+      - object: gear_a
+        robot: franka_left
+    advance:
+      type: timer
+      min_steps: 16
+  - name: left_present_gear_a
+    robot_targets:
+      franka_left: gear_a_mesh
+      franka_right: gear_b_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_gear_b
+    robot_targets:
+      franka_left: gear_a_mesh
+      franka_right: gear_b_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    attach:
+      - object: gear_b
+        robot: franka_right
+    advance:
+      type: timer
+      min_steps: 16
+  - name: right_pre_mesh
+    robot_targets:
+      franka_left: gear_a_mesh
+      franka_right: gear_b_mesh
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.035
+  - name: right_set_mesh
+    robot_targets:
+      franka_left: gear_a_mesh
+      franka_right: gear_b_mesh
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 14
+      tolerance: 0.03
+  - name: finalize_mesh
+    robot_targets:
+      franka_left: gear_a_mesh
+      franka_right: gear_b_mesh
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - gear_a
+      - gear_b
+    lock:
+      - object: gear_a
+        target: gear_a_locked
+      - object: gear_b
+        target: gear_b_locked
+    advance:
+      type: timer
+      min_steps: 20
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.05
+
+success:
+  - object: gear_a
+    target: gear_a_locked
+    position_tolerance: 0.03
+  - object: gear_b
+    target: gear_b_locked
+    position_tolerance: 0.03

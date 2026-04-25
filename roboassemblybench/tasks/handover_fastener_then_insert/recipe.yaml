@@ -1,0 +1,206 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: handover_fastener_then_insert
+prompt: Two Franka arms hand over a fastener and insert it into the receiver.
+
+metadata:
+  tags:
+    - handoff
+    - connector
+  runtime_note: Current runtime approximates the handover with a detach-then-attach phase before insertion.
+
+objects:
+  - name: receiver_block
+    kind: dynamic_cube
+    prim_path: /receiver_block
+    position: [0.55, -0.22, 0.024]
+    random_xy: [0.04, 0.03]
+    scale: [0.17, 0.07, 0.05]
+    color: [0.31, 0.60, 0.83]
+  - name: fastener_pin
+    kind: dynamic_cube
+    prim_path: /fastener_pin
+    position: [0.56, 0.22, 0.030]
+    random_xy: [0.04, 0.03]
+    scale: [0.030, 0.030, 0.08]
+    color: [0.90, 0.80, 0.21]
+  - name: handoff_fixture
+    kind: visual_cube
+    prim_path: /handoff_fixture
+    position: [0.82, 0.0, 0.07]
+    scale: [0.20, 0.18, 0.14]
+    color: [0.20, 0.30, 0.36]
+    tracked: false
+  - name: assembly_station
+    kind: visual_cube
+    prim_path: /assembly_station
+    position: [0.82, 0.0, 0.005]
+    scale: [0.40, 0.54, 0.01]
+    color: [0.18, 0.18, 0.18]
+    tracked: false
+
+targets:
+  - name: receiver_pick
+    reference: receiver_block
+    offset: [0.0, 0.0, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: receiver_hold
+    reference: handoff_fixture
+    offset: [0.0, 0.0, 0.13]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: receiver_locked
+    reference: handoff_fixture
+    offset: [0.0, 0.0, 0.09]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: fastener_pick
+    reference: fastener_pin
+    offset: [0.0, 0.0, 0.12]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: fastener_handoff
+    reference: handoff_fixture
+    offset: [-0.02, 0.0, 0.20]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: fastener_insert
+    reference: handoff_fixture
+    offset: [0.03, 0.0, 0.14]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: fastener_locked
+    reference: handoff_fixture
+    offset: [0.03, 0.0, 0.11]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: left_approach_receiver
+    robot_targets:
+      franka_left: receiver_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: left_grasp_receiver
+    robot_targets:
+      franka_left: receiver_pick
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    attach:
+      - object: receiver_block
+        robot: franka_left
+    advance:
+      type: timer
+      min_steps: 16
+  - name: left_place_receiver
+    robot_targets:
+      franka_left: receiver_hold
+      franka_right: fastener_pick
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: lock_receiver_and_release
+    robot_targets:
+      franka_left: receiver_hold
+      franka_right: fastener_pick
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - receiver_block
+    lock:
+      - object: receiver_block
+        target: receiver_locked
+    advance:
+      type: timer
+      min_steps: 12
+  - name: right_approach_fastener
+    robot_targets:
+      franka_left: left_wait
+      franka_right: fastener_pick
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_fastener
+    robot_targets:
+      franka_left: left_wait
+      franka_right: fastener_pick
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    attach:
+      - object: fastener_pin
+        robot: franka_right
+    advance:
+      type: timer
+      min_steps: 16
+  - name: handover_fastener_to_left
+    robot_targets:
+      franka_left: fastener_handoff
+      franka_right: fastener_handoff
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    detach:
+      - fastener_pin
+    attach:
+      - object: fastener_pin
+        robot: franka_left
+    advance:
+      type: timer
+      min_steps: 14
+  - name: left_insert_fastener
+    robot_targets:
+      franka_left: fastener_insert
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: close
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 14
+      tolerance: 0.03
+  - name: finalize_insert
+    robot_targets:
+      franka_left: fastener_insert
+      franka_right: right_wait
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - fastener_pin
+    lock:
+      - object: fastener_pin
+        target: fastener_locked
+    advance:
+      type: timer
+      min_steps: 20
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.05
+
+success:
+  - object: receiver_block
+    target: receiver_locked
+    position_tolerance: 0.03
+  - object: fastener_pin
+    target: fastener_locked
+    position_tolerance: 0.025
