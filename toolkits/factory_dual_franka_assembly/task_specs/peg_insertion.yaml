@@ -1,7 +1,7 @@
 extends: _dual_franka_assembly_base.yaml
 
 task_name: peg_insertion
-prompt: Two Franka arms align the housing and insert the peg into the shared jig.
+prompt: "Two Franka arms perform a real peg insertion: a fixed holed socket block sits on the workbench while the right arm inserts a wooden peg into its center slot."
 scene_profile: taoyuan_tabletop
 scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
 max_steps: 3200
@@ -19,83 +19,89 @@ robots:
     orientation_euler: [0.0, 0.0, -1.5707963268]
 
 objects:
-  - name: housing
-    kind: dynamic_cube
-    prim_path: /housing
-    position: [0.47, -0.26, 0.02]
-    random_xy: [0.01, 0.01]
-    scale: [0.12, 0.065, 0.04]
+  - name: housing_anchor
+    kind: visual_cube
+    prim_path: /housing_anchor
+    position: [0.47, -0.04, 0.036]
+    scale: [0.001, 0.001, 0.001]
     color: [0.23, 0.57, 0.84]
-    mass: 0.09
+    tracked: false
+  - name: housing_base
+    kind: static_cube
+    prim_path: /housing_base
+    position: [0.47, -0.04, 0.016]
+    scale: [0.130, 0.130, 0.012]
+    color: [0.23, 0.57, 0.84]
     static_friction: 1.2
-    dynamic_friction: 0.9
+    dynamic_friction: 0.95
     restitution: 0.0
+    tracked: false
+  - name: housing_left_wall
+    kind: static_cube
+    prim_path: /housing_left_wall
+    position: [0.420, -0.04, 0.042]
+    scale: [0.030, 0.130, 0.040]
+    color: [0.23, 0.57, 0.84]
+    static_friction: 1.2
+    dynamic_friction: 0.95
+    restitution: 0.0
+    tracked: false
+  - name: housing_right_wall
+    kind: static_cube
+    prim_path: /housing_right_wall
+    position: [0.520, -0.04, 0.042]
+    scale: [0.030, 0.130, 0.040]
+    color: [0.23, 0.57, 0.84]
+    static_friction: 1.2
+    dynamic_friction: 0.95
+    restitution: 0.0
+    tracked: false
+  - name: housing_front_wall
+    kind: static_cube
+    prim_path: /housing_front_wall
+    position: [0.47, -0.083, 0.042]
+    scale: [0.070, 0.044, 0.040]
+    color: [0.23, 0.57, 0.84]
+    static_friction: 1.2
+    dynamic_friction: 0.95
+    restitution: 0.0
+    tracked: false
+  - name: housing_back_wall
+    kind: static_cube
+    prim_path: /housing_back_wall
+    position: [0.47, 0.003, 0.042]
+    scale: [0.070, 0.044, 0.040]
+    color: [0.23, 0.57, 0.84]
+    static_friction: 1.2
+    dynamic_friction: 0.95
+    restitution: 0.0
+    tracked: false
   - name: peg
     kind: dynamic_cube
     prim_path: /peg
-    position: [0.47, 0.26, 0.0275]
+    position: [0.47, 0.26, 0.044]
     random_xy: [0.01, 0.01]
-    scale: [0.04, 0.04, 0.055]
+    scale: [0.046, 0.018, 0.068]
     color: [0.92, 0.82, 0.22]
-    mass: 0.03
-    static_friction: 1.2
-    dynamic_friction: 0.9
+    mass: 0.025
+    static_friction: 1.1
+    dynamic_friction: 0.85
     restitution: 0.0
   - name: insertion_jig
     kind: visual_cube
     prim_path: /insertion_jig
-    position: [0.47, -0.04, 0.08]
-    scale: [0.02, 0.02, 0.02]
+    position: [0.47, -0.04, 0.011]
+    scale: [0.014, 0.014, 0.002]
     color: [0.18, 0.34, 0.28]
-    tracked: false
-  - name: housing_support_pad
-    kind: static_cube
-    prim_path: /housing_support_pad
-    position: [0.47, -0.04, 0.155]
-    scale: [0.16, 0.10, 0.01]
-    color: [0.13, 0.22, 0.19]
-    static_friction: 0.8
-    dynamic_friction: 0.6
-    restitution: 0.0
-    tracked: false
-  - name: peg_socket_pad
-    kind: static_cube
-    prim_path: /peg_socket_pad
-    position: [0.49, 0.08, 0.1575]
-    scale: [0.07, 0.07, 0.01]
-    color: [0.12, 0.20, 0.17]
-    static_friction: 0.8
-    dynamic_friction: 0.6
-    restitution: 0.0
-    tracked: false
-  - name: jig_left_guide
-    kind: static_cube
-    prim_path: /jig_left_guide
-    position: [0.47, -0.13, 0.065]
-    scale: [0.18, 0.02, 0.13]
-    color: [0.16, 0.28, 0.24]
-    static_friction: 0.8
-    dynamic_friction: 0.6
-    restitution: 0.0
-    tracked: false
-  - name: jig_right_guide
-    kind: static_cube
-    prim_path: /jig_right_guide
-    position: [0.47, 0.05, 0.065]
-    scale: [0.18, 0.02, 0.13]
-    color: [0.16, 0.28, 0.24]
-    static_friction: 0.8
-    dynamic_friction: 0.6
-    restitution: 0.0
     tracked: false
   - name: workbench
     kind: static_cube
     prim_path: /workbench
     position: [0.47, -0.04, 0.005]
-    scale: [0.40, 0.54, 0.01]
+    scale: [0.42, 0.62, 0.01]
     color: [0.18, 0.18, 0.18]
-    static_friction: 0.8
-    dynamic_friction: 0.6
+    static_friction: 1.2
+    dynamic_friction: 0.9
     restitution: 0.0
     tracked: false
 
@@ -116,295 +122,56 @@ targets:
     reference: world
     position: [0.16, 0.66, 0.56]
     orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_pick
-    reference: housing
-    offset: [0.0, 0.0, 0.075]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_grasp_open
-    reference: housing
-    offset: [0.0, 0.0, 0.02]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_grasp_close
-    reference: housing
-    offset: [0.0, 0.0, 0.0]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_carry_lift
-    reference: housing
-    offset: [0.0, 0.0, 0.16]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_jig_lane
-    reference: insertion_jig
-    offset: [0.0, -0.24, 0.16]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_hold
-    reference: insertion_jig
-    offset: [0.0, 0.0, 0.136]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_hover
-    reference: insertion_jig
-    offset: [0.0, -0.06, 0.175]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_preseat
-    reference: insertion_jig
-    offset: [0.0, -0.02, 0.15]
-    orientation_euler: [3.1415926536, 0.0, 0.0]
-  - name: housing_locked
-    reference: insertion_jig
-    offset: [0.0, 0.0, 0.10]
-    orientation_euler: [1.0e-06, 0.0, 0.0]
   - name: peg_pick
     reference: peg
-    offset: [0.0, 0.0, 0.105]
+    offset: [0.0, 0.0, 0.11]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_grasp_open
     reference: peg
-    offset: [0.0, 0.0, 0.02]
+    offset: [0.0, 0.0, 0.008]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_grasp_close
     reference: peg
-    offset: [0.0, 0.0, -0.012]
+    offset: [0.0, 0.0, -0.006]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_preinsert
-    reference: insertion_jig
-    offset: [0.02, 0.12, 0.20]
+    reference: housing_anchor
+    offset: [0.0, 0.08, 0.094]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_preinsert_lane_robot
+    reference: housing_anchor
+    offset: [-0.002, 0.131, 0.225]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_preinsert_robot
+    reference: housing_anchor
+    offset: [-0.002, 0.011, 0.165]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_preinsert_lane
-    reference: insertion_jig
-    offset: [0.02, 0.22, 0.22]
+    reference: housing_anchor
+    offset: [0.0, 0.20, 0.154]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_insert_lane_robot
+    reference: housing_anchor
+    offset: [-0.002, -0.039, 0.171]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_insert_robot
+    reference: housing_anchor
+    offset: [-0.001, 0.000, 0.121]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_insert_lane
-    reference: insertion_jig
-    offset: [0.02, 0.18, 0.18]
+    reference: housing_anchor
+    offset: [0.0, 0.03, 0.100]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_insert
-    reference: insertion_jig
-    offset: [0.02, 0.12, 0.155]
+    reference: housing_anchor
+    offset: [0.0, 0.0, 0.078]
     orientation_euler: [3.1415926536, 0.0, 0.0]
   - name: peg_locked
-    reference: insertion_jig
-    offset: [0.02, 0.12, 0.11]
+    reference: housing_anchor
+    offset: [0.0, 0.0, 0.022]
     orientation_euler: [1.0e-06, 0.0, 0.0]
 
 phases:
-  - name: left_approach_housing
-    robot_targets:
-      franka_left:
-        target: housing_pick
-        ik_frame_compensation: position_only
-        position_tolerance: 0.06
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: open
-      franka_right: open
-    advance:
-      type: robot_targets_reached
-      min_steps: 12
-      tolerance: 0.04
-  - name: left_descend_housing_open
-    timeout_steps: 120
-    timeout_action: fail
-    robot_targets:
-      franka_left:
-        target: housing_grasp_open
-        ik_frame_compensation: position_only
-        position_only: true
-        position_tolerance: 0.03
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: open
-      franka_right: open
-    advance:
-      type: robot_targets_reached
-      min_steps: 10
-      tolerance: 0.03
-  - name: left_grasp_housing
-    timeout_steps: 320
-    robot_targets:
-      franka_left:
-        target: housing_grasp_close
-        ik_frame_compensation: position_only
-        position_only: true
-        position_tolerance: 0.015
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: close
-      franka_right: open
-    attach:
-      - object: housing
-        robot: franka_left
-        target:
-          target: housing_grasp_close
-          ik_frame_compensation: position_only
-          position_only: true
-        position_tolerance: 0.012
-        attachment_mode: pure_physical_grasp
-        disable_collision_on_attach: false
-        support_height_tolerance: 0.03
-        top_clearance: 0.02
-        # Housing is block-like; a valid physical pinch leaves the fingers open
-        # around the part width instead of fully closed at zero.
-        gripper_closed_threshold: 0.026
-        gripper_closed_margin: 0.006
-        allow_top_contact_fallback: false
-        allow_enclosure_fallback: false
-        allow_caging_contact_for_physical_grasp: true
-        require_physical_contact: true
-        require_target_reached_for_attach: false
-        physical_grasp_min_opening: 0.006
-        attach_gripper_object_margin: 0.0015
-        hold_gripper_object_margin: 0.006
-        close_xy_threshold: 0.004
-        close_z_threshold: 0.004
-        finger_contact_distance: 0.008
-        physical_attach_surface_gap: 0.006
-        grasp_preclose_open_steps: 24
-        grasp_close_ramp_steps: 24
-        hold_position_slip_tolerance: 0.12
-        hold_orientation_slip_tolerance: 1.6
-        release_min_steps: 80
-        release_require_contact_clear: false
-        release_finger_contact_distance: 0.0015
-        release_gripper_opening_threshold: 0.0395
-        release_gripper_object_margin: 0.0
-    advance:
-      type: timer
-      min_steps: 16
-  - name: left_lift_housing_verify
-    timeout_steps: 180
-    timeout_action: fail
-    robot_targets:
-      franka_left:
-        target: housing_carry_lift
-        ik_frame_compensation: position_only
-        position_only: true
-        position_tolerance: 0.08
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: close
-      franka_right: open
-    advance:
-      type: all_of
-      min_steps: 12
-      conditions:
-        - type: robot_targets_reached
-          tolerance: 0.08
-        - type: object_lifted
-          object: housing
-          robot: franka_left
-          min_lift: 0.055
-  - name: left_present_housing
-    timeout_steps: 720
-    timeout_action: advance
-    robot_targets:
-      franka_left:
-        target: housing_jig_lane
-        position_tolerance: 0.06
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: close
-      franka_right: open
-    advance:
-      type: robot_targets_reached
-      min_steps: 12
-      tolerance: 0.04
-  - name: seat_housing_in_jig
-    timeout_steps: 900
-    timeout_action: fail
-    robot_targets:
-      franka_left:
-        target: housing_hold
-        payload_object: housing
-        payload_target: housing_locked
-        orientation_tolerance: 0.45
-        position_tolerance: 0.07
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: close
-      franka_right: open
-    advance:
-      type: all_of
-      min_steps: 12
-      conditions:
-        - type: robot_targets_reached
-          tolerance: 0.07
-        - type: object_targets_reached
-          tolerance: 0.03
-          objects:
-            - object: housing
-              target: housing_locked
-              position_tolerance: 0.03
-  - name: release_housing_in_jig
-    timeout_steps: 420
-    timeout_action: fail
-    robot_targets:
-      franka_left:
-        target: left_wait
-        position_tolerance: 0.08
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: open
-      franka_right: open
-    detach:
-      - housing
-    advance:
-      type: all_of
-      min_steps: 24
-      conditions:
-        - type: object_targets_reached
-          tolerance: 0.045
-          objects:
-            - object: housing
-              target: housing_locked
-              position_tolerance: 0.045
-        - type: objects_static
-          linear_velocity_threshold: 0.03
-          angular_velocity_threshold: 1.0
-          objects:
-            - housing
-  - name: settle_housing_in_jig
-    timeout_steps: 360
-    timeout_action: fail
-    robot_targets:
-      franka_left:
-        target: left_wait
-        position_tolerance: 0.08
-      franka_right:
-        target: right_wait
-        position_tolerance: 0.08
-    gripper_commands:
-      franka_left: open
-      franka_right: open
-    advance:
-      type: all_of
-      min_steps: 12
-      conditions:
-        - type: robot_targets_reached
-          tolerance: 0.07
-        - type: object_targets_reached
-          tolerance: 0.035
-          objects:
-            - object: housing
-              target: housing_locked
-              position_tolerance: 0.035
-        - type: objects_static
-          linear_velocity_threshold: 0.03
-          angular_velocity_threshold: 1.0
-          objects:
-            - housing
   - name: right_approach_peg
     robot_targets:
       franka_left:
@@ -458,31 +225,44 @@ phases:
         disable_collision_on_attach: false
         support_height_tolerance: 0.03
         top_clearance: 0.02
-        gripper_closed_threshold: 0.018
-        gripper_closed_margin: 0.004
+        gripper_closed_threshold: 0.010
+        gripper_closed_margin: 0.002
         allow_top_contact_fallback: false
-        allow_caging_contact_for_physical_grasp: true
-        allow_caging_hold_for_physical_grasp: true
-        require_target_reached_for_attach: false
-        physical_grasp_min_opening: 0.006
-        attach_gripper_object_margin: 0.0015
-        hold_gripper_object_margin: 0.004
-        close_xy_threshold: 0.004
-        close_z_threshold: 0.004
+        require_physical_contact: true
+        require_target_reached_for_attach: true
+        physical_grasp_min_opening: 0.005
+        attach_gripper_object_margin: 0.001
+        hold_gripper_object_margin: 0.003
         finger_contact_distance: 0.006
         physical_attach_surface_gap: 0.006
-        grasp_preclose_open_steps: 24
-        grasp_close_ramp_steps: 24
-        slender_lateral_threshold: 0.04
+        slender_lateral_threshold: 0.03
         hold_position_slip_tolerance: 0.045
+        hold_grace_steps: 18
+        hold_grace_extra_opening: 0.010
         release_min_steps: 80
         release_require_contact_clear: false
         release_finger_contact_distance: 0.0015
-        release_gripper_opening_threshold: 0.03
+        release_gripper_opening_threshold: 0.028
         release_gripper_object_margin: 0.0
     advance:
       type: timer
-      min_steps: 16
+      min_steps: 24
+  - name: right_secure_peg
+    timeout_steps: 160
+    timeout_action: fail
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: peg_grasp_close
+        position_tolerance: 0.015
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: timer
+      min_steps: 24
   - name: right_lift_peg_verify
     timeout_steps: 180
     timeout_action: fail
@@ -505,19 +285,51 @@ phases:
         - type: object_lifted
           object: peg
           robot: franka_right
-          min_lift: 0.045
-  - name: right_preinsert_peg
+          min_lift: 0.05
+  - name: right_preinsert_lane
     timeout_steps: 420
-    timeout_action: advance
+    timeout_action: fail
     robot_targets:
       franka_left:
         target: left_wait
         position_tolerance: 0.08
       franka_right:
-        target: peg_preinsert
-        via:
-          - peg_preinsert_lane
+        target: right_preinsert_lane_robot
         position_tolerance: 0.06
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.08
+  - name: right_preinsert_peg
+    timeout_steps: 260
+    timeout_action: fail
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: right_preinsert_robot
+        position_tolerance: 0.05
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+  - name: right_insert_lane
+    timeout_steps: 260
+    timeout_action: fail
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: right_insert_lane_robot
+        position_tolerance: 0.05
     gripper_commands:
       franka_left: open
       franka_right: close
@@ -526,37 +338,34 @@ phases:
       min_steps: 12
       tolerance: 0.06
   - name: right_insert_peg
-    timeout_steps: 420
-    timeout_action: fail
+    timeout_steps: 520
+    timeout_action: advance
     robot_targets:
       franka_left:
         target: left_wait
         position_tolerance: 0.08
       franka_right:
-        target: peg_insert
+        target: right_insert_robot
         payload_object: peg
         payload_target: peg_locked
-        direct_payload_motion: true
-        direct_payload_ignore_floor_height: true
-        direct_payload_max_position_step: 0.005
-        direct_payload_max_vertical_step: 0.004
-        orientation_tolerance: 0.45
-        position_tolerance: 0.06
+        orientation_tolerance: 0.25
+        position_tolerance: 0.08
     gripper_commands:
       franka_left: open
       franka_right: close
     advance:
       type: all_of
-      min_steps: 16
+      min_steps: 24
       conditions:
         - type: robot_targets_reached
-          tolerance: 0.06
+          tolerance: 0.04
         - type: object_targets_reached
-          tolerance: 0.012
+          tolerance: 0.025
           objects:
             - object: peg
               target: peg_locked
-              position_tolerance: 0.012
+              position_tolerance: 0.025
+              orientation_tolerance: 0.45
   - name: finalize_insertion
     timeout_steps: 260
     timeout_action: fail
@@ -565,28 +374,18 @@ phases:
         target: left_wait
         position_tolerance: 0.08
       franka_right:
-        target: peg_insert_lane
-        position_tolerance: 0.08
+        target: right_insert_robot
+        payload_object: peg
+        payload_target: peg_locked
+        position_tolerance: 0.06
     gripper_commands:
       franka_left: open
       franka_right: open
     detach:
       - peg
     advance:
-      type: all_of
+      type: timer
       min_steps: 24
-      conditions:
-        - type: object_targets_reached
-          tolerance: 0.035
-          objects:
-            - object: peg
-              target: peg_locked
-              position_tolerance: 0.035
-        - type: objects_static
-          linear_velocity_threshold: 0.03
-          angular_velocity_threshold: 1.0
-          objects:
-            - peg
   - name: settle_peg_in_jig
     timeout_steps: 220
     timeout_action: fail
@@ -595,7 +394,7 @@ phases:
         target: left_wait
         position_tolerance: 0.08
       franka_right:
-        target: peg_insert_lane
+        target: right_insert_lane_robot
         position_tolerance: 0.08
     gripper_commands:
       franka_left: open
@@ -607,14 +406,15 @@ phases:
         - type: robot_targets_reached
           tolerance: 0.08
         - type: object_targets_reached
-          tolerance: 0.03
+          tolerance: 0.02
           objects:
             - object: peg
               target: peg_locked
-              position_tolerance: 0.03
+              position_tolerance: 0.025
+              orientation_tolerance: 0.45
         - type: objects_static
-          linear_velocity_threshold: 0.03
-          angular_velocity_threshold: 1.0
+          linear_velocity_threshold: 0.025
+          angular_velocity_threshold: 0.8
           objects:
             - peg
   - name: retreat
@@ -630,16 +430,10 @@ phases:
       tolerance: 0.08
 
 success:
-  - object: housing
-    target: housing_locked
-    position_tolerance: 0.03
-    require_released: true
-    require_static: true
-    linear_velocity_threshold: 0.02
-    angular_velocity_threshold: 0.8
   - object: peg
     target: peg_locked
     position_tolerance: 0.025
+    orientation_tolerance: 0.45
     require_released: true
     require_static: true
     linear_velocity_threshold: 0.02

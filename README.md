@@ -183,15 +183,25 @@ python toolkits/factory_dual_franka_assembly/export_lerobot.py \
   orient: x:180.0 y:-5.0 z:0
 
 
-conda run -n internutopia311 
-
-
-python roboassemblybench/scripts/generate_demos.py \
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
   --recipes peg_insertion \
   --scene-profiles taoyuan_grscenes_tabletop \
   --num-demos 1 \
   --max-trials 1 \
-  --output-dir roboassemblybench/outputs/live_peg_insertion_recorded \
+  --output-dir roboassemblybench/outputs/live_peg_insertion_recorded_v1 \
   --record-live-video \
   --live-video-fps 30 \
   --live-video-frame-stride 1
+
+
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
+  --recipes peg_insertion \
+  --scene-profiles taoyuan_grscenes_tabletop \
+  --num-demos 1 \
+  --max-trials 1 \
+  --output-dir roboassemblybench/outputs/peg_insertion_png_frames \
+  --record-live-video \
+  --live-video-fps 30 \
+  --live-video-frame-stride 1 \
+  --keep-video-frames

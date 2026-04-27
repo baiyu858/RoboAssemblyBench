@@ -6,7 +6,13 @@ from typing import Iterable
 
 import numpy as np
 
-from internutopia_extension.configs.objects import DynamicCubeCfg, StaticCubeCfg, UsdObjCfg, VisualCubeCfg
+from internutopia_extension.configs.objects import (
+    DynamicCompoundCuboidCfg,
+    DynamicCubeCfg,
+    StaticCubeCfg,
+    UsdObjCfg,
+    VisualCubeCfg,
+)
 from internutopia_extension.configs.robots.franka import (
     FrankaRobotCfg,
     arm_ik_cfg,
@@ -117,6 +123,18 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
     if kind == 'dynamic_cube':
         return DynamicCubeCfg(
             color=tuple(object_spec['color']),
+            mass=object_spec.get('mass'),
+            density=object_spec.get('density'),
+            collider=object_spec.get('collider', True),
+            static_friction=object_spec.get('static_friction'),
+            dynamic_friction=object_spec.get('dynamic_friction'),
+            restitution=object_spec.get('restitution'),
+            **common_kwargs,
+        )
+    if kind == 'dynamic_compound_cuboid':
+        return DynamicCompoundCuboidCfg(
+            color=tuple(object_spec.get('color', [0.5, 0.5, 0.5])),
+            parts=copy.deepcopy(object_spec['parts']),
             mass=object_spec.get('mass'),
             density=object_spec.get('density'),
             collider=object_spec.get('collider', True),
