@@ -2,8 +2,9 @@ extends: _dual_franka_assembly_base.yaml
 
 task_name: peg_insertion
 prompt: "Two Franka arms perform a real peg insertion: a fixed holed socket block sits on the workbench while the right arm inserts a wooden peg into its center slot."
-scene_profile: taoyuan_tabletop
-scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
 max_steps: 3200
 phase_timeout_steps: 420
 phase_timeout_action: fail
@@ -11,12 +12,17 @@ phase_timeout_action: fail
 robots:
   - name: franka_left
     prim_path: /franka_left
-    position: [0.08, -0.62, 0.0]
+    position: [0.08, -0.62, 1.0]
     orientation_euler: [0.0, 0.0, 1.5707963268]
   - name: franka_right
     prim_path: /franka_right
-    position: [0.08, 0.62, 0.0]
+    position: [0.08, 0.62, 1.0]
     orientation_euler: [0.0, 0.0, -1.5707963268]
+
+camera_specs:
+  - name: third_person_front
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
 
 objects:
   - name: housing_anchor
@@ -83,9 +89,9 @@ objects:
     random_xy: [0.01, 0.01]
     scale: [0.046, 0.018, 0.068]
     color: [0.92, 0.82, 0.22]
-    mass: 0.025
-    static_friction: 1.1
-    dynamic_friction: 0.85
+    mass: 0.015
+    static_friction: 2.0
+    dynamic_friction: 1.5
     restitution: 0.0
   - name: insertion_jig
     kind: visual_cube
@@ -98,11 +104,18 @@ objects:
     kind: static_cube
     prim_path: /workbench
     position: [0.47, -0.04, 0.005]
-    scale: [0.42, 0.62, 0.01]
-    color: [0.18, 0.18, 0.18]
+    scale: [0.56, 0.76, 0.01]
+    color: [0.10, 0.12, 0.12]
     static_friction: 1.2
     dynamic_friction: 0.9
     restitution: 0.0
+    tracked: false
+  - name: workbench_visual
+    kind: visual_cube
+    prim_path: /workbench_visual
+    position: [0.47, -0.04, 0.0125]
+    scale: [0.58, 0.78, 0.002]
+    color: [0.08, 0.08, 0.08]
     tracked: false
 
 targets:
@@ -221,7 +234,7 @@ phases:
         robot: franka_right
         target: peg_grasp_close
         position_tolerance: 0.010
-        attachment_mode: pure_physical_grasp
+        attachment_mode: physical_joint
         disable_collision_on_attach: false
         support_height_tolerance: 0.03
         top_clearance: 0.02
@@ -262,7 +275,7 @@ phases:
       franka_right: close
     advance:
       type: timer
-      min_steps: 24
+      min_steps: 48
   - name: right_lift_peg_verify
     timeout_steps: 180
     timeout_action: fail

@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 
 from internutopia.macros import gm
-from roboassemblybench.core.paths import SHARED_TASK_DIR, TASKS_DIR
+from roboassemblybench.core.paths import BENCHMARK_ROOT, SHARED_TASK_DIR, TASKS_DIR
 from roboassemblybench.core.scene_profiles import DEFAULT_SCENE_PROFILE, deep_merge, load_scene_profile
 
 TASK_SPEC_BASENAME = 'recipe.yaml'
@@ -36,7 +36,7 @@ def _replace_placeholders(value: Any):
     if isinstance(value, list):
         return [_replace_placeholders(item) for item in value]
     if isinstance(value, str):
-        return value.replace('${ASSET_PATH}', gm.ASSET_PATH)
+        return value.replace('${ASSET_PATH}', gm.ASSET_PATH).replace('${BENCHMARK_ROOT}', str(BENCHMARK_ROOT))
     return value
 
 
@@ -234,6 +234,16 @@ def _collect_asset_references(payload: dict, metadata: dict) -> list[dict]:
                 'kind': 'scene',
                 'path': scene_asset_path,
                 'source': 'scene_asset_path',
+            }
+        )
+    scene_asset_fallback_path = payload.get('scene_asset_fallback_path')
+    if scene_asset_fallback_path:
+        references.append(
+            {
+                'name': 'scene_asset_fallback',
+                'kind': 'scene',
+                'path': scene_asset_fallback_path,
+                'source': 'scene_asset_fallback_path',
             }
         )
 

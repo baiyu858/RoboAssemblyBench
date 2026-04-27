@@ -1,0 +1,249 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Scope "Lights"
+    {
+        def DomeLight "factory_dome_fill"
+        {
+            color3f inputs:color = (0.84, 0.90, 1.0)
+            float inputs:intensity = 420
+        }
+
+        def RectLight "factory_overhead_key"
+        {
+            color3f inputs:color = (1.0, 0.94, 0.84)
+            float inputs:height = 1.4
+            float inputs:intensity = 850
+            float inputs:width = 3.2
+            double3 xformOp:translate = (0.70, 0, 1.55)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def DistantLight "factory_side_fill"
+        {
+            color3f inputs:color = (0.72, 0.82, 1.0)
+            float inputs:angle = 0.6
+            float inputs:intensity = 140
+            double3 xformOp:rotateXYZ = (-50, 0, -35)
+            uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+        }
+    }
+
+    def Xform "FactoryCell"
+    {
+        custom string roboassemblybench_note = "Visual factory USD background for assembly-benchmark tabletop tasks. Collision is intentionally left to task objects and robot/table assets."
+
+        def Cube "floor_slab"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.16, 0.17, 0.17)]
+            double3 xformOp:translate = (0.62, 0, -0.035)
+            double3 xformOp:scale = (3.4, 2.35, 0.035)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "rear_wall"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.42, 0.45, 0.46)]
+            double3 xformOp:translate = (1.70, 0, 0.72)
+            double3 xformOp:scale = (0.045, 2.35, 0.72)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "left_wall"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.35, 0.38, 0.39)]
+            double3 xformOp:translate = (0.62, -1.17, 0.58)
+            double3 xformOp:scale = (3.4, 0.035, 0.58)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "right_wall"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.35, 0.38, 0.39)]
+            double3 xformOp:translate = (0.62, 1.17, 0.58)
+            double3 xformOp:scale = (3.4, 0.035, 0.58)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "gantry_crossbeam"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.87, 0.26, 0.18)]
+            double3 xformOp:translate = (0.66, 0, 1.16)
+            double3 xformOp:scale = (1.45, 0.07, 0.055)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "gantry_left_upright"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.87, 0.26, 0.18)]
+            double3 xformOp:translate = (0.04, -0.82, 0.58)
+            double3 xformOp:scale = (0.055, 0.055, 0.58)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "gantry_right_upright"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.87, 0.26, 0.18)]
+            double3 xformOp:translate = (0.04, 0.82, 0.58)
+            double3 xformOp:scale = (0.055, 0.055, 0.58)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "rear_conveyor_frame"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.25, 0.28, 0.30)]
+            double3 xformOp:translate = (1.12, 0, 0.19)
+            double3 xformOp:scale = (0.85, 0.32, 0.055)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "rear_conveyor_belt"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.035, 0.04, 0.04)]
+            double3 xformOp:translate = (1.12, 0, 0.235)
+            double3 xformOp:scale = (0.80, 0.27, 0.018)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "left_storage_rack"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.18, 0.25, 0.31)]
+            double3 xformOp:translate = (1.28, -0.86, 0.38)
+            double3 xformOp:scale = (0.45, 0.16, 0.38)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "right_control_cabinet"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.20, 0.28, 0.34)]
+            double3 xformOp:translate = (1.30, 0.86, 0.34)
+            double3 xformOp:scale = (0.32, 0.18, 0.34)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "control_panel"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.05, 0.10, 0.13)]
+            double3 xformOp:translate = (1.11, 0.86, 0.48)
+            double3 xformOp:scale = (0.018, 0.13, 0.11)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "warning_line_front_yellow"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.74, 0.06)]
+            double3 xformOp:translate = (0.58, -0.78, 0.004)
+            double3 xformOp:scale = (1.25, 0.018, 0.006)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "warning_line_back_yellow"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.74, 0.06)]
+            double3 xformOp:translate = (0.58, 0.78, 0.004)
+            double3 xformOp:scale = (1.25, 0.018, 0.006)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "warning_line_left_yellow"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.74, 0.06)]
+            double3 xformOp:translate = (-0.06, 0, 0.004)
+            double3 xformOp:scale = (0.018, 1.55, 0.006)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "warning_line_right_yellow"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.74, 0.06)]
+            double3 xformOp:translate = (1.22, 0, 0.004)
+            double3 xformOp:scale = (0.018, 1.55, 0.006)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "safety_post_front_left"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.72, 0.08)]
+            double3 xformOp:translate = (-0.10, -0.86, 0.34)
+            double3 xformOp:scale = (0.035, 0.035, 0.34)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "safety_post_front_right"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.72, 0.08)]
+            double3 xformOp:translate = (-0.10, 0.86, 0.34)
+            double3 xformOp:scale = (0.035, 0.035, 0.34)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "safety_post_rear_left"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.72, 0.08)]
+            double3 xformOp:translate = (1.30, -0.86, 0.34)
+            double3 xformOp:scale = (0.035, 0.035, 0.34)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "safety_post_rear_right"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.72, 0.08)]
+            double3 xformOp:translate = (1.30, 0.86, 0.34)
+            double3 xformOp:scale = (0.035, 0.035, 0.34)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "front_safety_rail"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.72, 0.08)]
+            double3 xformOp:translate = (-0.10, 0, 0.52)
+            double3 xformOp:scale = (0.028, 1.72, 0.025)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "rear_safety_rail"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(1.0, 0.72, 0.08)]
+            double3 xformOp:translate = (1.30, 0, 0.52)
+            double3 xformOp:scale = (0.028, 1.72, 0.025)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "overhead_light_strip"
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.86, 0.92, 0.84)]
+            double3 xformOp:translate = (0.78, 0, 1.32)
+            double3 xformOp:scale = (1.35, 0.045, 0.018)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+}

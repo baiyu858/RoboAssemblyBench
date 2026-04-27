@@ -21,6 +21,7 @@ class TaskCfg(BaseModel, extra=Extra.allow):
 
     # scene
     scene_asset_path: Optional[str] = None
+    scene_asset_fallback_path: Optional[str] = None
     scene_scale: Optional[Tuple[float, float, float]] = (1.0, 1.0, 1.0)
     scene_position: Optional[Tuple[float, float, float]] = (0, 0, 0)
     scene_orientation: Optional[Tuple[float, float, float, float]] = (1.0, 0, 0, 0)

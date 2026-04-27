@@ -1,5 +1,6 @@
 import os
 from typing import Optional, Sequence
+from urllib.parse import urlparse
 
 import numpy as np
 
@@ -14,11 +15,43 @@ class UsdObject(BaseObject):
         super().__init__(config, scene)
         self._config = config
 
+    @staticmethod
+    def _resolve_usd_path(usd_path: str) -> str:
+        path = os.path.expanduser(str(usd_path))
+        parsed = urlparse(path)
+        if parsed.scheme in {'http', 'https', 'omniverse'}:
+            return path
+        if path.startswith('${ISAAC_ASSETS_ROOT}') or path.startswith('/Isaac/'):
+            try:
+                from isaacsim.storage.native import get_assets_root_path
+
+                assets_root = get_assets_root_path()
+            except Exception:
+                assets_root = None
+            if assets_root:
+                suffix = path.removeprefix('${ISAAC_ASSETS_ROOT}')
+                if path.startswith('/Isaac/'):
+                    suffix = path
+                return assets_root.rstrip('/') + '/' + suffix.lstrip('/')
+            raise FileNotFoundError('Cannot resolve Isaac Sim assets root for object USD path: ' + path)
+        return os.path.abspath(path)
+
     def set_up_to_scene(self, scene: IScene):
-        from omni.isaac.core.prims import GeometryPrim, RigidPrim
+        from omni.isaac.core.prims import RigidPrim
+        from omni.isaac.core.prims.xform_prim import XFormPrim
         from omni.isaac.core.utils.prims import is_prim_path_valid
         from omni.isaac.core.utils.stage import add_reference_to_stage
         from omni.physx.scripts import utils
+        from pxr import UsdPhysics
+
+        def set_nested_collision_enabled(prim, enabled: bool) -> None:
+            if prim is None or not prim.IsValid():
+                return
+            if prim.HasAPI(UsdPhysics.CollisionAPI):
+                collision_api = UsdPhysics.CollisionAPI(prim)
+                collision_api.GetCollisionEnabledAttr().Set(enabled)
+            for child in prim.GetChildren():
+                set_nested_collision_enabled(child, enabled)
 
         class RigidObject(RigidPrim):
             def __init__(
@@ -43,9 +76,11 @@ class UsdObject(BaseObject):
                 if not is_prim_path_valid(prim_path):
                     if mass is None:
                         mass = 1
-                prim = add_reference_to_stage(os.path.abspath(usd_path), prim_path)
+                prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
                 if collider:
                     utils.setCollider(prim, approximationShape=None)
+                else:
+                    set_nested_collision_enabled(prim, False)
                 RigidPrim.__init__(
                     self,
                     prim_path=prim_path,
@@ -92,7 +127,7 @@ class UsdObject(BaseObject):
                 except Exception:
                     return
 
-        class GeometryObject(GeometryPrim):
+        class GeometryObject(XFormPrim):
             def __init__(
                 self,
                 prim_path: str,
@@ -110,12 +145,17 @@ class UsdObject(BaseObject):
                 dynamic_friction: Optional[float] = None,
                 restitution: Optional[float] = None,
             ) -> None:
-                prim = add_reference_to_stage(os.path.abspath(usd_path), prim_path)
+                prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
                 if collider:
                     utils.setCollider(prim, approximationShape=None)
+                else:
+                    set_nested_collision_enabled(prim, False)
                 self.size = size
                 self.color = color
-                GeometryPrim.__init__(
+                # Complex referenced USD assets should stay as XForms when they
+                # are visual-only. Wrapping them as GeometryPrim can make root
+                # collision/visibility handling unstable for factory props.
+                XFormPrim.__init__(
                     self,
                     prim_path=prim_path,
                     name=name,
@@ -124,7 +164,6 @@ class UsdObject(BaseObject):
                     orientation=orientation,
                     scale=scale,
                     visible=visible,
-                    collision=collider,
                 )
                 if collider and (
                     static_friction is not None
@@ -142,7 +181,8 @@ class UsdObject(BaseObject):
                             dynamic_friction=dynamic_friction,
                             restitution=restitution,
                         )
-                        self.apply_physics_material(physics_material)
+                        if hasattr(self, 'apply_physics_material'):
+                            self.apply_physics_material(physics_material)
                     except Exception:
                         pass
 

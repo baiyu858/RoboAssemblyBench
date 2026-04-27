@@ -174,6 +174,9 @@ python toolkits/factory_dual_franka_assembly/export_lerobot.py \
   translate :x:4.5 y:0.0 z:0.4
   orient: x:90.0 y:90.0 z:0.0
 
+  translate :x:5.0 y:0.0 z:3.2
+  orient: x:0.0 y:68.0 z:90.0
+
   left
   translate :x:-0.1 y:-0.0 z:-0.03
   orient: x:180.0 y:-5.0 z:0
@@ -191,7 +194,7 @@ conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py 
   --output-dir roboassemblybench/outputs/live_peg_insertion_recorded_v1 \
   --record-live-video \
   --live-video-fps 30 \
-  --live-video-frame-stride 1
+  --live-video-frame-stride 4
 
 
 
@@ -200,8 +203,48 @@ conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py 
   --scene-profiles taoyuan_grscenes_tabletop \
   --num-demos 1 \
   --max-trials 1 \
-  --output-dir roboassemblybench/outputs/peg_insertion_png_frames \
+  --output-dir roboassemblybench/outputs/peg_insertion_png_frames_v2 \
+  --record-live-video \
+  --live-video-fps 30 \
+  --live-video-frame-stride 4 \
+  --keep-video-frames
+
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
+  --recipes peg_insertion \
+  --scene-profiles taoyuan_grscenes_tabletop \
+  --num-demos 1 \
+  --max-trials 1 \
+  --output-dir roboassemblybench/outputs/peg_insertion_factory_ui
+
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
+  --recipes peg_insertion \
+  --scene-profiles taoyuan_grscenes_tabletop \
+  --num-demos 1 \
+  --max-trials 1 \
+  --output-dir roboassemblybench/outputs/peg_insertion_factory_ui \
   --record-live-video \
   --live-video-fps 30 \
   --live-video-frame-stride 1 \
   --keep-video-frames
+
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
+  --recipes peg_insertion \
+  --scene-profiles taoyuan_grscenes_tabletop \
+  --num-demos 1 \
+  --max-trials 1 \
+  --output-dir roboassemblybench/outputs/peg_insertion_isaac_warehouse_ui_v3 \
+  --record-live-video \
+  --live-video-fps 30 \
+  --live-video-frame-stride 4 \
+  --keep-video-frames
+
+
+
+CONDA_ENV=internutopia311 \
+RECIPE=peg_insertion \
+SCENE_PROFILE=taoyuan_grscenes_tabletop \
+ATTACH_RUNTIME_CAMERAS=1 \
+bash roboassemblybench/scripts/view_peg_insertion_scene_ui.sh

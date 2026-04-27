@@ -1,6 +1,10 @@
 import os
 
 
+def _is_remote_scene_file(file_path: str) -> bool:
+    return file_path.startswith(('omniverse://', 'http://', 'https://'))
+
+
 def validate_scene_file(file_path: str, prim_path_root: str = 'background'):
     """
     Validate scene file.
@@ -14,7 +18,7 @@ def validate_scene_file(file_path: str, prim_path_root: str = 'background'):
     """
     world_prim_path = '/' + prim_path_root
     if file_path.endswith('usd') or file_path.endswith('usda') or file_path.endswith('usdc'):
-        if not os.path.exists(file_path):
+        if not _is_remote_scene_file(file_path) and not os.path.exists(file_path):
             raise FileNotFoundError('File not found: ' + file_path)
         # Add usd directly
         return file_path, world_prim_path

@@ -493,8 +493,9 @@ def _invoke_worker(
         str(start_seed),
         '--max-trials',
         str(max_trials),
-        '--headless',
     ]
+    if headless:
+        command.append('--headless')
     if record_live_video:
         command.append('--record-live-video')
         command.extend(['--live-video-fps', str(int(live_video_fps))])

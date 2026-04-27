@@ -1,14 +1,18 @@
 profile_name: proxy_factory_cell
-scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
 workspace_offset: [0.0, 0.0, 0.0]
 
 metadata:
-  scene_family: procedural
-  description: Procedural fallback workcell for fast iteration without depending on full asset layouts.
+  scene_family: isaac_simple_warehouse
+  description: Isaac Sim asset-backed warehouse workcell using Simple_Warehouse/warehouse_with_forklifts.usd, with a lightweight RoboAssemblyBench USD fallback for offline runs.
   asset_references:
-    - name: empty_scene
+    - name: isaac_simple_warehouse
       kind: scene
-      path: ${ASSET_PATH}/scenes/empty.usd
+      path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+    - name: factory_cell_fallback
+      kind: scene
+      path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
 
 objects:
   - name: proxy_factory_pad

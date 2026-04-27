@@ -7,11 +7,11 @@ from typing import Any
 import yaml
 
 from internutopia.macros import gm
-from roboassemblybench.core.paths import SCENE_PROFILE_DIR
+from roboassemblybench.core.paths import BENCHMARK_ROOT, SCENE_PROFILE_DIR
 
 DEFAULT_SCENE_PROFILE = 'proxy_factory_cell'
 
-_NAMED_LIST_KEYS = {'robots', 'objects', 'targets', 'phases'}
+_NAMED_LIST_KEYS = {'robots', 'objects', 'targets', 'phases', 'camera_specs', 'cameras'}
 _UNIQUE_APPEND_LIST_KEYS = {'asset_references', 'supported_scene_profiles', 'tags'}
 
 
@@ -25,7 +25,7 @@ def _replace_placeholders(value: Any):
     if isinstance(value, list):
         return [_replace_placeholders(item) for item in value]
     if isinstance(value, str):
-        return value.replace('${ASSET_PATH}', gm.ASSET_PATH)
+        return value.replace('${ASSET_PATH}', gm.ASSET_PATH).replace('${BENCHMARK_ROOT}', str(BENCHMARK_ROOT))
     return value
 
 

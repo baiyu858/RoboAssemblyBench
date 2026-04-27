@@ -10,9 +10,9 @@ from toolkits.factory_dual_franka_assembly.scene_builder import (
 from toolkits.factory_dual_franka_assembly.scene_profiles import list_scene_profiles
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
 
-GRSCENES_TABLE_PATH_SUFFIX = (
-    '/scenes/GRScenes-100/home_scenes/models/object/others/table/'
-    'bc1e96d5d9ec6a4925d8c5741576af04/instance.usd'
+ISAAC_PACKING_TABLE_PATH_SUFFIX = (
+    '/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/'
+    'SM_HeavyDutyPackingTable_C02_01_physics.usd'
 )
 
 
@@ -44,17 +44,18 @@ def test_taoyuan_scene_profile_injects_assets_and_workspace_offset():
     assert task_cfg.target_poses['left_wait']['position'][2] > 1.0
 
 
-def test_taoyuan_grscenes_scene_profile_uses_real_table_anchor():
+def test_taoyuan_grscenes_scene_profile_uses_isaac_factory_table_anchor():
     recipe_spec = load_task_recipe('screw_fastening', scene_profile='taoyuan_grscenes_tabletop')
     assert recipe_spec['scene_profile'] == 'taoyuan_grscenes_tabletop'
-    assert recipe_spec['metadata']['scene_family'] == 'taoyuan_grscenes'
+    assert recipe_spec['metadata']['scene_family'] == 'isaac_packing_table'
     assert any(
-        reference['path'].endswith(GRSCENES_TABLE_PATH_SUFFIX)
+        reference['path'].endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
         for reference in recipe_spec['asset_references']
     )
     assert any(
         object_spec['name'] == 'taoyuan_table'
-        and object_spec['usd_path'].endswith(GRSCENES_TABLE_PATH_SUFFIX)
+        and object_spec['usd_path'].endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
+        and object_spec['collider'] is True
         and object_spec['rigid_body'] is False
         for object_spec in recipe_spec['objects']
     )
@@ -66,11 +67,12 @@ def test_taoyuan_grscenes_scene_profile_uses_real_table_anchor():
         scene_profile='taoyuan_grscenes_tabletop',
     )
     assert task_cfg.scene_profile == 'taoyuan_grscenes_tabletop'
-    assert task_cfg.workspace_offset == [0.0, 0.0, 0.78]
+    assert task_cfg.workspace_offset == [0.0, 0.0, 0.99]
     assert any(reference['kind'] == 'usd' for reference in task_cfg.asset_references)
     assert any(
         object_cfg.name == 'taoyuan_table'
-        and object_cfg.usd_path.endswith(GRSCENES_TABLE_PATH_SUFFIX)
+        and object_cfg.usd_path.endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
+        and object_cfg.collider is True
         and object_cfg.rigid_body is False
         for object_cfg in task_cfg.objects
     )
@@ -81,13 +83,13 @@ def test_asset_backed_recipes_default_to_taoyuan_tabletop():
     peg_insertion = load_task_recipe('peg_insertion')
 
     assert screw_fastening['scene_profile'] == 'taoyuan_tabletop'
-    assert peg_insertion['scene_profile'] == 'taoyuan_tabletop'
+    assert peg_insertion['scene_profile'] == 'taoyuan_grscenes_tabletop'
     assert any(
         reference['path'].endswith('/objects/table/white_big/instance.usd')
         for reference in screw_fastening['asset_references']
     )
     assert any(
-        reference['path'].endswith('/objects/table/white_big/instance.usd')
+        reference['path'].endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
         for reference in peg_insertion['asset_references']
     )
 

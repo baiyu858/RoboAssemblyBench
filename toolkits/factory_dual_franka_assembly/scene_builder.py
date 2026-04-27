@@ -303,6 +303,7 @@ def build_dual_franka_assembly_episode(
         phase_timeout_action=str(recipe_spec.get('phase_timeout_action', 'fail')),
         phase_timeout_recovery_phase=recipe_spec.get('phase_timeout_recovery_phase'),
         scene_asset_path=recipe_spec['scene_asset_path'],
+        scene_asset_fallback_path=recipe_spec.get('scene_asset_fallback_path'),
         scene_scale=tuple(float(value) for value in recipe_spec.get('scene_scale', [1.0, 1.0, 1.0])),
         scene_position=tuple(float(value) for value in recipe_spec.get('scene_position', [0.0, 0.0, 0.0])),
         scene_orientation=tuple(float(value) for value in recipe_spec.get('scene_orientation', [1.0, 0.0, 0.0, 0.0])),
