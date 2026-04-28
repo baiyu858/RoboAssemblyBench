@@ -16,6 +16,7 @@ from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task impo
 )
 from toolkits.factory_dual_franka_assembly.planner_primitives import (
     compose_pose,
+    euler_xyz_to_quat,
     pose_error,
     pose_within_tolerance,
     quat_conjugate,
@@ -189,8 +190,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if not isinstance(pose_spec, dict):
             raise TypeError(f'Unsupported pose specification: {type(pose_spec)!r}')
 
+        runtime_pose = self._resolve_runtime_target_pose(target_name, pose_spec)
+        if runtime_pose is not None:
+            position, orientation_array = runtime_pose
+            return target_name, position, orientation_array, target_spec
+
         position = pose_spec.get('position')
-        orientation = pose_spec.get('orientation')
+        orientation = self._target_orientation_from_spec(pose_spec)
         if position is None and target_name is not None and target_name in self.target_poses:
             position = self.target_poses[target_name]['position']
         if orientation is None and target_name is not None and target_name in self.target_poses:
@@ -201,6 +207,63 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         position = np.asarray(position, dtype=float)
         orientation_array = None if orientation is None else np.asarray(orientation, dtype=float)
         return target_name, position, orientation_array, target_spec
+
+    @staticmethod
+    def _target_orientation_from_spec(target_spec: dict):
+        orientation = target_spec.get('orientation')
+        if orientation is not None:
+            return np.asarray(orientation, dtype=float)
+        orientation_euler = target_spec.get('orientation_euler')
+        if orientation_euler is not None:
+            return euler_xyz_to_quat(orientation_euler)
+        return None
+
+    def _resolve_reference_pose(self, reference_name: str):
+        try:
+            reference_prim = self._resolve_object(reference_name)
+        except Exception:
+            reference_prim = None
+        if reference_prim is not None:
+            reference_position, reference_orientation = reference_prim.get_pose()
+            return np.asarray(reference_position, dtype=float), np.asarray(reference_orientation, dtype=float)
+        if reference_name in self.target_poses:
+            reference_pose = self.target_poses[reference_name]
+            return (
+                np.asarray(reference_pose['position'], dtype=float),
+                np.asarray(reference_pose['orientation'], dtype=float),
+            )
+        raise KeyError(f'Unknown runtime target reference: {reference_name}')
+
+    def _resolve_runtime_target_pose(self, target_name, pose_spec: dict):
+        if not isinstance(pose_spec, dict):
+            return None
+
+        reference_name = pose_spec.get('reference')
+        local_position = pose_spec.get('offset')
+        if reference_name is None and local_position is None:
+            return None
+
+        if reference_name in {None, 'world'}:
+            base_position = np.asarray(pose_spec.get('position', [0.0, 0.0, 0.0]), dtype=float)
+            base_orientation = np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
+            if target_name is not None and target_name in self.target_poses and 'position' not in pose_spec:
+                base_position = np.asarray(self.target_poses[target_name]['position'], dtype=float)
+                base_orientation = np.asarray(self.target_poses[target_name]['orientation'], dtype=float)
+        else:
+            base_position, base_orientation = self._resolve_reference_pose(str(reference_name))
+
+        local_position = np.asarray(local_position or [0.0, 0.0, 0.0], dtype=float)
+        local_orientation = self._target_orientation_from_spec(pose_spec)
+        if local_orientation is None:
+            local_orientation = np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
+
+        target_position, target_orientation = compose_pose(
+            base_position=base_position,
+            base_orientation=base_orientation,
+            local_position=local_position,
+            local_orientation=local_orientation,
+        )
+        return np.asarray(target_position, dtype=float), np.asarray(target_orientation, dtype=float)
 
     def _robot_end_effector_prim_name(self, robot_name: str) -> str | None:
         robot = self.robots.get(robot_name)
@@ -977,10 +1040,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _gripper_contact_metrics(self, object_name: str, robot_name: str, attach_spec: dict | None = None) -> dict:
         attach_spec = attach_spec or {}
         object_rigid_body = self._resolve_object(object_name)
-        object_position, object_orientation = object_rigid_body.get_pose()
-        object_position = np.asarray(object_position, dtype=float)
-        object_orientation = np.asarray(object_orientation, dtype=float)
-        half_extents = np.maximum(self._get_object_scale(object_name) * 0.5, np.array([0.01, 0.01, 0.01], dtype=float))
+        contact_box_center, contact_box_orientation = self._contact_box_pose(
+            object_name,
+            attach_spec=attach_spec,
+        )
+        half_extents = np.maximum(
+            self._contact_box_scale(object_name, attach_spec=attach_spec) * 0.5,
+            np.array([0.01, 0.01, 0.01], dtype=float),
+        )
         contact_distance = float(attach_spec.get('finger_contact_distance', self._FINGER_CONTACT_DISTANCE))
         contact_force_threshold = float(
             attach_spec.get('contact_force_threshold', self._FINGER_CONTACT_FORCE_THRESHOLD)
@@ -1013,7 +1080,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if not sample_positions:
                 fallback_sample = fingertip_position if fingertip_position is not None else finger_position
                 sample_positions = [np.asarray(fallback_sample, dtype=float)]
-            origin_gap = self._point_to_world_aabb_gap(finger_position, object_position, half_extents)
+            origin_gap = self._point_to_world_aabb_gap(finger_position, contact_box_center, half_extents)
             best_sample_position = None
             best_sample_gap = None
             best_local_contact = None
@@ -1021,8 +1088,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             for sample_position in sample_positions:
                 local_sample_position = self._point_to_local_frame(
                     sample_position,
-                    origin=object_position,
-                    orientation=object_orientation,
+                    origin=contact_box_center,
+                    orientation=contact_box_orientation,
                 )
                 local_contact = self._local_surface_contact_metrics(
                     local_sample_position,
@@ -1031,7 +1098,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 )
                 sample_gap = local_contact.get('best_surface_gap')
                 if sample_gap is None:
-                    sample_gap = self._point_to_world_aabb_gap(sample_position, object_position, half_extents)
+                    sample_gap = self._point_to_world_aabb_gap(sample_position, contact_box_center, half_extents)
                 sample_gap = float(sample_gap)
                 if best_sample_gap is None or sample_gap < best_sample_gap:
                     best_sample_gap = sample_gap
@@ -1065,7 +1132,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'origin_gap': origin_gap,
                 'fingertip_gap': None
                 if fingertip_position is None
-                else self._point_to_world_aabb_gap(fingertip_position, object_position, half_extents),
+                else self._point_to_world_aabb_gap(fingertip_position, contact_box_center, half_extents),
                 'fingertip_position': None if fingertip_position is None else fingertip_position.tolist(),
                 'sample_count': len(sample_positions),
                 'best_sample_position': None if best_sample_position is None else best_sample_position.tolist(),
@@ -1150,6 +1217,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'caging_axis': caging_axis,
             'caging_contact_distance': caging_contact_distance,
             'contact_ready': contact_ready,
+            'contact_box_center': contact_box_center.tolist(),
+            'contact_box_scale': (half_extents * 2.0).tolist(),
         }
 
     def _strict_physical_grasp_contact(self, object_name: str, contact_metrics: dict, attach_spec: dict | None = None) -> dict:
@@ -1390,7 +1459,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         contact_axis = self._contact_axis_for_gripper_limit(contact_metrics)
         if contact_axis is not None:
             axis_index = {'x': 0, 'y': 1, 'z': 2}[contact_axis]
-            object_scale = self._get_object_scale(object_name)
+            object_scale = self._contact_box_scale(object_name, attach_spec=attach_spec)
             if object_scale.size > axis_index:
                 object_half_extent = max(float(object_scale[axis_index]) * 0.5, 0.0)
                 object_margin_key = 'hold_gripper_object_margin' if hold_phase else 'attach_gripper_object_margin'
@@ -1439,7 +1508,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'physical_grasp_min_opening',
                 max(
                     float(attach_spec.get('physical_grasp_min_opening_ratio', 0.45))
-                    * max(float(np.min(self._get_object_scale(object_name)[:2])), 0.0)
+                    * max(float(np.min(self._contact_box_scale(object_name, attach_spec=attach_spec)[:2])), 0.0)
                     * 0.5,
                     0.008,
                 ),
@@ -1468,7 +1537,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         release_axis = self._contact_axis_for_gripper_limit(contact_metrics)
         if release_axis in {'x', 'y', 'z'}:
             axis_index = {'x': 0, 'y': 1, 'z': 2}[release_axis]
-            object_scale = self._get_object_scale(object_name)
+            object_scale = self._contact_box_scale(object_name, attach_spec=attach_spec)
             if object_scale.size > axis_index:
                 release_opening_threshold = max(
                     release_opening_threshold,
@@ -1498,6 +1567,29 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _get_object_scale(self, object_name: str) -> np.ndarray:
         metadata = self._object_metadata_map.get(object_name, {})
         return np.asarray(metadata.get('scale', [1.0, 1.0, 1.0]), dtype=float)
+
+    def _contact_box_scale(self, object_name: str, attach_spec: dict | None = None) -> np.ndarray:
+        attach_spec = attach_spec or {}
+        contact_box_scale = attach_spec.get('contact_box_scale')
+        if contact_box_scale is not None:
+            return np.asarray(contact_box_scale, dtype=float)
+        contact_box_half_extents = attach_spec.get('contact_box_half_extents')
+        if contact_box_half_extents is not None:
+            return np.asarray(contact_box_half_extents, dtype=float) * 2.0
+        return self._get_object_scale(object_name)
+
+    def _contact_box_pose(self, object_name: str, attach_spec: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+        attach_spec = attach_spec or {}
+        object_position, object_orientation = self._resolve_object(object_name).get_pose()
+        object_position = np.asarray(object_position, dtype=float)
+        object_orientation = np.asarray(object_orientation, dtype=float)
+        contact_box_offset = attach_spec.get('contact_box_offset')
+        if contact_box_offset is not None:
+            object_position = object_position + quat_rotate(
+                object_orientation,
+                np.asarray(contact_box_offset, dtype=float),
+            )
+        return object_position, object_orientation
 
     def _is_slender_attach_object(self, object_name: str, attach_spec: dict | None = None) -> bool:
         attach_spec = attach_spec or {}
@@ -2054,7 +2146,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         contact_ready = bool(contact_ready or enclosure_ready)
         if uses_physical_grasp:
             if gripper_opening is not None:
-                scale = self._get_object_scale(object_name)
+                scale = self._contact_box_scale(object_name, attach_spec=attach_spec)
                 grasp_axis = self._contact_axis_for_gripper_limit(contact_metrics)
                 if grasp_axis in {'x', 'y', 'z'}:
                     axis_index = {'x': 0, 'y': 1, 'z': 2}[grasp_axis]
@@ -2102,7 +2194,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._maybe_write_attach_debug(debug_payload)
         return attach_ready
 
-    def _detach_ready(self, phase_spec: dict, object_name: str) -> bool:
+    def _detach_ready(self, phase_spec: dict, object_name: str, detach_spec=None) -> bool:
         attachment_state = self._attachments.get(object_name)
         if attachment_state is None:
             return True
@@ -2111,6 +2203,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return True
         if self._current_gripper_command(phase_spec, robot_name) != 'open':
             return False
+        detach_spec = detach_spec if isinstance(detach_spec, dict) else {}
+        min_release_steps = int(detach_spec.get('release_min_steps', detach_spec.get('min_steps', 0)))
+        if self.phase_step_counter < min_release_steps:
+            return False
+        release_gripper_opening_threshold = detach_spec.get('release_gripper_opening_threshold')
+        if release_gripper_opening_threshold is not None:
+            gripper_opening = self._get_robot_gripper_opening(robot_name)
+            if gripper_opening is None or float(gripper_opening) < float(release_gripper_opening_threshold):
+                return False
         if attachment_state.get('mode') == 'pure_physical_grasp':
             return self._pure_physical_release_ready(object_name, attachment_state)
         target_info = self._resolve_phase_robot_target(
@@ -2237,7 +2338,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             object_name = self._extract_object_name(object_entry)
             if object_name is None or object_name in lock_targets:
                 continue
-            if self._detach_ready(phase_spec, object_name):
+            if self._detach_ready(phase_spec, object_name, object_entry):
                 self._detach_object(object_name)
 
     def _phase_interactions_complete(self, phase_spec: dict) -> bool:
@@ -2447,6 +2548,46 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 return False
         return True
 
+    def _robot_object_contact(self, contact_specs) -> bool:
+        for contact_spec in self._as_list(contact_specs):
+            if not isinstance(contact_spec, dict):
+                return False
+            object_name = contact_spec.get('object')
+            robot_name = contact_spec.get('robot')
+            if object_name is None or robot_name is None:
+                return False
+
+            normalized_contact_spec = dict(contact_spec)
+            contact_metrics = self._gripper_contact_metrics(
+                object_name,
+                robot_name,
+                attach_spec=normalized_contact_spec,
+            )
+            attach_mode = self._attachment_mode(normalized_contact_spec)
+            if attach_mode in self._PHYSICAL_GRASP_ATTACHMENT_MODES:
+                strict_contact = self._strict_physical_grasp_contact(
+                    object_name,
+                    contact_metrics,
+                    attach_spec=normalized_contact_spec,
+                )
+                contact_ready = bool(strict_contact.get('physical_contact_ready'))
+                if bool(normalized_contact_spec.get('allow_caging_contact_for_physical_grasp', False)):
+                    contact_ready = bool(contact_ready or contact_metrics.get('contact_ready'))
+            else:
+                strict_dual_finger_contact = self._strict_dual_finger_contact(
+                    object_name,
+                    contact_metrics.get('left_finger') or {},
+                    contact_metrics.get('right_finger') or {},
+                    attach_spec=normalized_contact_spec,
+                )
+                if bool(normalized_contact_spec.get('require_physical_contact', False)):
+                    contact_ready = bool(strict_dual_finger_contact)
+                else:
+                    contact_ready = bool(contact_metrics.get('contact_ready'))
+            if not contact_ready:
+                return False
+        return True
+
     def _object_velocity_metrics(
         self,
         object_name: str,
@@ -2589,6 +2730,11 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 linear_threshold=float(advance.get('linear_velocity_threshold', 1e-2)),
                 angular_threshold=float(advance.get('angular_velocity_threshold', 0.5)),
             )
+        if advance_type in {'robot_object_contact', 'gripper_object_contact'}:
+            contact_specs = advance.get('contacts')
+            if contact_specs is None:
+                contact_specs = [advance]
+            return self._robot_object_contact(contact_specs)
         if advance_type == 'success_criteria_met':
             return self._check_success()
         raise ValueError(f'Unsupported advance condition: {advance_type}')
@@ -2619,6 +2765,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if bool(success_criterion.get('require_released', success_criterion.get('require_not_grasped', False))):
                 if object_name in self._attachments:
                     return False
+            if bool(success_criterion.get('require_attached', success_criterion.get('require_grasped', False))):
+                attachment_state = self._attachments.get(object_name)
+                if attachment_state is None:
+                    return False
+                required_robot = success_criterion.get('robot')
+                if required_robot is not None and attachment_state.get('robot_name') != required_robot:
+                    return False
             if bool(success_criterion.get('require_static', False)):
                 static_metrics = self._object_velocity_metrics(
                     object_name,
@@ -2627,7 +2780,93 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 )
                 if not bool(static_metrics.get('valid')) or not bool(static_metrics.get('is_static')):
                     return False
+            success_contact_spec = success_criterion.get('require_robot_object_contact')
+            if success_contact_spec:
+                normalized_contact_spec = dict(success_contact_spec)
+                normalized_contact_spec.setdefault('object', object_name)
+                if normalized_contact_spec.get('robot') is None:
+                    return False
+                if not self._robot_object_contact(normalized_contact_spec):
+                    return False
         return True
+
+    def _success_diagnostics(self) -> list[dict]:
+        diagnostics = []
+        for success_criterion in self.cfg.success_criteria:
+            object_name = success_criterion['object']
+            target_name = success_criterion.get('target') or success_criterion.get('target_name')
+            target_like = success_criterion.get('target_pose', target_name)
+            position_tolerance = float(success_criterion.get('position_tolerance', success_criterion.get('tolerance', 0.03)))
+            orientation_tolerance = success_criterion.get('orientation_tolerance')
+            object_position, object_orientation = self._resolve_object(object_name).get_pose()
+            _, target_position, target_orientation, target_spec = self._resolve_target_pose_spec(target_like)
+            position_tolerance, orientation_tolerance = self._target_tolerances(
+                target_spec=target_spec,
+                default_position_tolerance=position_tolerance,
+                default_orientation_tolerance=orientation_tolerance,
+            )
+            position_error, orientation_error = pose_error(
+                current_position=object_position,
+                current_orientation=object_orientation,
+                target_position=target_position,
+                target_orientation=target_orientation,
+            )
+            pose_passed = pose_within_tolerance(
+                current_position=object_position,
+                current_orientation=object_orientation,
+                target_position=target_position,
+                target_orientation=target_orientation,
+                position_tolerance=position_tolerance,
+                orientation_tolerance=orientation_tolerance,
+            )
+            released_passed = True
+            if bool(success_criterion.get('require_released', success_criterion.get('require_not_grasped', False))):
+                released_passed = object_name not in self._attachments
+            attached_passed = True
+            if bool(success_criterion.get('require_attached', success_criterion.get('require_grasped', False))):
+                attachment_state = self._attachments.get(object_name)
+                attached_passed = attachment_state is not None
+                required_robot = success_criterion.get('robot')
+                if attached_passed and required_robot is not None:
+                    attached_passed = attachment_state.get('robot_name') == required_robot
+            static_metrics = None
+            static_passed = True
+            if bool(success_criterion.get('require_static', False)):
+                static_metrics = self._object_velocity_metrics(
+                    object_name,
+                    linear_threshold=float(success_criterion.get('linear_velocity_threshold', 1e-2)),
+                    angular_threshold=float(success_criterion.get('angular_velocity_threshold', 0.5)),
+                )
+                static_passed = bool(static_metrics.get('valid')) and bool(static_metrics.get('is_static'))
+            contact_passed = True
+            success_contact_spec = success_criterion.get('require_robot_object_contact')
+            if success_contact_spec:
+                normalized_contact_spec = dict(success_contact_spec)
+                normalized_contact_spec.setdefault('object', object_name)
+                contact_passed = bool(
+                    normalized_contact_spec.get('robot') is not None
+                    and self._robot_object_contact(normalized_contact_spec)
+                )
+            diagnostics.append(
+                {
+                    'object': object_name,
+                    'target': target_name,
+                    'object_position': np.asarray(object_position).tolist(),
+                    'target_position': np.asarray(target_position).tolist(),
+                    'position_error': position_error,
+                    'position_tolerance': position_tolerance,
+                    'orientation_error': orientation_error,
+                'orientation_tolerance': orientation_tolerance,
+                'pose_passed': pose_passed,
+                'released_passed': released_passed,
+                'attached_passed': attached_passed,
+                'static_metrics': static_metrics,
+                'static_passed': static_passed,
+                'contact_passed': contact_passed,
+                'passed': bool(pose_passed and released_passed and attached_passed and static_passed and contact_passed),
+            }
+            )
+        return diagnostics
 
     def get_tracked_robot_states(self, phase_spec: dict | None = None) -> dict:
         phase_spec = phase_spec or self.get_current_phase_spec()
@@ -2864,6 +3103,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'steps': self.step_counter,
             'tracked_objects': self.get_tracked_object_states(),
             'tracked_robots': self.get_tracked_robot_states(),
+            'success_diagnostics': self._success_diagnostics(),
             'timeout_count': self.phase_timeout_count,
             'recovery_count': self.phase_recovery_count,
             'handoff_history': self._handoff_history,

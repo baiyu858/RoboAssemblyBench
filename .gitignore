@@ -123,6 +123,9 @@ work_dirs/
 # internutopia assets
 /asset
 assets
+roboassemblybench/assets/
+!roboassemblybench/assets/robofactory_native/
+!roboassemblybench/assets/robofactory_native/**
 
 # user scripts
 /scripts

@@ -1,0 +1,61 @@
+extends: _base.yaml
+task_name: place_food
+title: Place food
+summary: RoboFactory Place Food migrated into the RoboAssemblyBench factory tabletop scene.
+task_description: >-
+  The left Franka picks up a USD food item and places it into a USD pot on the factory
+  workbench while the right Franka stabilizes near the pot, matching the intent of the
+  RoboFactory Place Food task.
+metadata:
+  tags:
+    - robofactory
+    - place-food
+    - food-placement
+    - usd-asset
+  object_roles:
+    pot:
+      role: receptacle
+      summary: Native USDZ ceramic jar visual wrapped with authored pot collision walls for the placement target.
+    meat:
+      role: food_item
+      owner: franka_left
+      summary: Native USDZ pancake-stack visual with non-food props hidden and compact collision proxies for grasping.
+    workbench:
+      role: support_surface
+      summary: Physical tabletop surface inherited from the peg insertion factory scene.
+    workbench_visual:
+      role: visual_surface
+      summary: Dark visual layer for the factory tabletop.
+  target_roles:
+    meat_grasp_close:
+      object: meat
+      phase: grasp_food
+      summary: Left gripper close pose for picking the food item.
+    pot_stabilize:
+      object: pot
+      phase: approach_food_and_pot
+      summary: Right arm pose near the pot rim for stabilization.
+    meat_in_pot:
+      object: meat
+      phase: settle_food_in_pot
+      summary: Final food pose inside the pot.
+  phase_notes:
+    - name: approach_food_and_pot
+      summary: Left arm approaches the food while the right arm moves near the pot.
+      focus_objects:
+        - meat
+        - pot
+    - name: grasp_food
+      summary: Left gripper closes and attaches the food item for transport.
+      focus_objects:
+        - meat
+    - name: lower_food_into_pot
+      summary: Payload-driven motion moves the food into the pot volume.
+      focus_objects:
+        - meat
+        - pot
+    - name: settle_food_in_pot
+      summary: The food is released and must remain static near the pot target.
+      focus_objects:
+        - meat
+        - pot

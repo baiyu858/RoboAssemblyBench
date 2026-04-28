@@ -157,7 +157,10 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
         return UsdObjCfg(
             usd_path=object_spec['usd_path'],
             collider=bool(object_spec.get('collider', True)),
+            auto_collider=bool(object_spec.get('auto_collider', True)),
             rigid_body=bool(object_spec.get('rigid_body', True)),
+            mass=object_spec.get('mass'),
+            density=object_spec.get('density'),
             static_friction=object_spec.get('static_friction'),
             dynamic_friction=object_spec.get('dynamic_friction'),
             restitution=object_spec.get('restitution'),

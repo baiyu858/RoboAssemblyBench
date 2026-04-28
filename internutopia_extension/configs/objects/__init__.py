@@ -52,7 +52,10 @@ class UsdObjCfg(ObjectCfg):
     type: Optional[str] = 'UsdObject'
     usd_path: str
     collider: Optional[bool] = True
+    auto_collider: Optional[bool] = True
     rigid_body: Optional[bool] = True
+    mass: Optional[float] = None
+    density: Optional[float] = None
     static_friction: Optional[float] = None
     dynamic_friction: Optional[float] = None
     restitution: Optional[float] = None

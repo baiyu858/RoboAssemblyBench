@@ -1,0 +1,379 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: place_food
+prompt: "Two Franka arms perform the RoboFactory Place Food task in the factory tabletop scene: the left arm picks up food and places it into a USD pot while the right arm stabilizes near the pot."
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
+max_steps: 2400
+phase_timeout_steps: 420
+phase_timeout_action: fail
+source_benchmark: robofactory
+source_config_path: third_part/RoboFactory/robofactory/configs/table/place_food.yaml
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.08, -0.62, 1.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.08, 0.62, 1.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+camera_specs:
+  - name: third_person_front
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+
+objects:
+  - name: pot
+    kind: usd
+    prim_path: /pot
+    usd_path: ${BENCHMARK_ROOT}/assets/robofactory_native/place_food/pot.usda
+    position: [0.54, 0.04, 0.065]
+    random_xy: [0.01, 0.005]
+    scale: [0.34, 0.34, 0.12]
+    collider: true
+    auto_collider: false
+    rigid_body: false
+    static_friction: 1.4
+    dynamic_friction: 1.0
+    restitution: 0.0
+    tracked: false
+  - name: meat
+    kind: usd
+    prim_path: /meat
+    usd_path: ${BENCHMARK_ROOT}/assets/robofactory_native/place_food/meat.usda
+    position: [0.54, -0.22, 0.0325]
+    random_xy: [0.015, 0.01]
+    scale: [0.12, 0.05, 0.045]
+    mass: 0.08
+    collider: true
+    auto_collider: false
+    rigid_body: true
+    static_friction: 1.8
+    dynamic_friction: 1.2
+    restitution: 0.0
+  - name: workbench
+    kind: static_cube
+    prim_path: /workbench
+    position: [0.47, -0.04, 0.005]
+    scale: [0.56, 0.76, 0.01]
+    color: [0.10, 0.12, 0.12]
+    static_friction: 1.2
+    dynamic_friction: 0.9
+    restitution: 0.0
+    tracked: false
+  - name: workbench_visual
+    kind: visual_cube
+    prim_path: /workbench_visual
+    position: [0.47, -0.04, 0.0125]
+    scale: [0.58, 0.78, 0.002]
+    color: [0.08, 0.08, 0.08]
+    tracked: false
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.24, -0.44, 0.52]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.24, 0.44, 0.52]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.16, -0.66, 0.58]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.16, 0.66, 0.58]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: meat_pick
+    reference: meat
+    offset: [0.0, 0.0, 0.105]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: meat_grasp_open
+    reference: meat
+    offset: [0.0, 0.0, 0.008]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: meat_grasp_close
+    reference: meat
+    offset: [0.0, 0.0, -0.010]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: meat_lift
+    reference: meat
+    offset: [0.0, 0.0, 0.18]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: pot_stabilize
+    reference: pot
+    offset: [0.0, 0.0, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: meat_above_pot
+    reference: pot
+    offset: [0.0, 0.0, 0.22]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: meat_motion_drop
+    reference: pot
+    offset: [-0.075, 0.055, 0.20]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: meat_drop
+    reference: pot
+    offset: [0.0, 0.0, 0.20]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: meat_in_pot
+    reference: pot
+    offset: [0.0, 0.0, 0.024]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+  - name: left_release_clear
+    reference: pot
+    offset: [-0.11, 0.05, 0.36]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_release_hold
+    reference: pot
+    offset: [-0.11, 0.05, 0.18]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+
+phases:
+  - name: approach_food_and_pot
+    robot_targets:
+      franka_left:
+        target: meat_pick
+        position_tolerance: 0.07
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+  - name: descend_to_food
+    timeout_steps: 240
+    robot_targets:
+      franka_left:
+        target: meat_grasp_open
+        position_tolerance: 0.035
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: grasp_food
+    timeout_steps: 340
+    robot_targets:
+      franka_left:
+        target: meat_grasp_close
+        position_tolerance: 0.025
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    attach:
+      - object: meat
+        robot: franka_left
+        target: meat_grasp_close
+        position_tolerance: 0.025
+        attachment_mode: physical_joint
+        disable_collision_on_attach: true
+        support_height_tolerance: 0.04
+        top_clearance: 0.03
+        require_contact: false
+        gripper_closed_threshold: 0.041
+        gripper_closed_margin: 0.004
+    advance:
+      type: timer
+      min_steps: 36
+  - name: lift_food
+    robot_targets:
+      franka_left:
+        target: meat_lift
+        position_tolerance: 0.07
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: object_lifted
+      object: meat
+      min_lift: 0.08
+      require_attached: true
+      min_steps: 12
+  - name: carry_food_above_pot
+    timeout_steps: 460
+    robot_targets:
+      franka_left:
+        target: meat_above_pot
+        payload_object: meat
+        payload_target: meat_motion_drop
+        position_only: true
+        position_tolerance: 0.11
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: object_targets_reached
+      min_steps: 12
+      tolerance: 0.08
+      objects:
+        - object: meat
+          target: meat_motion_drop
+          position_tolerance: 0.08
+  - name: lower_food_into_pot
+    timeout_steps: 520
+    robot_targets:
+      franka_left:
+        target: meat_above_pot
+        payload_object: meat
+        payload_target: meat_motion_drop
+        position_only: true
+        position_tolerance: 0.11
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: object_targets_reached
+      min_steps: 18
+      tolerance: 0.12
+      objects:
+        - object: meat
+          target: meat_drop
+          position_tolerance: 0.12
+  - name: hold_food_in_pot
+    timeout_steps: 180
+    robot_targets:
+      franka_left:
+        target: meat_above_pot
+        payload_object: meat
+        payload_target: meat_motion_drop
+        position_only: true
+        position_tolerance: 0.11
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: timer
+      min_steps: 48
+  - name: release_food
+    timeout_steps: 240
+    robot_targets:
+      franka_left:
+        target: meat_above_pot
+        payload_object: meat
+        payload_target: meat_motion_drop
+        position_only: true
+        position_tolerance: 0.08
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    detach:
+      - object: meat
+        release_min_steps: 80
+        release_gripper_opening_threshold: 0.039
+    advance:
+      type: timer
+      min_steps: 0
+  - name: let_food_drop
+    timeout_steps: 180
+    robot_targets:
+      franka_left:
+        target: left_release_hold
+        position_tolerance: 0.08
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: timer
+      min_steps: 100
+  - name: clear_gripper_after_release
+    timeout_steps: 180
+    robot_targets:
+      franka_left:
+        target: left_release_clear
+        position_tolerance: 0.08
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 36
+      tolerance: 0.08
+  - name: settle_food_in_pot
+    timeout_steps: 360
+    robot_targets:
+      franka_left:
+        target: left_release_clear
+        position_tolerance: 0.10
+      franka_right:
+        target: pot_stabilize
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: all_of
+      min_steps: 36
+      conditions:
+        - type: objects_static
+          objects:
+            - meat
+          linear_velocity_threshold: 0.02
+          angular_velocity_threshold: 0.8
+        - type: object_targets_reached
+          tolerance: 0.15
+          objects:
+            - object: meat
+              target: meat_in_pot
+              position_tolerance: 0.15
+success:
+  - object: meat
+    target: meat_in_pot
+    position_tolerance: 0.15
+    require_released: true
+    require_static: true
+
+metadata:
+  tags:
+    - robofactory
+    - place-food
+    - food-placement
+    - usd-asset
+  asset_references:
+    - name: native_pot_visual_asset
+      kind: usdz
+      path: roboassemblybench/assets/robofactory_native/downloads/place_food/white_ceramic_jar_with_handle.usdz
+      source_url: https://ar-code.com/files/AR-Code-1674906795076.usdz
+    - name: native_food_visual_asset
+      kind: usdz
+      path: roboassemblybench/assets/robofactory_native/downloads/place_food/pancakes_photogrammetry.usdz
+      source_url: https://developer.apple.com/augmented-reality/quick-look/models/pancakes/pancakes_photogrammetry.usdz

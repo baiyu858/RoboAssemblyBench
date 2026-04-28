@@ -53,6 +53,16 @@ class UsdObject(BaseObject):
             for child in prim.GetChildren():
                 set_nested_collision_enabled(child, enabled)
 
+        def set_nested_colliders(prim) -> None:
+            if prim is None or not prim.IsValid():
+                return
+            try:
+                utils.setCollider(prim, approximationShape=None)
+            except Exception:
+                pass
+            for child in prim.GetChildren():
+                set_nested_colliders(child)
+
         class RigidObject(RigidPrim):
             def __init__(
                 self,
@@ -69,6 +79,7 @@ class UsdObject(BaseObject):
                 linear_velocity: Optional[Sequence[float]] = None,
                 angular_velocity: Optional[Sequence[float]] = None,
                 collider: Optional[bool] = True,
+                auto_collider: Optional[bool] = True,
                 static_friction: Optional[float] = None,
                 dynamic_friction: Optional[float] = None,
                 restitution: Optional[float] = None,
@@ -77,9 +88,9 @@ class UsdObject(BaseObject):
                     if mass is None:
                         mass = 1
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
-                if collider:
-                    utils.setCollider(prim, approximationShape=None)
-                else:
+                if collider and auto_collider:
+                    set_nested_colliders(prim)
+                elif not collider:
                     set_nested_collision_enabled(prim, False)
                 RigidPrim.__init__(
                     self,
@@ -141,14 +152,15 @@ class UsdObject(BaseObject):
                 color: Optional[np.ndarray] = None,
                 size: Optional[float] = None,
                 collider: Optional[bool] = False,
+                auto_collider: Optional[bool] = True,
                 static_friction: Optional[float] = None,
                 dynamic_friction: Optional[float] = None,
                 restitution: Optional[float] = None,
             ) -> None:
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
-                if collider:
-                    utils.setCollider(prim, approximationShape=None)
-                else:
+                if collider and auto_collider:
+                    set_nested_colliders(prim)
+                elif not collider:
                     set_nested_collision_enabled(prim, False)
                 self.size = size
                 self.color = color
@@ -196,6 +208,9 @@ class UsdObject(BaseObject):
                     orientation=self._config.orientation,
                     scale=self._config.scale,
                     collider=self._config.collider,
+                    auto_collider=self._config.auto_collider,
+                    mass=self._config.mass,
+                    density=self._config.density,
                     static_friction=self._config.static_friction,
                     dynamic_friction=self._config.dynamic_friction,
                     restitution=self._config.restitution,
@@ -211,6 +226,7 @@ class UsdObject(BaseObject):
                     orientation=self._config.orientation,
                     scale=self._config.scale,
                     collider=self._config.collider,
+                    auto_collider=self._config.auto_collider,
                     static_friction=self._config.static_friction,
                     dynamic_friction=self._config.dynamic_friction,
                     restitution=self._config.restitution,

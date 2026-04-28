@@ -1,0 +1,294 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: lift_barrier
+prompt: "Two Franka arms perform the RoboFactory Lift Barrier task in the factory tabletop scene: both grippers close on a steel barrier and lift it above the workbench."
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
+max_steps: 2200
+phase_timeout_steps: 420
+phase_timeout_action: fail
+source_benchmark: robofactory
+source_config_path: third_part/RoboFactory/robofactory/configs/table/lift_barrier.yaml
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.08, -0.62, 1.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.08, 0.62, 1.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+camera_specs:
+  - name: third_person_front
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+
+objects:
+  - name: barrier
+    kind: usd
+    prim_path: /barrier
+    usd_path: ${BENCHMARK_ROOT}/assets/robofactory_native/lift_barrier/barrier.usda
+    position: [0.47, 0.0, 0.05]
+    random_xy: [0.01, 0.01]
+    scale: [0.126, 0.60, 0.09]
+    mass: 0.12
+    collider: true
+    auto_collider: false
+    rigid_body: true
+    static_friction: 1.6
+    dynamic_friction: 1.2
+    restitution: 0.0
+  - name: workbench
+    kind: static_cube
+    prim_path: /workbench
+    position: [0.47, -0.04, 0.005]
+    scale: [0.56, 0.76, 0.01]
+    color: [0.10, 0.12, 0.12]
+    static_friction: 1.2
+    dynamic_friction: 0.9
+    restitution: 0.0
+    tracked: false
+  - name: workbench_visual
+    kind: visual_cube
+    prim_path: /workbench_visual
+    position: [0.47, -0.04, 0.0125]
+    scale: [0.58, 0.78, 0.002]
+    color: [0.08, 0.08, 0.08]
+    tracked: false
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.24, -0.44, 0.52]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.24, 0.44, 0.52]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.16, -0.66, 0.60]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.16, 0.66, 0.60]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_barrier_pick
+    reference: barrier
+    offset: [0.0, -0.25, 0.12]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_barrier_pick
+    reference: barrier
+    offset: [0.0, 0.25, 0.12]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_barrier_grasp_open
+    reference: barrier
+    offset: [0.0, -0.25, 0.05]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_barrier_grasp_open
+    reference: barrier
+    offset: [0.0, 0.25, 0.05]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_barrier_grasp_close
+    reference: barrier
+    offset: [0.0, -0.25, 0.0]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_barrier_grasp_close
+    reference: barrier
+    offset: [0.0, 0.25, 0.0]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_barrier_lift
+    reference: barrier
+    offset: [0.0, -0.25, 0.24]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_barrier_lift
+    reference: barrier
+    offset: [0.0, 0.25, 0.24]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: barrier_lifted
+    reference: barrier
+    offset: [0.0, 0.0, 0.20]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: approach_barrier
+    robot_targets:
+      franka_left:
+        target: left_barrier_pick
+        position_tolerance: 0.07
+      franka_right:
+        target: right_barrier_pick
+        position_tolerance: 0.07
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+  - name: descend_to_barrier
+    timeout_steps: 240
+    robot_targets:
+      franka_left:
+        target: left_barrier_grasp_open
+        position_tolerance: 0.04
+      franka_right:
+        target: right_barrier_grasp_open
+        position_tolerance: 0.04
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: grasp_barrier
+    timeout_steps: 340
+    robot_targets:
+      franka_left:
+        target: left_barrier_grasp_close
+        position_tolerance: 0.025
+      franka_right:
+        target: right_barrier_grasp_close
+        position_tolerance: 0.025
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    attach:
+      - object: barrier
+        robot: franka_left
+        target: left_barrier_grasp_close
+        position_tolerance: 0.02
+        attachment_mode: physical_joint
+        disable_collision_on_attach: false
+        support_height_tolerance: 0.025
+        top_clearance: 0.02
+        require_contact: true
+        require_physical_contact: true
+        require_target_reached_for_attach: true
+        require_dual_finger_contact: true
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
+        finger_contact_distance: 0.010
+        physical_contact_axes: y
+        physical_attach_surface_gap: 0.010
+        contact_box_offset: [0.0, -0.25, 0.0]
+        contact_box_scale: [0.126, 0.09, 0.09]
+        gripper_closed_threshold: 0.028
+        gripper_closed_margin: 0.006
+        post_attach_settle_steps: 18
+    advance:
+      type: all_of
+      min_steps: 24
+      conditions:
+        - type: robot_object_contact
+          robot: franka_right
+          object: barrier
+          attachment_mode: pure_physical_grasp
+          require_physical_contact: true
+          require_dual_finger_contact: true
+          finger_contact_distance: 0.010
+          physical_contact_axes: y
+          physical_attach_surface_gap: 0.010
+          contact_box_offset: [0.0, 0.25, 0.0]
+          contact_box_scale: [0.126, 0.075, 0.09]
+  - name: lift_barrier
+    timeout_steps: 460
+    robot_targets:
+      franka_left:
+        target: left_barrier_lift
+        payload_object: barrier
+        payload_target: barrier_lifted
+        position_tolerance: 0.08
+      franka_right:
+        name: right_barrier_follow_live
+        reference: barrier
+        offset: [0.0, 0.25, 0.24]
+        orientation_euler: [3.1415926536, 0.0, 0.0]
+        position_tolerance: 0.045
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: all_of
+      min_steps: 24
+      conditions:
+        - type: object_targets_reached
+          tolerance: 0.08
+          objects:
+            - object: barrier
+              target: barrier_lifted
+              position_tolerance: 0.08
+              orientation_tolerance: 0.9
+        - type: robot_object_contact
+          robot: franka_right
+          object: barrier
+          attachment_mode: pure_physical_grasp
+          require_physical_contact: false
+          require_dual_finger_contact: false
+          allow_caging_contact_for_physical_grasp: true
+          finger_contact_distance: 0.012
+          physical_contact_axes: y
+          physical_attach_surface_gap: 0.014
+          contact_box_offset: [0.0, 0.25, 0.0]
+          contact_box_scale: [0.126, 0.09, 0.09]
+  - name: hold_lifted_barrier
+    timeout_steps: 220
+    robot_targets:
+      franka_left:
+        target: left_barrier_lift
+        payload_object: barrier
+        payload_target: barrier_lifted
+        position_tolerance: 0.08
+      franka_right:
+        name: right_barrier_follow_live
+        reference: barrier
+        offset: [0.0, 0.25, 0.24]
+        orientation_euler: [3.1415926536, 0.0, 0.0]
+        position_tolerance: 0.045
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: success_criteria_met
+      min_steps: 20
+
+success:
+  - object: barrier
+    target: barrier_lifted
+    position_tolerance: 0.10
+    orientation_tolerance: 1.2
+    require_attached: true
+    robot: franka_left
+    require_static: true
+    linear_velocity_threshold: 0.06
+    angular_velocity_threshold: 2.0
+    require_robot_object_contact:
+      robot: franka_right
+      attachment_mode: pure_physical_grasp
+      require_physical_contact: false
+      require_dual_finger_contact: false
+      allow_caging_contact_for_physical_grasp: true
+      finger_contact_distance: 0.012
+      physical_contact_axes: y
+      physical_attach_surface_gap: 0.014
+      contact_box_offset: [0.0, 0.25, 0.0]
+      contact_box_scale: [0.126, 0.09, 0.09]
+
+metadata:
+  tags:
+    - robofactory
+    - lift-barrier
+    - dual-arm
+    - usd-asset
+  asset_references:
+    - name: native_barrier_visual_asset
+      kind: usdz
+      path: roboassemblybench/assets/robofactory_native/downloads/lift_barrier/industrial_straight_ladder.usdz
+      source_url: https://ar-code.com/files/AR-Code-1676875259084.usdz
+    - name: robofactory_source_barrier_annotation
+      kind: annotation
+      path: third_part/RoboFactory/robofactory/assets/objects/steel_barrier_annotated/model_data.json

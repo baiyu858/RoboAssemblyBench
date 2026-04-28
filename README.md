@@ -219,6 +219,36 @@ conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py 
 
 
 conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
+  --recipes lift_barrier place_food \
+  --scene-profiles taoyuan_grscenes_tabletop \
+  --num-demos 1 \
+  --max-trials 1 \
+  --output-dir roboassemblybench/outputs/robofactory_migrated_tasks \
+  --record-live-video \
+  --live-video-fps 30 \
+  --live-video-frame-stride 4 \
+  --keep-video-frames
+
+RECIPE=lift_barrier bash roboassemblybench/scripts/view_peg_insertion_scene_ui.sh
+RECIPE=place_food bash roboassemblybench/scripts/view_peg_insertion_scene_ui.sh
+
+RoboFactory asset conversion with authored physics wrappers:
+
+```bash
+conda run -n internutopia311 python roboassemblybench/scripts/convert_robofactory_assets.py
+```
+
+If the visual USD files already exist and only the physics wrappers need to be regenerated:
+
+```bash
+python roboassemblybench/scripts/convert_robofactory_assets.py --skip-conversion
+```
+
+Converted assets are written to `roboassemblybench/assets/robofactory_converted/`. The task recipes load `physics/*.usda`, which reference the converted visual USDs and preserve authored collision proxies via `auto_collider: false`.
+The conversion script skips already-created visual USDs by default; add `--force` only when you want to rebuild them from the original RoboFactory OBJ/URDF sources.
+
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
   --recipes peg_insertion \
   --scene-profiles taoyuan_grscenes_tabletop \
   --num-demos 1 \
@@ -231,15 +261,18 @@ conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py 
 
 
 conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py \
-  --recipes peg_insertion \
+  --recipes lift_barrier \
   --scene-profiles taoyuan_grscenes_tabletop \
   --num-demos 1 \
   --max-trials 1 \
-  --output-dir roboassemblybench/outputs/peg_insertion_isaac_warehouse_ui_v3 \
+  --output-dir roboassemblybench/outputs/lift_barrier_v2 \
   --record-live-video \
   --live-video-fps 30 \
   --live-video-frame-stride 4 \
   --keep-video-frames
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py --recipes place_food --scene-profiles taoyuan_grscenes_tabletop --num-demos 1 --max-trials 1 --output-dir /tmp/robofactory_migrate_place_verify_final --headless
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py --recipes lift_barrier --scene-profiles taoyuan_grscenes_tabletop --num-demos 1 --max-trials 1 --output-dir /tmp/robofactory_migrate_lift_verify_final --headless
 
 
 
@@ -248,3 +281,6 @@ RECIPE=peg_insertion \
 SCENE_PROFILE=taoyuan_grscenes_tabletop \
 ATTACH_RUNTIME_CAMERAS=1 \
 bash roboassemblybench/scripts/view_peg_insertion_scene_ui.sh
+
+
+conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py --recipes place_food --scene-profiles taoyuan_grscenes_tabletop --num-demos 1 --max-trials 1 --output-dir /tmp/robofactory_migrate_place_verify_final --headless

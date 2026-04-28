@@ -1,0 +1,54 @@
+extends: _base.yaml
+task_name: lift_barrier
+title: Lift barrier
+summary: RoboFactory Lift Barrier migrated into the RoboAssemblyBench factory tabletop scene.
+task_description: >-
+  Two Franka arms approach a USD steel-barrier asset from opposite sides, close around
+  the grip regions, and lift the barrier above the tabletop in the factory workcell.
+metadata:
+  tags:
+    - robofactory
+    - lift-barrier
+    - dual-arm
+    - usd-asset
+  object_roles:
+    barrier:
+      role: lifted_workpiece
+      owner: dual_arm
+      summary: Native USDZ industrial ladder visual wrapped with authored barrier collision proxies for dual-arm lifting.
+    workbench:
+      role: support_surface
+      summary: Physical tabletop surface inherited from the peg insertion factory scene.
+    workbench_visual:
+      role: visual_surface
+      summary: Dark visual layer for the factory tabletop.
+  target_roles:
+    left_barrier_grasp_close:
+      object: barrier
+      phase: grasp_barrier
+      summary: Left gripper close pose on the left grip pad of the barrier.
+    right_barrier_grasp_close:
+      object: barrier
+      phase: grasp_barrier
+      summary: Right gripper close pose on the right grip pad of the barrier.
+    barrier_lifted:
+      object: barrier
+      phase: hold_lifted_barrier
+      summary: Final lifted barrier target above the tabletop.
+  phase_notes:
+    - name: approach_barrier
+      summary: Both arms approach the two ends of the barrier.
+      focus_objects:
+        - barrier
+    - name: grasp_barrier
+      summary: Both grippers close, with the left gripper owning the physical joint attachment.
+      focus_objects:
+        - barrier
+    - name: lift_barrier
+      summary: The arms raise the barrier to satisfy the RoboFactory lifted-height success condition.
+      focus_objects:
+        - barrier
+    - name: hold_lifted_barrier
+      summary: The lifted pose is held long enough for success evaluation.
+      focus_objects:
+        - barrier
