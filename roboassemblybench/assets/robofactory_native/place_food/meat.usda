@@ -1,0 +1,70 @@
+#usda 1.0
+(
+    defaultPrim = "RoboAssemblyNativeFood"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "RoboAssemblyNativeFood"
+{
+    def Xform "Visual"
+    {
+        token purpose = "render"
+
+        def Xform "Normalize"
+        {
+            double3 xformOp:scale = (0.110761753, 0.110273642, 0.110761753)
+            uniform token[] xformOpOrder = ["xformOp:scale"]
+
+            def Xform "Raw" (
+                prepend references = @../downloads/place_food/red_onion_asset/RedOnion.usd@
+            )
+            {
+                double3 xformOp:translate = (0.058657, -0.12316, -3.903718)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+            }
+        }
+    }
+
+    def Cube "collision_core" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0, -0.02)
+        double3 xformOp:scale = (0.72, 0.72, 0.82)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_top_bulb" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0, 0.12)
+        double3 xformOp:scale = (0.56, 0.56, 0.54)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_bottom_bulb" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0, -0.18)
+        double3 xformOp:scale = (0.46, 0.46, 0.36)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}

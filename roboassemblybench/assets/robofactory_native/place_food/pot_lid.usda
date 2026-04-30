@@ -1,0 +1,80 @@
+#usda 1.0
+(
+    defaultPrim = "RoboAssemblyNativePotLid"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "RoboAssemblyNativePotLid"
+{
+    def Xform "Visual"
+    {
+        token purpose = "render"
+
+        def Xform "Normalize"
+        {
+            double3 xformOp:scale = (0.055, 0.055, 0.094)
+            uniform token[] xformOpOrder = ["xformOp:scale"]
+
+            def Xform "HandleToX"
+            {
+                double xformOp:rotateZ = 90
+                uniform token[] xformOpOrder = ["xformOp:rotateZ"]
+
+                def Xform "Raw" (
+                    prepend references = @../downloads/place_food/pan_f_asset/Pan_F.usd@
+                )
+                {
+                    double3 xformOp:translate = (-0.00227, 0.003559, -4.972404)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+
+                    over Xform "Pan_F"
+                    {
+                        over Mesh "pan_f_base"
+                        {
+                            token visibility = "invisible"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    def Cube "collision_lid_disc" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0, 0.292)
+        double3 xformOp:scale = (0.98, 0.98, 0.20)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "visual_grip_knob"
+    {
+        token purpose = "render"
+        double size = 1
+        color3f[] primvars:displayColor = [(0.16, 0.17, 0.17)]
+        double3 xformOp:translate = (0, 0, 0.44)
+        double3 xformOp:scale = (0.13, 0.13, 0.24)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_grip_knob" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0, 0.44)
+        double3 xformOp:scale = (0.13, 0.13, 0.24)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}

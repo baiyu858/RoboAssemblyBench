@@ -3,9 +3,10 @@ task_name: place_food
 title: Place food
 summary: RoboFactory Place Food migrated into the RoboAssemblyBench factory tabletop scene.
 task_description: >-
-  The left Franka picks up a USD food item and places it into a USD pot on the factory
-  workbench while the right Franka stabilizes near the pot, matching the intent of the
-  RoboFactory Place Food task.
+  The left Franka picks up a USD food item and places it into a USD pan on the factory
+  workbench while the right Franka removes the pan lid before release and then replaces
+  the lid after the food settles, matching the intent of the RoboFactory Place Food task
+  without passing food through a closed lid.
 metadata:
   tags:
     - robofactory
@@ -15,11 +16,15 @@ metadata:
   object_roles:
     pot:
       role: receptacle
-      summary: Native USDZ ceramic jar visual wrapped with authored pot collision walls for the placement target.
+      summary: Isaac Sim Pan_F base visual with the lid hidden, wrapped by authored receptacle collision walls for placement.
+    pot_lid:
+      role: removable_lid
+      owner: franka_right
+      summary: Isaac Sim Pan_F lid visual with a visible grasp knob; the contact box is kept inside the visible knob for right-arm lid removal and replacement.
     meat:
       role: food_item
       owner: franka_left
-      summary: Native USDZ pancake-stack visual with non-food props hidden and compact collision proxies for grasping.
+      summary: Isaac Sim RedOnion visual with compact collision proxies and grasp contact boxes aligned to the visible onion body.
     workbench:
       role: support_surface
       summary: Physical tabletop surface inherited from the peg insertion factory scene.
@@ -33,27 +38,60 @@ metadata:
       summary: Left gripper close pose for picking the food item.
     pot_stabilize:
       object: pot
-      phase: approach_food_and_pot
-      summary: Right arm pose near the pot rim for stabilization.
+      phase: legacy
+      summary: Legacy right arm pose near the pot rim, retained for compatibility but no longer used by the lid-removal recipe.
+    lid_grasp_close:
+      object: pot_lid
+      phase: grasp_food
+      summary: Right gripper close pose on the lid knob before moving the lid aside.
+    lid_opened:
+      object: pot_lid
+      phase: lift_food
+      summary: Held-open lid pose beside the pan, keeping the pan mouth clear before food release.
+    lid_closed:
+      object: pot_lid
+      phase: settle_lid_closed
+      summary: Final lid pose back on the pan after the food has been released and settled.
     meat_in_pot:
       object: meat
       phase: settle_food_in_pot
       summary: Final food pose inside the pot.
   phase_notes:
     - name: approach_food_and_pot
-      summary: Left arm approaches the food while the right arm moves near the pot.
+      summary: Left arm approaches the food while the right arm approaches the pan lid.
       focus_objects:
         - meat
-        - pot
+        - pot_lid
     - name: grasp_food
-      summary: Left gripper closes and attaches the food item for transport.
+      summary: Left gripper closes on the food and right gripper closes on the lid knob using contact-gated attachments.
       focus_objects:
         - meat
+        - pot_lid
+    - name: lift_food
+      summary: The food is lifted while the right arm carries the lid to the open pose beside the pan.
+      focus_objects:
+        - meat
+        - pot_lid
     - name: lower_food_into_pot
-      summary: Payload-driven motion moves the food into the pot volume.
+      summary: Payload-driven motion moves the food into the open pan volume after the lid has been cleared.
       focus_objects:
         - meat
         - pot
+    - name: move_lid_above_pot
+      summary: The right arm carries the held lid back above the pan after the food has settled inside.
+      focus_objects:
+        - pot_lid
+        - pot
+    - name: lower_lid_onto_pot
+      summary: The right arm lowers the lid to the pan mouth before release.
+      focus_objects:
+        - pot_lid
+        - pot
+    - name: settle_lid_closed
+      summary: The released lid and food are both static, with the lid back on the pan.
+      focus_objects:
+        - meat
+        - pot_lid
     - name: settle_food_in_pot
       summary: The food is released and must remain static near the pot target.
       focus_objects:

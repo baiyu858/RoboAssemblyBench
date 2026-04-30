@@ -1,0 +1,112 @@
+#usda 1.0
+(
+    defaultPrim = "RoboAssemblyNativePot"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "RoboAssemblyNativePot"
+{
+    def Xform "Visual"
+    {
+        token purpose = "render"
+
+        def Xform "Normalize"
+        {
+            double3 xformOp:scale = (0.055, 0.055, 0.094)
+            uniform token[] xformOpOrder = ["xformOp:scale"]
+
+            def Xform "HandleToX"
+            {
+                double xformOp:rotateZ = 90
+                uniform token[] xformOpOrder = ["xformOp:rotateZ"]
+
+                def Xform "Raw" (
+                    prepend references = @../downloads/place_food/pan_f_asset/Pan_F.usd@
+                )
+                {
+                    double3 xformOp:translate = (-0.00227, 0.003559, -4.972404)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+
+                    over Xform "Pan_F"
+                    {
+                        over Mesh "pan_f_lid"
+                        {
+                            token visibility = "invisible"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    def Cube "collision_bottom" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0, -0.42)
+        double3 xformOp:scale = (0.92, 0.92, 0.14)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_left_wall" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (-0.46, 0, 0)
+        double3 xformOp:scale = (0.1, 0.92, 0.82)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_right_wall" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0.46, 0, 0)
+        double3 xformOp:scale = (0.1, 0.92, 0.82)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_front_wall" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, -0.46, 0)
+        double3 xformOp:scale = (0.82, 0.1, 0.82)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "collision_back_wall" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        token visibility = "invisible"
+        token purpose = "guide"
+        bool physics:collisionEnabled = 1
+        double size = 1
+        color3f[] primvars:displayColor = [(0.15, 0.7, 1)]
+        double3 xformOp:translate = (0, 0.46, 0)
+        double3 xformOp:scale = (0.82, 0.1, 0.82)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}

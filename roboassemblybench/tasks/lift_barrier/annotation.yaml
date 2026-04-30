@@ -15,7 +15,7 @@ metadata:
     barrier:
       role: lifted_workpiece
       owner: dual_arm
-      summary: Native USDZ industrial ladder visual wrapped with authored barrier collision proxies for dual-arm lifting.
+      summary: Isaac Sim MetalFencing_A2 visual with visible grip pads aligned to authored collision proxies for dual-arm lifting.
     workbench:
       role: support_surface
       summary: Physical tabletop surface inherited from the peg insertion factory scene.
@@ -45,7 +45,7 @@ metadata:
       focus_objects:
         - barrier
     - name: lift_barrier
-      summary: The arms raise the barrier to satisfy the RoboFactory lifted-height success condition.
+      summary: The arms raise the barrier while the right gripper follows the same live contact point instead of hovering above it.
       focus_objects:
         - barrier
     - name: hold_lifted_barrier
