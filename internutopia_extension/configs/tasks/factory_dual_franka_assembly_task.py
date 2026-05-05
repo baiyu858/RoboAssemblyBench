@@ -38,6 +38,7 @@ class FactoryDualFrankaAssemblyTaskCfg(TaskCfg):
     benchmark_metadata: Dict[str, Any] = {}
     task_metadata: Dict[str, Any] = {}
     scene_profile_metadata: Dict[str, Any] = {}
+    scene_lights: List[Dict[str, Any]] = []
     asset_references: List[Dict[str, Any]] = []
     source_benchmark: str = 'factory_dual_franka_assembly'
     source_config_path: Optional[str] = None

@@ -2,35 +2,27 @@ profile_name: taoyuan_grscenes_tabletop
 scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
 workspace_offset: [0.0, 0.0, 0.99]
 camera_specs: []
+scene_lights:
+  - name: warehouse_dome_fill
+    kind: dome
+    intensity: 950
+    color: [0.78, 0.84, 1.0]
+  - name: warehouse_sun_fill
+    kind: distant
+    intensity: 420
+    angle: 0.75
+    color: [1.0, 0.95, 0.86]
+    rotation_euler: [-55.0, 0.0, -35.0]
 
 metadata:
-  scene_family: isaac_packing_table
-  description: Isaac Sim asset-backed factory tabletop workcell using the official PackingTable heavy-duty workbench asset in the center of the warehouse scene, with the task work surface aligned to the visual table top.
+  scene_family: factory_tabletop_visual
+  description: Factory tabletop workcell using lightweight task-local visual geometry, with the task work surface aligned to the visual table top.
   asset_references:
     - name: empty_scene
       kind: scene
       path: ${ASSET_PATH}/scenes/empty.usd
-    - name: isaac_heavy_duty_packing_table
-      kind: usd
-      path: ${ISAAC_ASSETS_ROOT}/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/SM_HeavyDutyPackingTable_C02_01_physics.usd
 
 objects:
-  - name: taoyuan_table
-    kind: usd
-    prim_path: /factory_packing_table
-    usd_path: ${ISAAC_ASSETS_ROOT}/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/SM_HeavyDutyPackingTable_C02_01_physics.usd
-    position: [0.47, 0.0, 0.0]
-    apply_workspace_offset: false
-    scale: [1.55, 2.05, 1.0]
-    # Keep the detailed Isaac table as visual context. A clean task-local
-    # workbench cube provides the physical tabletop so the USD asset's root
-    # collision shell cannot bump or tilt the peg during insertion.
-    collider: false
-    static_friction: 1.2
-    dynamic_friction: 0.9
-    restitution: 0.0
-    rigid_body: false
-    tracked: false
   - name: factory_tabletop_visual
     kind: visual_cube
     prim_path: /factory_tabletop_visual

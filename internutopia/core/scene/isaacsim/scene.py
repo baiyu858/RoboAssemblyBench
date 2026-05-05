@@ -28,6 +28,73 @@ class IsaacsimScene(IScene):
         position = [env_offset[idx] + i for idx, i in enumerate(task_config.scene_position)]
         scene_prim = create_prim(prim_path, usd_path=source, scale=task_config.scene_scale, translation=position)
         self.scene_prim = scene_prim
+        self._load_scene_lights(task_config, env_id)
+
+    @staticmethod
+    def _light_prim_type(kind: str):
+        from pxr import UsdLux
+
+        normalized = kind.lower().replace('-', '_')
+        if normalized in {'dome', 'dome_light', 'domelight'}:
+            return UsdLux.DomeLight
+        if normalized in {'distant', 'distant_light', 'distantlight'}:
+            return UsdLux.DistantLight
+        if normalized in {'rect', 'rect_light', 'rectlight'}:
+            return UsdLux.RectLight
+        if normalized in {'sphere', 'sphere_light', 'spherelight'}:
+            return UsdLux.SphereLight
+        raise ValueError(f'Unsupported scene light kind: {kind!r}')
+
+    @staticmethod
+    def _set_light_transform(light_prim, light_spec: dict):
+        from pxr import Gf, UsdGeom
+
+        xformable = UsdGeom.Xformable(light_prim)
+        xformable.ClearXformOpOrder()
+        position = light_spec.get('position')
+        if position is not None:
+            xformable.AddTranslateOp().Set(Gf.Vec3d(*(float(value) for value in position)))
+
+        rotation = light_spec.get('rotation_euler', light_spec.get('rotation'))
+        if rotation is not None:
+            xformable.AddRotateXYZOp().Set(Gf.Vec3f(*(float(value) for value in rotation)))
+
+    def _load_scene_lights(self, task_config: TaskCfg, env_id: int):
+        scene_lights = getattr(task_config, 'scene_lights', None) or []
+        if not scene_lights:
+            return
+
+        from pxr import Gf, Sdf, UsdGeom
+
+        stage = self.scene_prim.GetStage()
+        lights_root = f'/World/env_{env_id}/lights'
+        UsdGeom.Scope.Define(stage, Sdf.Path(lights_root))
+
+        for index, light_spec in enumerate(scene_lights):
+            name = light_spec.get('name') or f'scene_light_{index}'
+            prim_path = f'{lights_root}/{name}'
+            if stage.GetPrimAtPath(prim_path).IsValid():
+                stage.RemovePrim(prim_path)
+
+            light_cls = self._light_prim_type(light_spec.get('kind', 'dome'))
+            light = light_cls.Define(stage, Sdf.Path(prim_path))
+            if light_spec.get('intensity') is not None:
+                light.CreateIntensityAttr(float(light_spec['intensity']))
+            if light_spec.get('color') is not None:
+                light.CreateColorAttr(Gf.Vec3f(*(float(value) for value in light_spec['color'])))
+            if light_spec.get('exposure') is not None:
+                light.CreateExposureAttr(float(light_spec['exposure']))
+
+            if hasattr(light, 'CreateAngleAttr') and light_spec.get('angle') is not None:
+                light.CreateAngleAttr(float(light_spec['angle']))
+            if hasattr(light, 'CreateRadiusAttr') and light_spec.get('radius') is not None:
+                light.CreateRadiusAttr(float(light_spec['radius']))
+            if hasattr(light, 'CreateWidthAttr') and light_spec.get('width') is not None:
+                light.CreateWidthAttr(float(light_spec['width']))
+            if hasattr(light, 'CreateHeightAttr') and light_spec.get('height') is not None:
+                light.CreateHeightAttr(float(light_spec['height']))
+
+            self._set_light_transform(light.GetPrim(), light_spec)
 
     @staticmethod
     def _is_remote_path(path: str) -> bool:
