@@ -1,0 +1,98 @@
+extends: _base.yaml
+task_name: fabrica_cooling_manifold
+title: Fabrica cooling manifold
+summary: The right Franka seats a Fabrica cooling-manifold insert into a fixed manifold base while reusing the RoboAssemblyBench factory scene.
+task_description: >-
+  A Fabrica cooling-manifold base is staged on the shared factory work area. The right Franka
+  physically grasps a loose manifold insert from the black optical-board proxy, lifts it, aligns it
+  over the base, seats it into the target pose, releases it, and retreats after the insert remains
+  static.
+metadata:
+  tags:
+    - fabrica
+    - cooling-manifold
+    - insertion
+    - physical-grasp
+    - dual-arm
+  object_roles:
+    manifold_base:
+      role: fixed_assembly_base
+      summary: Static Fabrica cooling-manifold part used as the insertion reference.
+    manifold_insert:
+      role: inserted_workpiece
+      owner: franka_right
+      summary: Loose Fabrica cooling-manifold part grasped and seated into the base.
+    optical_board:
+      role: locating_board_visual
+      summary: Real Fabrica optical-board OBJ visual referenced from the source bundle.
+    optical_board_proxy:
+      role: support_surface
+      summary: Lightweight collision/support proxy aligned with the black Fabrica optical board.
+    workbench:
+      role: support_surface
+      summary: Factory workbench surface used by the RoboAssemblyBench scene profile.
+  target_roles:
+    left_wait:
+      phase: right_approach_insert
+      summary: Left-arm idle pose while the right arm performs the insertion.
+    right_wait:
+      phase: right_approach_insert
+      summary: Right-arm default staging pose.
+    insert_pick:
+      object: manifold_insert
+      phase: right_approach_insert
+      summary: Hover pose above the loose Fabrica insert.
+    insert_grasp_open:
+      object: manifold_insert
+      phase: right_descend_insert
+      summary: Open-gripper pose just above the insert.
+    insert_grasp_close:
+      object: manifold_insert
+      phase: right_grasp_insert
+      summary: Physical grasp pose for closing around the insert.
+    insert_preseat:
+      object: manifold_insert
+      phase: right_preseat_insert
+      summary: Staging pose above the fixed manifold base.
+    insert_seat_robot:
+      object: manifold_insert
+      phase: right_seat_insert
+      summary: Payload-driven robot target used to press the insert into the base.
+    insert_seated:
+      object: manifold_insert
+      phase: settle_insert
+      summary: Final seated insert pose relative to the manifold base.
+  phase_notes:
+    - name: right_approach_insert
+      summary: The right arm approaches the loose Fabrica insert while the left arm waits.
+      focus_objects:
+        - manifold_insert
+      focus_targets:
+        - insert_pick
+    - name: right_grasp_insert
+      summary: The right gripper closes around the insert using contact-gated physical attachment.
+      focus_objects:
+        - manifold_insert
+      focus_targets:
+        - insert_grasp_close
+    - name: right_preseat_insert
+      summary: The grasped insert is carried above the fixed manifold base for alignment.
+      focus_objects:
+        - manifold_insert
+        - manifold_base
+      focus_targets:
+        - insert_preseat
+    - name: right_seat_insert
+      summary: The right arm drives the attached insert into the target seated pose.
+      focus_objects:
+        - manifold_insert
+        - manifold_base
+      focus_targets:
+        - insert_seat_robot
+        - insert_seated
+    - name: settle_insert
+      summary: The insert must remain released, static, and seated in the manifold base.
+      focus_objects:
+        - manifold_insert
+      focus_targets:
+        - insert_seated

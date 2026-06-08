@@ -10,10 +10,7 @@ from toolkits.factory_dual_franka_assembly.scene_builder import (
 from toolkits.factory_dual_franka_assembly.scene_profiles import list_scene_profiles
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
 
-ISAAC_PACKING_TABLE_PATH_SUFFIX = (
-    '/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/'
-    'SM_HeavyDutyPackingTable_C02_01_physics.usd'
-)
+ISAAC_PACKING_TABLE_MARKER = '/Isaac/Props/PackingTable/'
 
 
 def test_scene_profiles_are_discoverable():
@@ -44,21 +41,17 @@ def test_taoyuan_scene_profile_injects_assets_and_workspace_offset():
     assert task_cfg.target_poses['left_wait']['position'][2] > 1.0
 
 
-def test_taoyuan_grscenes_scene_profile_uses_isaac_factory_table_anchor():
+def test_taoyuan_grscenes_scene_profile_omits_isaac_factory_table_xform():
     recipe_spec = load_task_recipe('screw_fastening', scene_profile='taoyuan_grscenes_tabletop')
     assert recipe_spec['scene_profile'] == 'taoyuan_grscenes_tabletop'
-    assert recipe_spec['metadata']['scene_family'] == 'isaac_packing_table'
-    assert any(
-        reference['path'].endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
-        for reference in recipe_spec['asset_references']
-    )
-    assert any(
-        object_spec['name'] == 'taoyuan_table'
-        and object_spec['usd_path'].endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
-        and object_spec['collider'] is True
-        and object_spec['rigid_body'] is False
-        for object_spec in recipe_spec['objects']
-    )
+    assert recipe_spec['metadata']['scene_family'] == 'factory_tabletop_visual'
+    assert {light['name'] for light in recipe_spec['scene_lights']} == {
+        'warehouse_dome_fill',
+        'warehouse_sun_fill',
+    }
+    assert not any(ISAAC_PACKING_TABLE_MARKER in reference['path'] for reference in recipe_spec['asset_references'])
+    assert not any(object_spec.get('prim_path') == '/factory_packing_table' for object_spec in recipe_spec['objects'])
+    assert any(object_spec['name'] == 'factory_tabletop_visual' for object_spec in recipe_spec['objects'])
 
     task_cfg = build_dual_franka_assembly_episode(
         recipe='screw_fastening',
@@ -68,14 +61,13 @@ def test_taoyuan_grscenes_scene_profile_uses_isaac_factory_table_anchor():
     )
     assert task_cfg.scene_profile == 'taoyuan_grscenes_tabletop'
     assert task_cfg.workspace_offset == [0.0, 0.0, 0.99]
-    assert any(reference['kind'] == 'usd' for reference in task_cfg.asset_references)
-    assert any(
-        object_cfg.name == 'taoyuan_table'
-        and object_cfg.usd_path.endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
-        and object_cfg.collider is True
-        and object_cfg.rigid_body is False
-        for object_cfg in task_cfg.objects
-    )
+    assert {light['name'] for light in task_cfg.scene_lights} == {
+        'warehouse_dome_fill',
+        'warehouse_sun_fill',
+    }
+    assert not any(ISAAC_PACKING_TABLE_MARKER in reference['path'] for reference in task_cfg.asset_references)
+    assert not any(object_cfg.prim_path == '/factory_packing_table' for object_cfg in task_cfg.objects)
+    assert any(object_cfg.name == 'factory_tabletop_visual' for object_cfg in task_cfg.objects)
 
 
 def test_asset_backed_recipes_default_to_taoyuan_tabletop():
@@ -88,10 +80,7 @@ def test_asset_backed_recipes_default_to_taoyuan_tabletop():
         reference['path'].endswith('/objects/table/white_big/instance.usd')
         for reference in screw_fastening['asset_references']
     )
-    assert any(
-        reference['path'].endswith(ISAAC_PACKING_TABLE_PATH_SUFFIX)
-        for reference in peg_insertion['asset_references']
-    )
+    assert not any(ISAAC_PACKING_TABLE_MARKER in reference['path'] for reference in peg_insertion['asset_references'])
 
 
 def test_convert_dataset_recurses_profile_directories(tmp_path):

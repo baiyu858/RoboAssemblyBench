@@ -5,6 +5,10 @@ __all__ = [
     'DualFrankaAssemblyDemoPolicy',
     'FrankaRobofactoryPlanner',
     'PlannerWaypoint',
+    'RoboBrainRunConfig',
+    'RoboBrainRunResult',
+    'RoboBrainRunner',
+    'RoboChecker',
     'build_dual_franka_assembly_batch',
     'build_dual_franka_assembly_episode',
     'build_task_description',
@@ -18,6 +22,15 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name in {
+        'RoboBrainRunConfig',
+        'RoboBrainRunResult',
+        'RoboBrainRunner',
+        'RoboChecker',
+    }:
+        module = import_module('roboassemblybench.robobrain')
+        return getattr(module, name)
+
     if name in {
         'DualFrankaAssemblyDemoPolicy',
         'FrankaRobofactoryPlanner',

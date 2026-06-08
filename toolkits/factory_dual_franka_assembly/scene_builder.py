@@ -336,6 +336,7 @@ def build_dual_franka_assembly_episode(
         benchmark_metadata=copy.deepcopy(recipe_spec.get('metadata', {})),
         task_metadata=copy.deepcopy(recipe_spec.get('task_metadata', {})),
         scene_profile_metadata=copy.deepcopy(recipe_spec.get('scene_profile_metadata', {})),
+        scene_lights=copy.deepcopy(recipe_spec.get('scene_lights', [])),
         asset_references=copy.deepcopy(recipe_spec.get('asset_references', [])),
         source_benchmark=str(recipe_spec.get('source_benchmark', recipe_spec.get('benchmark_family', 'factory_dual_franka_assembly'))),
         source_config_path=recipe_spec.get('source_config_path'),

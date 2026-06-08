@@ -25,6 +25,7 @@ class TaskCfg(BaseModel, extra=Extra.allow):
     scene_scale: Optional[Tuple[float, float, float]] = (1.0, 1.0, 1.0)
     scene_position: Optional[Tuple[float, float, float]] = (0, 0, 0)
     scene_orientation: Optional[Tuple[float, float, float, float]] = (1.0, 0, 0, 0)
+    scene_lights: Optional[List[dict]] = []
 
     # inherit
     robots: Optional[List[RobotCfg]] = []

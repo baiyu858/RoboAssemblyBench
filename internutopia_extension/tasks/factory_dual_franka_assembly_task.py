@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
-from collections import OrderedDict
+from collections import OrderedDict, deque
 
 import numpy as np
 
@@ -129,7 +129,11 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._object_prims = {}
         self._attachments = {}
         self._attachment_joints = {}
+        self._configured_joint_paths = {}
+        self._configured_joint_specs = {}
+        self._configured_joints_created = False
         self._locked_targets = {}
+        self._object_pose_history = {}
         self._object_collision_enabled = {}
         self._contact_probes = {}
         self._contact_sensors = {}
@@ -470,6 +474,288 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             object_name = self._extract_object_name(object_entry)
             if object_name is not None:
                 self._unlock_object(object_name)
+
+        for joint_override in self._as_list(phase_spec.get('joint_overrides')):
+            if isinstance(joint_override, dict):
+                self._update_configured_joint(joint_override)
+
+    def _joint_local_pose(self, joint_spec: dict, key: str):
+        pose_spec = joint_spec.get(key)
+        if not isinstance(pose_spec, dict):
+            pose_spec = {}
+        position = np.asarray(pose_spec.get('position', pose_spec.get('offset', [0.0, 0.0, 0.0])), dtype=float)
+        orientation = pose_spec.get('orientation')
+        if orientation is None:
+            orientation = euler_xyz_to_quat(pose_spec.get('orientation_euler', [0.0, 0.0, 0.0]))
+        return position, np.asarray(orientation, dtype=float)
+
+    def _joint_frame_units(self, joint_spec: dict, key: str) -> str:
+        pose_spec = joint_spec.get(key)
+        if not isinstance(pose_spec, dict):
+            return str(joint_spec.get('frame_units', 'meters')).lower()
+        return str(pose_spec.get('units', joint_spec.get('frame_units', 'meters'))).lower()
+
+    def _set_joint_attr(self, joint_prim, attr_name: str, value, value_type_name=None):
+        try:
+            attr = joint_prim.GetAttribute(attr_name)
+            if not attr.IsValid() and value_type_name is not None:
+                attr = joint_prim.CreateAttribute(attr_name, value_type_name)
+            if attr.IsValid():
+                attr.Set(value)
+        except Exception as exc:
+            raise RuntimeError(f'Failed to set configured joint attribute {attr_name!r}: {exc}') from exc
+
+    def _apply_configured_joint_drive(self, joint_prim, drive_spec: dict | None):
+        if not isinstance(drive_spec, dict) or not drive_spec:
+            return
+
+        from pxr import Sdf, UsdPhysics
+
+        drive_name = str(drive_spec.get('name', 'angular'))
+        try:
+            drive_api = UsdPhysics.DriveAPI.Apply(joint_prim, drive_name)
+            drive_attrs = (
+                ('type', 'Type', str, None),
+                ('max_force', 'MaxForce', float, None),
+                ('target_position', 'TargetPosition', float, None),
+                ('target_velocity', 'TargetVelocity', float, None),
+                ('damping', 'Damping', float, None),
+                ('stiffness', 'Stiffness', float, None),
+            )
+            for spec_key, attr_suffix, caster, _ in drive_attrs:
+                if drive_spec.get(spec_key) is None:
+                    continue
+                attr = None
+                get_attr = getattr(drive_api, f'Get{attr_suffix}Attr', None)
+                if callable(get_attr):
+                    attr = get_attr()
+                if attr is None or not attr.IsValid():
+                    create_attr = getattr(drive_api, f'Create{attr_suffix}Attr', None)
+                    if callable(create_attr):
+                        attr = create_attr()
+                if attr is not None and attr.IsValid():
+                    attr.Set(caster(drive_spec[spec_key]))
+            return
+        except Exception:
+            pass
+
+        attr_prefix = f'physics:drive:{drive_name}'
+        if drive_spec.get('type') is not None:
+            self._set_joint_attr(
+                joint_prim,
+                f'{attr_prefix}:type',
+                str(drive_spec.get('type')),
+                Sdf.ValueTypeNames.Token,
+            )
+        if drive_spec.get('max_force') is not None:
+            self._set_joint_attr(
+                joint_prim,
+                f'{attr_prefix}:maxForce',
+                float(drive_spec['max_force']),
+                Sdf.ValueTypeNames.Float,
+            )
+        if drive_spec.get('target_position') is not None:
+            self._set_joint_attr(
+                joint_prim,
+                f'{attr_prefix}:targetPosition',
+                float(drive_spec['target_position']),
+                Sdf.ValueTypeNames.Float,
+            )
+        if drive_spec.get('target_velocity') is not None:
+            self._set_joint_attr(
+                joint_prim,
+                f'{attr_prefix}:targetVelocity',
+                float(drive_spec['target_velocity']),
+                Sdf.ValueTypeNames.Float,
+            )
+        if drive_spec.get('damping') is not None:
+            self._set_joint_attr(
+                joint_prim,
+                f'{attr_prefix}:damping',
+                float(drive_spec['damping']),
+                Sdf.ValueTypeNames.Float,
+            )
+        if drive_spec.get('stiffness') is not None:
+            self._set_joint_attr(
+                joint_prim,
+                f'{attr_prefix}:stiffness',
+                float(drive_spec['stiffness']),
+                Sdf.ValueTypeNames.Float,
+            )
+
+    def _create_configured_joint_prim(
+        self,
+        *,
+        joint_path: str,
+        joint_type: str,
+        body0: str | None,
+        body1: str,
+        parent_pos: np.ndarray,
+        parent_quat: np.ndarray,
+        child_pos: np.ndarray,
+        child_quat: np.ndarray,
+        enabled: bool,
+        break_force,
+        break_torque,
+    ):
+        import omni
+        from omni.isaac.core import World
+        from pxr import Gf, PhysxSchema, Sdf, UsdPhysics
+
+        stage = World.instance().stage
+        joint = getattr(UsdPhysics, joint_type).Define(stage, joint_path)
+        if body0 is not None:
+            if not omni.isaac.core.utils.prims.is_prim_path_valid(body0):
+                raise ValueError(f'Invalid configured joint body0 path: {body0}')
+            joint.GetBody0Rel().SetTargets([Sdf.Path(body0)])
+        if not omni.isaac.core.utils.prims.is_prim_path_valid(body1):
+            raise ValueError(f'Invalid configured joint body1 path: {body1}')
+        joint.GetBody1Rel().SetTargets([Sdf.Path(body1)])
+
+        joint_prim = omni.isaac.core.utils.prims.get_prim_at_path(joint_path)
+        PhysxSchema.PhysxJointAPI.Apply(joint_prim)
+        self._set_joint_attr(joint_prim, 'physics:localPos0', Gf.Vec3f(*parent_pos), Sdf.ValueTypeNames.Point3f)
+        self._set_joint_attr(joint_prim, 'physics:localRot0', Gf.Quatf(*parent_quat), Sdf.ValueTypeNames.Quatf)
+        self._set_joint_attr(joint_prim, 'physics:localPos1', Gf.Vec3f(*child_pos), Sdf.ValueTypeNames.Point3f)
+        self._set_joint_attr(joint_prim, 'physics:localRot1', Gf.Quatf(*child_quat), Sdf.ValueTypeNames.Quatf)
+        if break_force is not None:
+            self._set_joint_attr(joint_prim, 'physics:breakForce', float(break_force), Sdf.ValueTypeNames.Float)
+        if break_torque is not None:
+            self._set_joint_attr(joint_prim, 'physics:breakTorque', float(break_torque), Sdf.ValueTypeNames.Float)
+        self._set_joint_attr(joint_prim, 'physics:jointEnabled', bool(enabled), Sdf.ValueTypeNames.Bool)
+        return joint_prim
+
+    def _create_configured_joint(self, joint_spec: dict):
+        joint_name = str(joint_spec.get('name') or f"{joint_spec.get('parent', 'world')}_{joint_spec.get('child')}_joint")
+        if joint_name in self._configured_joint_paths:
+            return
+
+        child_name = joint_spec.get('child')
+        if child_name is None:
+            return
+
+        parent_name = joint_spec.get('parent')
+        parent_body_path = None
+        if parent_name is not None:
+            parent_body_path = self._resolve_object(str(parent_name)).unwrap().prim_path
+        child_body_path = self._resolve_object(str(child_name)).unwrap().prim_path
+
+        parent_pos, parent_quat = self._joint_local_pose(joint_spec, 'parent_frame')
+        child_pos, child_quat = self._joint_local_pose(joint_spec, 'child_frame')
+        joint_type = str(joint_spec.get('type', 'RevoluteJoint'))
+        joint_path = str(joint_spec.get('prim_path') or f"{child_body_path}/{joint_name}")
+        anchor_to_world = bool(joint_spec.get('anchor_to_world', False))
+        if anchor_to_world and parent_name is not None:
+            parent_body = self._resolve_object(str(parent_name))
+            parent_world_pos, parent_world_quat = parent_body.get_pose()
+            if self._joint_frame_units(joint_spec, 'parent_frame') in {'normalized', 'scale', 'scaled'}:
+                parent_pos = parent_pos * self._get_object_scale(str(parent_name))
+            parent_pos, parent_quat = compose_pose(
+                base_position=np.asarray(parent_world_pos, dtype=float),
+                base_orientation=np.asarray(parent_world_quat, dtype=float),
+                local_position=parent_pos,
+                local_orientation=parent_quat,
+            )
+            parent_body_path = None
+        try:
+            joint_prim = self._create_configured_joint_prim(
+                joint_path=joint_path,
+                joint_type=joint_type,
+                body0=parent_body_path,
+                body1=child_body_path,
+                parent_pos=parent_pos,
+                parent_quat=parent_quat,
+                child_pos=child_pos,
+                child_quat=child_quat,
+                enabled=bool(joint_spec.get('enabled', True)),
+                break_force=joint_spec.get('break_force'),
+                break_torque=joint_spec.get('break_torque'),
+            )
+        except Exception as exc:
+            raise RuntimeError(f'Failed to create configured joint {joint_name!r}: {exc}') from exc
+
+        self._apply_configured_joint_settings(joint_name=joint_name, joint_prim=joint_prim, joint_spec=joint_spec)
+
+        self._configured_joint_paths[joint_name] = joint_path
+        self._configured_joint_specs[joint_name] = copy.deepcopy(joint_spec)
+
+    def _apply_configured_joint_settings(self, *, joint_name: str, joint_prim, joint_spec: dict):
+        joint_type = str(joint_spec.get('type', 'RevoluteJoint'))
+        if joint_type != 'RevoluteJoint':
+            return
+
+        try:
+            from pxr import Sdf
+
+            if joint_spec.get('axis') is not None:
+                self._set_joint_attr(
+                    joint_prim,
+                    'physics:axis',
+                    str(joint_spec.get('axis', 'X')).upper(),
+                    Sdf.ValueTypeNames.Token,
+                )
+            if joint_spec.get('lower_limit') is not None:
+                self._set_joint_attr(
+                    joint_prim,
+                    'physics:lowerLimit',
+                    float(joint_spec['lower_limit']),
+                    Sdf.ValueTypeNames.Float,
+                )
+            if joint_spec.get('upper_limit') is not None:
+                self._set_joint_attr(
+                    joint_prim,
+                    'physics:upperLimit',
+                    float(joint_spec['upper_limit']),
+                    Sdf.ValueTypeNames.Float,
+                )
+            if joint_spec.get('joint_friction') is not None:
+                self._set_joint_attr(
+                    joint_prim,
+                    'physxJoint:jointFriction',
+                    float(joint_spec['joint_friction']),
+                    Sdf.ValueTypeNames.Float,
+                )
+            self._apply_configured_joint_drive(joint_prim, joint_spec.get('angular_drive'))
+        except Exception as exc:
+            raise RuntimeError(f'Failed to apply configured joint settings for {joint_name!r}: {exc}') from exc
+
+    def _update_configured_joint(self, override_spec: dict):
+        joint_name = override_spec.get('name')
+        if not joint_name:
+            return
+
+        joint_path = self._configured_joint_paths.get(str(joint_name))
+        if joint_path is None:
+            return
+
+        from omni.isaac.core.utils.prims import get_prim_at_path
+
+        joint_prim = get_prim_at_path(joint_path)
+        if joint_prim is None or not joint_prim.IsValid():
+            return
+
+        base_spec = copy.deepcopy(self._configured_joint_specs.get(str(joint_name), {}))
+        merged_spec = copy.deepcopy(base_spec)
+        merged_spec.update(copy.deepcopy(override_spec))
+        if isinstance(base_spec.get('angular_drive'), dict) and isinstance(override_spec.get('angular_drive'), dict):
+            merged_spec['angular_drive'] = copy.deepcopy(base_spec['angular_drive'])
+            merged_spec['angular_drive'].update(copy.deepcopy(override_spec['angular_drive']))
+
+        self._apply_configured_joint_settings(
+            joint_name=str(joint_name),
+            joint_prim=joint_prim,
+            joint_spec=merged_spec,
+        )
+        self._configured_joint_specs[str(joint_name)] = merged_spec
+
+    def _ensure_configured_scene_joints(self):
+        if self._configured_joints_created and self._configured_joint_paths:
+            return
+        joint_specs = self.cfg.task_metadata.get('hinge_joints', [])
+        for joint_spec in self._as_list(joint_specs):
+            if isinstance(joint_spec, dict):
+                self._create_configured_joint(joint_spec)
+        self._configured_joints_created = True
 
     def _resolve_timeout_spec(self, phase_spec: dict) -> dict:
         timeout_spec: dict = {}
@@ -2421,6 +2707,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if self._phase_initialized:
             return
 
+        self._ensure_configured_scene_joints()
         phase_spec = self.get_current_phase_spec()
         self._apply_phase_actions(phase_spec)
 
@@ -2464,6 +2751,26 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 local_orientation=attach_state['orientation'],
             )
             self._set_object_pose(object_name, position, orientation)
+
+        self._record_object_pose_history()
+
+    def _record_object_pose_history(self):
+        tracked_object_names = set(self.cfg.tracked_object_names) or set(self.objects.keys())
+        for object_name in tracked_object_names:
+            try:
+                position, orientation = self._resolve_object(object_name).get_pose()
+            except Exception:
+                continue
+            history = self._object_pose_history.setdefault(object_name, deque(maxlen=24))
+            sample = (
+                int(self.step_counter),
+                np.asarray(position, dtype=float).copy(),
+                np.asarray(orientation, dtype=float).copy(),
+            )
+            if history and history[-1][0] == int(self.step_counter):
+                history[-1] = sample
+            else:
+                history.append(sample)
 
     def _robot_targets_reached(self, phase_spec: dict, tolerance: float, orientation_tolerance: float | None) -> bool:
         effective_tolerance = self._effective_robot_target_tolerance(tolerance)
@@ -2594,6 +2901,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         *,
         linear_threshold: float = 1e-2,
         angular_threshold: float = 0.5,
+        pose_stability_position_tolerance: float = 2e-3,
+        pose_stability_orientation_tolerance: float = 0.05,
+        pose_stability_min_samples: int = 8,
     ) -> dict:
         rigid_body = self._resolve_object(object_name)
 
@@ -2623,6 +2933,27 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
         linear_speed = float(np.linalg.norm(linear_velocity))
         angular_speed = float(np.linalg.norm(angular_velocity))
+        pose_stable_override = False
+        history = self._object_pose_history.get(object_name)
+        if history is not None and len(history) >= int(pose_stability_min_samples):
+            start_step, start_position, start_orientation = history[0]
+            end_step, end_position, end_orientation = history[-1]
+            if end_step > start_step:
+                position_drift = float(np.linalg.norm(np.asarray(end_position) - np.asarray(start_position)))
+                _, orientation_drift = pose_error(
+                    current_position=np.asarray(end_position, dtype=float),
+                    current_orientation=np.asarray(end_orientation, dtype=float),
+                    target_position=np.asarray(start_position, dtype=float),
+                    target_orientation=np.asarray(start_orientation, dtype=float),
+                )
+                pose_stable_override = bool(
+                    position_drift <= float(pose_stability_position_tolerance)
+                    and orientation_drift <= float(pose_stability_orientation_tolerance)
+                )
+        is_static = bool(
+            (linear_speed <= float(linear_threshold) and angular_speed <= float(angular_threshold))
+            or pose_stable_override
+        )
         return {
             'valid': True,
             'linear_velocity': linear_velocity.tolist(),
@@ -2631,7 +2962,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'angular_speed': angular_speed,
             'linear_threshold': float(linear_threshold),
             'angular_threshold': float(angular_threshold),
-            'is_static': bool(linear_speed <= float(linear_threshold) and angular_speed <= float(angular_threshold)),
+            'pose_stable_override': pose_stable_override,
+            'is_static': is_static,
         }
 
     def _objects_static(
@@ -3080,6 +3412,17 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         return obs
 
     def cleanup(self) -> None:
+        try:
+            from omni.isaac.core.utils.prims import delete_prim
+
+            for joint_path in list(self._configured_joint_paths.values()):
+                delete_prim(joint_path)
+        except Exception:
+            pass
+        self._configured_joint_paths.clear()
+        self._configured_joint_specs.clear()
+        self._configured_joints_created = False
+        self._object_pose_history.clear()
         for object_name in list(self._attachment_joints.keys()):
             self._remove_attachment_joint(object_name)
         self._contact_probes.clear()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ from toolkits.factory_dual_franka_assembly.demo_policy import DualFrankaAssembly
 from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_batch
 from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_PROFILE, list_scene_profiles
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes, load_task_recipe
+from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
 
 
 def _to_jsonable(value: Any):
@@ -280,6 +282,16 @@ def _write_json(path: Path, payload: Any):
     path.write_text(json.dumps(_to_jsonable(payload), indent=2), encoding='utf-8')
 
 
+def _runtime_failed_results(results: list[dict]) -> list[dict]:
+    failed_results = []
+    for result in results:
+        runtime_report = result.get('runtime_robochecker') or {}
+        has_runtime_feedback = bool(runtime_report.get('feedback_count') or runtime_report.get('feedback'))
+        if not result.get('success') and has_runtime_feedback:
+            failed_results.append(result)
+    return failed_results
+
+
 def _build_env(task_configs, headless: bool):
     config = Config(
         simulator=SimConfig(
@@ -308,6 +320,13 @@ def _run_task_sequence(
     live_video_fps: int = 30,
     live_video_frame_stride: int = 8,
     keep_video_frames: bool = False,
+    runtime_robochecker: bool = False,
+    runtime_feedback_path: Path | None = None,
+    runtime_observation_dir: Path | None = None,
+    runtime_checker_stride: int = 8,
+    runtime_stop_on_violation: bool = True,
+    runtime_capture_rgb: bool = True,
+    runtime_rgb_frame_stride: int = 24,
 ):
     env = _build_env(task_configs=task_configs, headless=headless)
     policy = DualFrankaAssemblyDemoPolicy()
@@ -316,6 +335,16 @@ def _run_task_sequence(
     episode_idx = 0
     recorder = None
     video_recorder = None
+    runtime_checker = None
+    if runtime_robochecker:
+        runtime_checker = RuntimeRoboChecker(
+            output_dir=runtime_observation_dir or ((output_dir / 'runtime_observations') if output_dir is not None else None),
+            feedback_path=runtime_feedback_path,
+            check_stride=runtime_checker_stride,
+            capture_rgb=runtime_capture_rgb,
+            rgb_frame_stride=runtime_rgb_frame_stride,
+            stop_on_violation=runtime_stop_on_violation,
+        )
 
     try:
         # In headless Isaac workers, `SimulationApp.is_running()` may flip to
@@ -343,9 +372,36 @@ def _run_task_sequence(
                 recorder.record(task, obs_list[0], env_actions)
             if video_recorder is not None:
                 video_recorder.record(task, obs_list[0], step_index=int(task.step_counter))
+            if runtime_checker is not None:
+                runtime_result = runtime_checker.observe(
+                    task=task,
+                    obs=obs_list[0],
+                    actions=env_actions,
+                    episode_idx=episode_idx,
+                )
+                if runtime_result.get('blocking'):
+                    detail = {
+                        'runtime_robochecker': runtime_result.get('feedback', []),
+                        'snapshot': runtime_result.get('snapshot', {}),
+                    }
+                    if hasattr(task, '_set_terminal_state'):
+                        task._set_terminal_state(
+                            'failed',
+                            reason='runtime-robochecker-violation',
+                            status='failed',
+                            detail=detail,
+                        )
+                    else:
+                        task.failed = True
+                        task.success = False
+                        task.terminal_reason = 'runtime-robochecker-violation'
+                    terminated = list(terminated)
+                    terminated[0] = True
 
             if terminated[0]:
                 metrics = task.calculate_metrics()
+                if runtime_checker is not None:
+                    metrics['runtime_robochecker'] = runtime_checker.finalize()
                 results.append(metrics)
                 recorded_videos = {}
                 recorded_video_summaries = {}
@@ -382,6 +438,11 @@ def _run_task_sequence(
         if results_output_path is not None:
             _write_json(results_output_path, results)
     finally:
+        if runtime_checker is not None:
+            try:
+                runtime_checker.finalize()
+            except Exception:
+                pass
         if video_recorder is not None:
             try:
                 video_recorder.finalize()
@@ -432,10 +493,22 @@ def _worker_mode(args, *, headless: bool):
                 recipe=args.worker_recipe,
                 seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
                 scene_profile=scene_profile,
-                attach_runtime_cameras=False,
+                attach_runtime_cameras=bool(args.runtime_capture_rgb),
             ),
             headless=headless,
             results_output_path=Path(args.worker_results_path).resolve(),
+            output_dir=Path(args.output_dir).resolve(),
+            runtime_robochecker=bool(args.runtime_robochecker),
+            runtime_feedback_path=None
+            if args.runtime_feedback_path is None
+            else Path(args.runtime_feedback_path).resolve(),
+            runtime_observation_dir=None
+            if args.runtime_observation_dir is None
+            else Path(args.runtime_observation_dir).resolve(),
+            runtime_checker_stride=max(int(args.runtime_checker_stride), 1),
+            runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
+            runtime_capture_rgb=bool(args.runtime_capture_rgb),
+            runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
         )
         return
 
@@ -450,7 +523,7 @@ def _worker_mode(args, *, headless: bool):
             recipe=args.worker_recipe,
             seeds=[int(seed) for seed in args.worker_seeds],
             scene_profile=scene_profile,
-            attach_runtime_cameras=bool(args.record_live_video),
+            attach_runtime_cameras=bool(args.record_live_video or args.runtime_capture_rgb),
         ),
         headless=headless,
         output_dir=Path(args.output_dir).resolve(),
@@ -459,6 +532,15 @@ def _worker_mode(args, *, headless: bool):
         live_video_fps=max(int(args.live_video_fps), 1),
         live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
         keep_video_frames=bool(args.keep_video_frames),
+        runtime_robochecker=bool(args.runtime_robochecker),
+        runtime_feedback_path=None if args.runtime_feedback_path is None else Path(args.runtime_feedback_path).resolve(),
+        runtime_observation_dir=None
+        if args.runtime_observation_dir is None
+        else Path(args.runtime_observation_dir).resolve(),
+        runtime_checker_stride=max(int(args.runtime_checker_stride), 1),
+        runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
+        runtime_capture_rgb=bool(args.runtime_capture_rgb),
+        runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
     )
 
 
@@ -477,6 +559,13 @@ def _invoke_worker(
     live_video_fps: int = 30,
     live_video_frame_stride: int = 8,
     keep_video_frames: bool = False,
+    runtime_robochecker: bool = False,
+    runtime_feedback_path: Path | None = None,
+    runtime_observation_dir: Path | None = None,
+    runtime_checker_stride: int = 8,
+    runtime_stop_on_violation: bool = True,
+    runtime_capture_rgb: bool = True,
+    runtime_rgb_frame_stride: int = 24,
 ):
     command = [
         sys.executable,
@@ -502,6 +591,18 @@ def _invoke_worker(
         command.extend(['--live-video-frame-stride', str(int(live_video_frame_stride))])
     if keep_video_frames:
         command.append('--keep-video-frames')
+    if runtime_robochecker:
+        command.append('--runtime-robochecker')
+        command.extend(['--runtime-checker-stride', str(int(runtime_checker_stride))])
+        command.extend(['--runtime-rgb-frame-stride', str(int(runtime_rgb_frame_stride))])
+        if runtime_feedback_path is not None:
+            command.extend(['--runtime-feedback-path', str(runtime_feedback_path)])
+        if runtime_observation_dir is not None:
+            command.extend(['--runtime-observation-dir', str(runtime_observation_dir)])
+        if runtime_stop_on_violation:
+            command.append('--runtime-stop-on-violation')
+        if runtime_capture_rgb:
+            command.append('--runtime-capture-rgb')
     if scene_profile is not None:
         command.extend(['--worker-scene-profile', scene_profile])
     if seeds:
@@ -524,8 +625,19 @@ def _results_from_worker(
     live_video_fps: int = 30,
     live_video_frame_stride: int = 8,
     keep_video_frames: bool = False,
+    runtime_robochecker: bool = False,
+    runtime_feedback_path: Path | None = None,
+    runtime_observation_dir: Path | None = None,
+    runtime_checker_stride: int = 8,
+    runtime_stop_on_violation: bool = True,
+    runtime_capture_rgb: bool = True,
+    runtime_rgb_frame_stride: int = 24,
 ) -> list[dict]:
-    results_path = worker_dir / f'{_output_profile_name(scene_profile)}__{recipe}__{mode}_results.json'
+    worker_dir.mkdir(parents=True, exist_ok=True)
+    results_path = worker_dir / (
+        f'{_safe_filename_component(_output_profile_name(scene_profile))}'
+        f'__{_safe_filename_component(recipe)}__{mode}_results.json'
+    )
     if results_path.exists():
         results_path.unlink()
     _invoke_worker(
@@ -542,6 +654,13 @@ def _results_from_worker(
         live_video_fps=live_video_fps,
         live_video_frame_stride=live_video_frame_stride,
         keep_video_frames=keep_video_frames,
+        runtime_robochecker=runtime_robochecker,
+        runtime_feedback_path=runtime_feedback_path,
+        runtime_observation_dir=runtime_observation_dir,
+        runtime_checker_stride=runtime_checker_stride,
+        runtime_stop_on_violation=runtime_stop_on_violation,
+        runtime_capture_rgb=runtime_capture_rgb,
+        runtime_rgb_frame_stride=runtime_rgb_frame_stride,
     )
     if not results_path.exists():
         raise RuntimeError(
@@ -570,6 +689,16 @@ def _output_profile_name(scene_profile: str | None) -> str:
     return scene_profile or 'raw'
 
 
+def _safe_filename_component(value: str | None) -> str:
+    value = str(value or 'raw').replace('\\', '/').rstrip('/')
+    if '/' in value:
+        path = Path(value)
+        parent_name = path.parent.name
+        value = f'{parent_name}_{path.stem}' if parent_name else path.stem
+    value = re.sub(r'[^A-Za-z0-9_.-]+', '_', value).strip('._')
+    return value or 'raw'
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate dual-Franka assembly demos in InternUtopia.')
     parser.add_argument('--recipes', nargs='+', default=None)
@@ -587,6 +716,13 @@ def main():
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)
     parser.add_argument('--keep-video-frames', action='store_true')
+    parser.add_argument('--runtime-robochecker', action='store_true')
+    parser.add_argument('--runtime-feedback-path', type=str, default=None)
+    parser.add_argument('--runtime-observation-dir', type=str, default=None)
+    parser.add_argument('--runtime-checker-stride', type=int, default=8)
+    parser.add_argument('--runtime-stop-on-violation', action='store_true')
+    parser.add_argument('--runtime-capture-rgb', action='store_true')
+    parser.add_argument('--runtime-rgb-frame-stride', type=int, default=24)
     parser.add_argument(
         '--output-dir',
         type=str,
@@ -641,6 +777,17 @@ def main():
                 headless=headless,
                 start_seed=args.start_seed,
                 max_trials=args.max_trials,
+                runtime_robochecker=bool(args.runtime_robochecker),
+                runtime_feedback_path=None
+                if args.runtime_feedback_path is None
+                else Path(args.runtime_feedback_path).resolve(),
+                runtime_observation_dir=None
+                if args.runtime_observation_dir is None
+                else Path(args.runtime_observation_dir).resolve(),
+                runtime_checker_stride=max(int(args.runtime_checker_stride), 1),
+                runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
+                runtime_capture_rgb=bool(args.runtime_capture_rgb),
+                runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
             if not successful_seeds:
@@ -664,7 +811,26 @@ def main():
                 live_video_fps=max(int(args.live_video_fps), 1),
                 live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
                 keep_video_frames=bool(args.keep_video_frames),
+                runtime_robochecker=bool(args.runtime_robochecker),
+                runtime_feedback_path=None
+                if args.runtime_feedback_path is None
+                else Path(args.runtime_feedback_path).resolve(),
+                runtime_observation_dir=None
+                if args.runtime_observation_dir is None
+                else Path(args.runtime_observation_dir).resolve(),
+                runtime_checker_stride=max(int(args.runtime_checker_stride), 1),
+                runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
+                runtime_capture_rgb=bool(args.runtime_capture_rgb),
+                runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
             )
+            runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
+            if runtime_failed_results:
+                _write_json(recipe_dir / 'runtime_failed_results.json', runtime_failed_results)
+                failed_seeds = [result.get('seed') for result in runtime_failed_results]
+                raise RuntimeError(
+                    f'Runtime RoboChecker rejected collected demos for recipe {recipe_name!r}; '
+                    f'failed seeds: {failed_seeds}. Inspect runtime_feedback.json and runtime_observations.'
+                )
             manifest = {
                 'recipe': recipe_name,
                 'recipe_request': recipe,
@@ -693,6 +859,13 @@ def main():
                 'record_live_video': bool(args.record_live_video),
                 'live_video_fps': max(int(args.live_video_fps), 1),
                 'live_video_frame_stride': max(int(args.live_video_frame_stride), 1),
+                'runtime_robochecker': bool(args.runtime_robochecker),
+                'runtime_feedback_path': args.runtime_feedback_path,
+                'runtime_observation_dir': args.runtime_observation_dir,
+                'runtime_checker_stride': max(int(args.runtime_checker_stride), 1),
+                'runtime_stop_on_violation': bool(args.runtime_stop_on_violation),
+                'runtime_capture_rgb': bool(args.runtime_capture_rgb),
+                'runtime_rgb_frame_stride': max(int(args.runtime_rgb_frame_stride), 1),
                 'successful_seeds': successful_seeds,
                 'asset_references': _to_jsonable(recipe_spec.get('asset_references', [])),
                 'metadata': _to_jsonable(recipe_spec.get('metadata', {})),

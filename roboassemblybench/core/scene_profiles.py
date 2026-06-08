@@ -11,7 +11,15 @@ from roboassemblybench.core.paths import BENCHMARK_ROOT, SCENE_PROFILE_DIR
 
 DEFAULT_SCENE_PROFILE = 'proxy_factory_cell'
 
-_NAMED_LIST_KEYS = {'robots', 'objects', 'targets', 'phases', 'camera_specs', 'cameras'}
+_NAMED_LIST_KEYS = {
+    'robots',
+    'objects',
+    'targets',
+    'phases',
+    'camera_specs',
+    'cameras',
+    'scene_lights',
+}
 _UNIQUE_APPEND_LIST_KEYS = {'asset_references', 'supported_scene_profiles', 'tags'}
 
 

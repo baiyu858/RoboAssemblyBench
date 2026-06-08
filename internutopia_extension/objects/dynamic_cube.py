@@ -13,6 +13,8 @@ class DynamicCube(BaseObject):
 
     def set_up_to_scene(self, scene: IScene):
         from omni.isaac.core.objects import DynamicCuboid
+        from omni.isaac.core.utils.prims import get_prim_at_path
+        from pxr import PhysxSchema, Sdf
 
         dynamic_cube = DynamicCuboid(
             prim_path=self._config.prim_path,
@@ -45,4 +47,16 @@ class DynamicCube(BaseObject):
                 # The object remains usable with Isaac's default material if material
                 # helpers are unavailable in a particular extension startup order.
                 pass
+
+        if self._config.disable_gravity is not None:
+            prim = get_prim_at_path(self._config.prim_path)
+            if prim is not None and prim.IsValid():
+                try:
+                    rigid_body_api = PhysxSchema.PhysxRigidBodyAPI.Apply(prim)
+                    attr = rigid_body_api.GetDisableGravityAttr()
+                    if not attr.IsValid():
+                        attr = prim.CreateAttribute('physxRigidBody:disableGravity', Sdf.ValueTypeNames.Bool)
+                    attr.Set(bool(self._config.disable_gravity))
+                except Exception:
+                    pass
         scene.add(dynamic_cube)
