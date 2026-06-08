@@ -21,6 +21,11 @@ def test_fabrica_cooling_manifold_task_is_discoverable_and_reuses_factory_scene(
         reference['name'] == 'fabrica_franka_cooling_fullbundle'
         for reference in recipe_spec['asset_references']
     )
+    assert any(
+        reference['name'] == 'optical_board'
+        and reference['path'].endswith('assets/fabrica_support/optical_board.obj')
+        for reference in recipe_spec['asset_references']
+    )
 
 
 def test_fabrica_cooling_manifold_episode_builds_with_fabrica_parts():
@@ -34,6 +39,7 @@ def test_fabrica_cooling_manifold_episode_builds_with_fabrica_parts():
     assert task_cfg.recipe == 'fabrica_cooling_manifold'
     assert task_cfg.annotation_name == 'fabrica_cooling_manifold'
     assert 'manifold_insert' in task_cfg.tracked_object_names
+    assert 'optical_board' not in task_cfg.tracked_object_names
     assert 'insert_seated' in task_cfg.target_poses
     assert len(task_cfg.phase_specs) >= 8
     assert len(task_cfg.success_criteria) == 1

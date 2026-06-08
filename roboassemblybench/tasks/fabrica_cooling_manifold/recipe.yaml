@@ -30,6 +30,10 @@ metadata:
       kind: manifest
       path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/manifest.json
       role: assembly_metadata
+    - name: optical_board
+      kind: obj
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_support/optical_board.obj
+      role: locating_board_visual
   tags:
     - fabrica
     - cooling-manifold
@@ -80,6 +84,16 @@ objects:
     static_friction: 0.9
     dynamic_friction: 0.7
     restitution: 0.0
+  - name: optical_board
+    kind: usd
+    prim_path: /optical_board
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_support/optical_board.obj
+    position: [0.47, 0.02, 0.023]
+    scale: [1.0, 1.0, 1.0]
+    collider: false
+    auto_collider: false
+    rigid_body: false
+    tracked: false
   - name: optical_board_proxy
     kind: static_cube
     prim_path: /optical_board_proxy

@@ -22,9 +22,12 @@ metadata:
       role: inserted_workpiece
       owner: franka_right
       summary: Loose Fabrica cooling-manifold part grasped and seated into the base.
+    optical_board:
+      role: locating_board_visual
+      summary: Real Fabrica optical-board OBJ visual referenced from the source bundle.
     optical_board_proxy:
       role: support_surface
-      summary: Lightweight proxy for the black Fabrica optical board from the source package.
+      summary: Lightweight collision/support proxy aligned with the black Fabrica optical board.
     workbench:
       role: support_surface
       summary: Factory workbench surface used by the RoboAssemblyBench scene profile.
