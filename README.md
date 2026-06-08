@@ -284,3 +284,5 @@ bash roboassemblybench/scripts/view_peg_insertion_scene_ui.sh
 
 
 conda run -n internutopia311 python roboassemblybench/scripts/generate_demos.py --recipes place_food --scene-profiles taoyuan_grscenes_tabletop --num-demos 1 --max-trials 1 --output-dir /tmp/robofactory_migrate_place_verify_final --headless
+
+

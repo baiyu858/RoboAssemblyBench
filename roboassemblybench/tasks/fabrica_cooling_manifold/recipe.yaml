@@ -1,0 +1,350 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: fabrica_cooling_manifold
+prompt: "Two Franka arms assemble a Fabrica cooling-manifold module in the shared factory workcell: the right arm picks a manifold insert from the staging board and seats it into the fixed manifold base."
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
+max_steps: 2600
+phase_timeout_steps: 420
+phase_timeout_action: fail
+source_benchmark: fabrica
+source_config_path: roboassemblybench/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001.zip
+
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/Fabrica
+  asset_note: >-
+    This task reuses the existing RoboAssemblyBench factory scene profile and references the
+    Fabrica Franka cooling-manifold full bundle for the assembly parts. Unzip the full bundle
+    next to the zip file to make the per-part USD paths below directly loadable.
+  asset_references:
+    - name: fabrica_franka_cooling_fullbundle
+      kind: zip
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001.zip
+      role: source_bundle
+    - name: fabrica_franka_scene_usda
+      kind: scene
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/scene/scene.usda
+      role: source_scene_reference
+    - name: fabrica_cooling_manifest
+      kind: manifest
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/manifest.json
+      role: assembly_metadata
+  tags:
+    - fabrica
+    - cooling-manifold
+    - insertion
+    - usd-asset
+    - dual-arm
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.08, -0.62, 1.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.08, 0.62, 1.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+camera_specs:
+  - name: third_person_front
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+
+objects:
+  - name: manifold_base
+    kind: usd
+    prim_path: /manifold_base
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd
+    position: [0.47, -0.07, 0.045]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: false
+    rigid_body: false
+    static_friction: 0.8
+    dynamic_friction: 0.6
+    restitution: 0.0
+    tracked: false
+  - name: manifold_insert
+    kind: usd
+    prim_path: /manifold_insert
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd
+    position: [0.47, 0.24, 0.055]
+    random_xy: [0.008, 0.008]
+    scale: [1.0, 1.0, 1.0]
+    mass: 0.126
+    collider: true
+    auto_collider: false
+    rigid_body: true
+    static_friction: 0.9
+    dynamic_friction: 0.7
+    restitution: 0.0
+  - name: optical_board_proxy
+    kind: static_cube
+    prim_path: /optical_board_proxy
+    position: [0.47, 0.02, 0.010]
+    scale: [0.62, 0.82, 0.012]
+    color: [0.02, 0.02, 0.025]
+    static_friction: 1.0
+    dynamic_friction: 0.8
+    restitution: 0.0
+    tracked: false
+  - name: workbench
+    kind: static_cube
+    prim_path: /workbench
+    position: [0.47, 0.02, 0.005]
+    scale: [0.66, 0.90, 0.010]
+    color: [0.10, 0.12, 0.12]
+    static_friction: 1.2
+    dynamic_friction: 0.9
+    restitution: 0.0
+    tracked: false
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.24, -0.44, 0.54]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.24, 0.44, 0.54]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.16, -0.66, 0.58]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.16, 0.66, 0.58]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_pick
+    reference: manifold_insert
+    offset: [0.0, 0.0, 0.13]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_grasp_open
+    reference: manifold_insert
+    offset: [0.0, 0.0, 0.060]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_grasp_close
+    reference: manifold_insert
+    offset: [0.0, 0.0, 0.025]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_lift
+    reference: manifold_insert
+    offset: [0.0, 0.0, 0.18]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_preseat
+    reference: manifold_base
+    offset: [0.0, 0.12, 0.15]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_seat_robot
+    reference: manifold_base
+    offset: [0.0, 0.018, 0.105]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: insert_seated
+    reference: manifold_base
+    offset: [0.0, 0.0, 0.030]
+    orientation_euler: [1.0e-06, 0.0, 0.0]
+
+phases:
+  - name: right_approach_insert
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_pick
+        position_tolerance: 0.07
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+  - name: right_descend_insert
+    timeout_steps: 280
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_grasp_open
+        position_tolerance: 0.04
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.04
+  - name: right_grasp_insert
+    timeout_steps: 360
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_grasp_close
+        position_tolerance: 0.03
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    attach:
+      - object: manifold_insert
+        robot: franka_right
+        target: insert_grasp_close
+        position_tolerance: 0.025
+        attachment_mode: physical_joint
+        disable_collision_on_attach: false
+        require_contact: true
+        require_physical_contact: true
+        require_target_reached_for_attach: true
+        require_dual_finger_contact: true
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
+        finger_contact_distance: 0.010
+        physical_contact_axes: y
+        physical_attach_surface_gap: 0.010
+        contact_box_offset: [0.0, 0.0, 0.020]
+        contact_box_scale: [0.080, 0.060, 0.050]
+        gripper_closed_threshold: 0.030
+        gripper_closed_margin: 0.006
+        post_attach_settle_steps: 18
+    advance:
+      type: object_attached
+      object: manifold_insert
+      robot: franka_right
+      min_steps: 20
+  - name: right_lift_insert
+    timeout_steps: 320
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_lift
+        payload_object: manifold_insert
+        position_tolerance: 0.06
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+  - name: right_preseat_insert
+    timeout_steps: 360
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_preseat
+        payload_object: manifold_insert
+        position_tolerance: 0.07
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+  - name: right_seat_insert
+    timeout_steps: 520
+    timeout_action: advance
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_seat_robot
+        payload_object: manifold_insert
+        payload_target: insert_seated
+        orientation_tolerance: 0.35
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: close
+    advance:
+      type: all_of
+      min_steps: 24
+      conditions:
+        - type: robot_targets_reached
+          tolerance: 0.05
+        - type: object_targets_reached
+          tolerance: 0.04
+          objects:
+            - object: manifold_insert
+              target: insert_seated
+              position_tolerance: 0.04
+              orientation_tolerance: 0.55
+  - name: release_insert
+    timeout_steps: 260
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_seat_robot
+        payload_object: manifold_insert
+        payload_target: insert_seated
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    detach:
+      - manifold_insert
+    advance:
+      type: timer
+      min_steps: 24
+  - name: settle_insert
+    timeout_steps: 240
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.08
+      franka_right:
+        target: insert_preseat
+        position_tolerance: 0.10
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: all_of
+      min_steps: 12
+      conditions:
+        - type: object_targets_reached
+          tolerance: 0.04
+          objects:
+            - object: manifold_insert
+              target: insert_seated
+              position_tolerance: 0.04
+              orientation_tolerance: 0.55
+        - type: objects_static
+          linear_velocity_threshold: 0.03
+          angular_velocity_threshold: 1.0
+          objects:
+            - manifold_insert
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.08
+
+success:
+  - object: manifold_insert
+    target: insert_seated
+    position_tolerance: 0.04
+    orientation_tolerance: 0.55
+    require_released: true
+    require_static: true
+    linear_velocity_threshold: 0.03
+    angular_velocity_threshold: 1.0

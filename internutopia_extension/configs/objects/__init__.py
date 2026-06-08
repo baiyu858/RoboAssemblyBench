@@ -11,6 +11,7 @@ class DynamicCubeCfg(ObjectCfg):
     mass: Optional[float] = None
     density: Optional[float] = None
     collider: Optional[bool] = True
+    disable_gravity: Optional[bool] = None
     static_friction: Optional[float] = None
     dynamic_friction: Optional[float] = None
     restitution: Optional[float] = None

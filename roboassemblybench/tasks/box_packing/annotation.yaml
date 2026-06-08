@@ -1,0 +1,124 @@
+extends: _base.yaml
+task_name: box_packing
+title: Box closing
+summary: Two Franka arms physically rotate and close the front and back flaps of a small upright cardboard box.
+task_description: >-
+  The task reuses the peg insertion tabletop workcell and dual-arm layout, but replaces the workpiece
+  with a scaled cardboard-box proxy that has only two active hinged flaps for closing. Because the bundled
+  `cardboard_box_rigged` asset only provides whole-box open and closed visuals, the task uses a matched
+  PhysX proxy for contact and success checking. The left arm closes the front flap and the right arm closes
+  the back flap by rotating each flap around its edge axis until the box is shut. Success requires both
+  flaps to be released, physically settled, and aligned with their closed targets.
+metadata:
+  tags:
+    - cardboard-box
+    - box-closing
+    - dual-arm
+    - physical-contact
+  object_roles:
+    box_floor:
+      role: box_base
+      summary: Static floor of the scaled cardboard-box proxy.
+    box_left_wall:
+      role: box_wall
+      summary: Negative-Y side wall of the cardboard box.
+    box_right_wall:
+      role: box_wall
+      summary: Positive-Y side wall of the cardboard box.
+    box_front_wall:
+      role: box_wall
+      summary: Front wall that supports the front flap hinge line.
+    box_back_wall:
+      role: box_wall
+      summary: Back wall that supports the back flap hinge line.
+    front_flap:
+      role: lid_flap
+      owner: franka_left
+      summary: Front cardboard flap rotated shut by the left arm.
+    back_flap:
+      role: lid_flap
+      owner: franka_right
+      summary: Back cardboard flap rotated shut by the right arm.
+    workbench:
+      role: support_surface
+      summary: Static tabletop surface shared with the peg insertion scene.
+  target_roles:
+    left_wait:
+      phase: release_closed_box
+      summary: Left-arm standby pose after pressing the front flap closed.
+    right_wait:
+      phase: release_closed_box
+      summary: Right-arm standby pose after pressing the back flap closed.
+    left_retreat:
+      phase: retreat
+      summary: Left-arm retreat pose after the box is verified closed.
+    right_retreat:
+      phase: retreat
+      summary: Right-arm retreat pose after the box is verified closed.
+    front_flap_push_start:
+      object: front_flap
+      phase: approach_end_flaps
+      summary: Left-arm approach pose above the front flap before the closing sweep.
+    front_flap_push_closed:
+      object: front_flap
+      phase: press_end_flaps_closed
+      summary: Left-arm end pose that presses the front flap into its closed range.
+    front_flap_closed:
+      object: front_flap
+      phase: verify_box_closed
+      summary: Final closed target for the front flap.
+    back_flap_push_start:
+      object: back_flap
+      phase: approach_end_flaps
+      summary: Right-arm approach pose above the back flap before the closing sweep.
+    back_flap_push_closed:
+      object: back_flap
+      phase: press_end_flaps_closed
+      summary: Right-arm end pose that presses the back flap into its closed range.
+    back_flap_closed:
+      object: back_flap
+      phase: verify_box_closed
+      summary: Final closed target for the back flap.
+  phase_notes:
+    - name: approach_end_flaps
+      summary: Both arms move to the front and back flaps and prepare to close the box.
+      focus_objects:
+        - front_flap
+        - back_flap
+      focus_targets:
+        - front_flap_push_start
+        - back_flap_push_start
+    - name: press_end_flaps_closed
+      summary: The two flaps are rotated shut around their edge hinges with physical contact.
+      focus_objects:
+        - front_flap
+        - back_flap
+      focus_targets:
+        - front_flap_push_closed
+        - back_flap_push_closed
+        - front_flap_closed
+        - back_flap_closed
+    - name: hold_end_flaps_closed
+      summary: Both arms keep pressing briefly so the flaps finish rotating into the closed pose.
+      focus_objects:
+        - front_flap
+        - back_flap
+      focus_targets:
+        - front_flap_push_closed
+        - back_flap_push_closed
+    - name: release_closed_box
+      summary: The arms release the flaps and move away while the shut box settles physically.
+      focus_objects:
+        - front_flap
+        - back_flap
+      focus_targets:
+        - front_flap_closed
+        - back_flap_closed
+    - name: verify_box_closed
+      summary: Final verification checks that both flaps are closed, released, and physically static.
+      focus_objects:
+        - front_flap
+        - back_flap
+      focus_targets:
+        - front_flap_closed
+        - back_flap_closed

@@ -1,0 +1,454 @@
+extends: _dual_franka_assembly_base.yaml
+
+task_name: box_packing
+prompt: "Two Franka arms close the front and back hinged flaps of a small upright cardboard box."
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
+max_steps: 3200
+phase_timeout_steps: 520
+phase_timeout_action: fail
+
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/external/cardboard_box_rigged
+  asset_note: The bundled cardboard-box asset exposes open and closed whole-box meshes, not articulated flap links, so the task uses a matching hinged PhysX proxy for manipulation.
+  asset_references:
+    - name: cardboard_box_rigged
+      path: ${BENCHMARK_ROOT}/assets/external/cardboard_box_rigged
+      role: source_visual_asset
+      note: The physical hinged proxy is sized and colored to match this asset because the source USDZ has no separate flap rigid bodies.
+  hinge_joints:
+    - name: front_flap_hinge
+      type: RevoluteJoint
+      anchor_to_world: true
+      frame_units: normalized
+      parent: box_front_wall
+      child: front_flap
+      axis: Y
+      angular_drive:
+        type: force
+        target_position: 90.0
+        target_velocity: 0.0
+        stiffness: 0.200
+        damping: 0.100
+        max_force: 5.00
+      parent_frame:
+        offset: [0.0, 0.0, 0.5]
+      child_frame:
+        offset: [-0.5, 0.0, 0.5]
+        orientation_euler: [0.0, 1.5707963268, 0.0]
+      lower_limit: 0.0
+      upper_limit: 120.0
+    - name: back_flap_hinge
+      type: RevoluteJoint
+      anchor_to_world: true
+      frame_units: normalized
+      parent: box_back_wall
+      child: back_flap
+      axis: Y
+      angular_drive:
+        type: force
+        target_position: -90.0
+        target_velocity: 0.0
+        stiffness: 0.200
+        damping: 0.100
+        max_force: 5.00
+      parent_frame:
+        offset: [0.0, 0.0, 0.5]
+      child_frame:
+        offset: [0.5, 0.0, 0.5]
+        orientation_euler: [0.0, -1.5707963268, 0.0]
+      lower_limit: -120.0
+      upper_limit: 0.0
+
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.08, -0.62, 1.0]
+    orientation_euler: [0.0, 0.0, 1.5707963268]
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.08, 0.62, 1.0]
+    orientation_euler: [0.0, 0.0, -1.5707963268]
+
+camera_specs:
+  - name: third_person_front
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+
+objects:
+  - name: box_floor
+    kind: static_cube
+    prim_path: /box_floor
+    position: [0.47, 0.0, 0.016]
+    scale: [0.332, 0.312, 0.012]
+    color: [0.58, 0.45, 0.27]
+    static_friction: 1.5
+    dynamic_friction: 1.0
+    restitution: 0.0
+    tracked: false
+  - name: box_left_wall
+    kind: static_cube
+    prim_path: /box_left_wall
+    position: [0.47, -0.158, 0.070]
+    scale: [0.332, 0.016, 0.132]
+    color: [0.66, 0.52, 0.33]
+    static_friction: 1.6
+    dynamic_friction: 1.1
+    restitution: 0.0
+    tracked: false
+  - name: box_right_wall
+    kind: static_cube
+    prim_path: /box_right_wall
+    position: [0.47, 0.158, 0.070]
+    scale: [0.332, 0.016, 0.132]
+    color: [0.66, 0.52, 0.33]
+    static_friction: 1.6
+    dynamic_friction: 1.1
+    restitution: 0.0
+    tracked: false
+  - name: box_front_wall
+    kind: static_cube
+    prim_path: /box_front_wall
+    position: [0.304, 0.0, 0.070]
+    scale: [0.016, 0.312, 0.132]
+    color: [0.66, 0.52, 0.33]
+    static_friction: 1.6
+    dynamic_friction: 1.1
+    restitution: 0.0
+    tracked: false
+  - name: box_back_wall
+    kind: static_cube
+    prim_path: /box_back_wall
+    position: [0.636, 0.0, 0.070]
+    scale: [0.016, 0.312, 0.132]
+    color: [0.66, 0.52, 0.33]
+    static_friction: 1.6
+    dynamic_friction: 1.1
+    restitution: 0.0
+    tracked: false
+  - name: front_flap
+    kind: dynamic_cube
+    prim_path: /front_flap
+    position: [0.309, 0.0, 0.2135]
+    orientation_euler: [0.0, -1.5707963268, 0.0]
+    scale: [0.155, 0.300, 0.014]
+    color: [0.74, 0.59, 0.36]
+    mass: 0.018
+    disable_gravity: true
+    static_friction: 2.2
+    dynamic_friction: 1.5
+    restitution: 0.0
+  - name: back_flap
+    kind: dynamic_cube
+    prim_path: /back_flap
+    position: [0.631, 0.0, 0.2135]
+    orientation_euler: [0.0, 1.5707963268, 0.0]
+    scale: [0.155, 0.300, 0.014]
+    color: [0.74, 0.59, 0.36]
+    mass: 0.018
+    disable_gravity: true
+    static_friction: 2.2
+    dynamic_friction: 1.5
+    restitution: 0.0
+  - name: workbench
+    kind: static_cube
+    prim_path: /workbench
+    position: [0.47, 0.0, 0.005]
+    scale: [0.66, 0.90, 0.010]
+    color: [0.10, 0.12, 0.12]
+    static_friction: 1.2
+    dynamic_friction: 0.9
+    restitution: 0.0
+    tracked: false
+  - name: workbench_visual
+    kind: visual_cube
+    prim_path: /workbench_visual
+    position: [0.47, 0.0, 0.0125]
+    scale: [0.68, 0.92, 0.002]
+    color: [0.08, 0.08, 0.08]
+    tracked: false
+
+targets:
+  - name: left_wait
+    reference: world
+    position: [0.24, -0.44, 0.54]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_wait
+    reference: world
+    position: [0.24, 0.44, 0.54]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: left_retreat
+    reference: world
+    position: [0.16, -0.66, 0.58]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: right_retreat
+    reference: world
+    position: [0.16, 0.66, 0.58]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+
+  - name: front_flap_push_start
+    reference: world
+    position: [0.286, -0.035, 0.275]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: front_flap_push_mid
+    reference: world
+    position: [0.390, -0.006, 0.176]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: front_flap_push_closed
+    reference: world
+    position: [0.520, 0.000, 0.100]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: front_flap_closed
+    reference: world
+    position: [0.3815, 0.0, 0.131]
+    orientation_euler: [0.0, 0.0, 0.0]
+
+  - name: back_flap_push_start
+    reference: world
+    position: [0.654, 0.035, 0.275]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: back_flap_push_mid
+    reference: world
+    position: [0.550, 0.006, 0.176]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: back_flap_push_closed
+    reference: world
+    position: [0.420, 0.000, 0.100]
+    orientation_euler: [3.1415926536, 0.0, 0.0]
+  - name: back_flap_closed
+    reference: world
+    position: [0.5585, 0.0, 0.131]
+    orientation_euler: [0.0, 0.0, 0.0]
+
+phases:
+  - name: approach_end_flaps
+    robot_targets:
+      franka_left:
+        target: front_flap_push_start
+        position_tolerance: 0.07
+      franka_right:
+        target: back_flap_push_start
+        position_tolerance: 0.07
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: robot_targets_reached
+      min_steps: 12
+      tolerance: 0.06
+
+  - name: push_end_flaps_mid
+    timeout_steps: 320
+    timeout_action: advance
+    robot_targets:
+      franka_left:
+        target: front_flap_push_mid
+        position_tolerance: 0.08
+      franka_right:
+        target: back_flap_push_mid
+        position_tolerance: 0.08
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: timer
+      min_steps: 88
+
+  - name: press_end_flaps_closed
+    timeout_steps: 560
+    timeout_action: advance
+    joint_overrides:
+      - name: front_flap_hinge
+        angular_drive:
+          target_position: 105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+      - name: back_flap_hinge
+        angular_drive:
+          target_position: -105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+    robot_targets:
+      franka_left:
+        target: front_flap_push_closed
+        via:
+          - front_flap_push_mid
+        position_tolerance: 0.09
+      franka_right:
+        target: back_flap_push_closed
+        via:
+          - back_flap_push_mid
+        position_tolerance: 0.09
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: object_targets_reached
+      min_steps: 72
+      tolerance: 0.085
+      objects:
+        - object: front_flap
+          target: front_flap_closed
+          position_tolerance: 0.085
+          orientation_tolerance: 1.05
+        - object: back_flap
+          target: back_flap_closed
+          position_tolerance: 0.085
+          orientation_tolerance: 1.05
+
+  - name: hold_end_flaps_closed
+    timeout_steps: 220
+    timeout_action: advance
+    joint_overrides:
+      - name: front_flap_hinge
+        angular_drive:
+          target_position: 105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+      - name: back_flap_hinge
+        angular_drive:
+          target_position: -105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+    robot_targets:
+      franka_left:
+        target: front_flap_push_closed
+        position_tolerance: 0.09
+      franka_right:
+        target: back_flap_push_closed
+        position_tolerance: 0.09
+    gripper_commands:
+      franka_left: close
+      franka_right: close
+    advance:
+      type: timer
+      min_steps: 96
+
+  - name: release_closed_box
+    timeout_steps: 420
+    timeout_action: advance
+    joint_overrides:
+      - name: front_flap_hinge
+        angular_drive:
+          target_position: 105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+      - name: back_flap_hinge
+        angular_drive:
+          target_position: -105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.09
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.09
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: all_of
+      min_steps: 24
+      conditions:
+        - type: object_targets_reached
+          tolerance: 0.090
+          objects:
+            - object: front_flap
+              target: front_flap_closed
+              position_tolerance: 0.090
+              orientation_tolerance: 1.10
+            - object: back_flap
+              target: back_flap_closed
+              position_tolerance: 0.090
+              orientation_tolerance: 1.10
+        - type: objects_static
+          linear_velocity_threshold: 0.06
+          angular_velocity_threshold: 1.2
+          objects:
+            - front_flap
+            - back_flap
+
+  - name: verify_box_closed
+    timeout_steps: 420
+    joint_overrides:
+      - name: front_flap_hinge
+        angular_drive:
+          target_position: 105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+      - name: back_flap_hinge
+        angular_drive:
+          target_position: -105.0
+          stiffness: 4.0
+          damping: 1.0
+          max_force: 120.0
+    robot_targets:
+      franka_left:
+        target: left_wait
+        position_tolerance: 0.09
+      franka_right:
+        target: right_wait
+        position_tolerance: 0.09
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: all_of
+      min_steps: 20
+      conditions:
+        - type: object_targets_reached
+          tolerance: 0.090
+          objects:
+            - object: front_flap
+              target: front_flap_closed
+              position_tolerance: 0.090
+              orientation_tolerance: 1.10
+            - object: back_flap
+              target: back_flap_closed
+              position_tolerance: 0.090
+              orientation_tolerance: 1.10
+        - type: objects_static
+          linear_velocity_threshold: 0.06
+          angular_velocity_threshold: 1.2
+          objects:
+            - front_flap
+            - back_flap
+
+  - name: retreat
+    robot_targets:
+      franka_left: left_retreat
+      franka_right: right_retreat
+    gripper_commands:
+      franka_left: open
+      franka_right: open
+    advance:
+      type: success_criteria_met
+      min_steps: 12
+
+success:
+  - object: front_flap
+    target: front_flap_closed
+    position_tolerance: 0.090
+    orientation_tolerance: 1.10
+    require_released: true
+    require_static: true
+    linear_velocity_threshold: 0.06
+    angular_velocity_threshold: 1.2
+  - object: back_flap
+    target: back_flap_closed
+    position_tolerance: 0.090
+    orientation_tolerance: 1.10
+    require_released: true
+    require_static: true
+    linear_velocity_threshold: 0.06
+    angular_velocity_threshold: 1.2
