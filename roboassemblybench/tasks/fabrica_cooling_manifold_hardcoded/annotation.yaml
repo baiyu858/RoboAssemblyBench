@@ -1,24 +1,25 @@
 extends: _base.yaml
-task_name: fabrica_cooling_manifold
-title: Fabrica cooling manifold
-summary: The right Franka sequentially seats six physical Fabrica cooling-manifold parts into a fixed manifold base.
-task_description: >-
-  A Fabrica cooling-manifold base plate is staged on the shared factory work area. The right Franka
-  physically grasps six loose manifold parts from the black Fabrica optical board, lifts each one,
-  aligns it over the base, seats it into the target pose, releases it, and retreats after the final
-  assembled module remains static.
+task_name: fabrica_cooling_manifold_hardcoded
+title: Fabrica cooling manifold hardcoded deterministic demo
+summary: Deterministic no-RL version of the Fabrica cooling-manifold six-part insertion
+  task.
+task_description: The right Franka automatically carries each cooling-manifold part
+  using a fixed payload constraint, moves to the pre-insertion pose, deterministically
+  advances the part into the fixed base with small steps, releases it, and locks the
+  seated part for stable completion. No RL checkpoint is used.
 metadata:
   tags:
-    - fabrica
-    - cooling-manifold
-    - insertion
-    - physical-grasp
-    - dual-arm
+  - fabrica
+  - cooling-manifold
+  - insertion
+  - physical-grasp
+  - dual-arm
   object_roles:
     fabrica_cooling_manifold_0:
       role: inserted_workpiece
       owner: franka_right
-      summary: Loose physical Fabrica cooling-manifold part grasped and seated into the fixed base.
+      summary: Loose physical Fabrica cooling-manifold part grasped and seated into
+        the fixed base.
     fabrica_cooling_manifold_1:
       role: fixed_assembly_base
       summary: Static Fabrica cooling-manifold base plate used as the insertion reference.
@@ -39,13 +40,12 @@ metadata:
       summary: Loose physical Fabrica cooling-manifold part staged for later assembly.
     optical_board:
       role: locating_board
-      summary: Black Fabrica optical-board mesh loaded from the official bundle wrapper with its authored collision enabled.
-    fabrica_fixture:
-      role: official_pickup_fixture
-      summary: Official Fabrica generated pickup fixture converted from fixture.obj and used to stage the six loose parts.
+      summary: Black Fabrica optical-board mesh loaded from the official bundle wrapper
+        with its authored collision enabled.
     assembled_manifold_preview:
       role: assembled_reference_visual
-      summary: Complete Fabrica cooling-manifold assembled USD preview placed beside the task base as a visual completion reference.
+      summary: Complete Fabrica cooling-manifold assembled USD preview placed beside
+        the task base as a visual completion reference.
     workbench:
       role: support_surface
       summary: Factory workbench surface used by the RoboAssemblyBench scene profile.
@@ -59,13 +59,14 @@ metadata:
     right_retreat:
       summary: Right-arm terminal retreat pose after all six insertions.
   phase_notes:
-    - name: sequential_part_insertions
-      summary: The right arm sequentially inserts parts 0, 2, 3, 4, 5, and 6 into the fixed base plate fabrica_cooling_manifold_1.
-      focus_objects:
-        - fabrica_cooling_manifold_0
-        - fabrica_cooling_manifold_1
-        - fabrica_cooling_manifold_2
-        - fabrica_cooling_manifold_3
-        - fabrica_cooling_manifold_4
-        - fabrica_cooling_manifold_5
-        - fabrica_cooling_manifold_6
+  - name: sequential_part_insertions
+    summary: The right arm sequentially inserts parts 0, 2, 3, 4, 5, and 6 into the
+      fixed base plate fabrica_cooling_manifold_1.
+    focus_objects:
+    - fabrica_cooling_manifold_0
+    - fabrica_cooling_manifold_1
+    - fabrica_cooling_manifold_2
+    - fabrica_cooling_manifold_3
+    - fabrica_cooling_manifold_4
+    - fabrica_cooling_manifold_5
+    - fabrica_cooling_manifold_6

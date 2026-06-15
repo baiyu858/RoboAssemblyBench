@@ -1,0 +1,215 @@
+extends: _dual_franka_assembly_base.yaml
+task_name: fabrica_plumbers_block
+prompt: 'Two Franka arms replay the official Fabrica plumbers-block assembly motion in Isaac Sim.'
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
+max_steps: 7200
+phase_timeout_steps: 420
+phase_timeout_action: fail
+source_benchmark: fabrica
+source_config_path: roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+  asset_references:
+    - name: fabrica_franka_plumbers_block_fullbundle
+      kind: directory
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+      role: source_bundle
+    - name: fabrica_plumbers_scene_usda
+      kind: scene
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/scene/scene.usda
+      role: source_scene_reference
+    - name: fabrica_plumbers_manifest
+      kind: manifest
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/manifest.json
+      role: assembly_metadata
+    - name: fabrica_plumbers_assembled_preview
+      kind: usd
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/assembled/fabrica_plumbers_block_assembled.usda
+      role: assembled_reference_visual
+    - name: fabrica_plumbers_pickup_fixture_usd
+      kind: usd
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_fixture/plumbers_block/fixture_pickup_tray.usda
+      role: official_pickup_fixture_visual
+  tags:
+    - fabrica
+    - plumbers-block
+    - official-replay
+  local_skills:
+    fabrica_fixplug_rl:
+      backend: fabrica_fixplug
+      checkpoint: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/sr_gen_plumbers_block.pth
+      plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+      config: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/config.yaml
+      adapter: toolkits.factory_dual_franka_assembly.factory_insert_adapter:FabricaFixPlugPolicyAdapter
+      observation_space: 3
+      action_space: 3
+      device: cpu
+      path_transform: true
+      residual_action: true
+      pos_action_scale: [0.005, 0.005, 0.005]
+      max_position_step: 0.006
+      trained_task: FabricaFixPlugTaskAssemble
+      trained_backend: Isaac Gym PhysX
+      trained_assumption: plug fixed to Franka hand; policy controls only the local insertion residual.
+  fabrica_official_layout:
+    source_scene: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/scene/scene.usda
+    source_scene_spec: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/scene/scene_spec.json
+    pickup_fixture_source: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/fixture/fixture.obj
+    pickup_pose_source: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/fixture/pickup.json
+    assembly_order:
+      - 2
+      - 0
+      - 3
+      - 1
+      - 4
+    base_part_id: 2
+    note: All mesh scales remain [1, 1, 1]; coordinates are copied from the plumbers-block full-bundle scene_spec and converted to recipe-local z by subtracting the workspace offset.
+robots:
+  - name: franka_left
+    prim_path: /franka_left
+    position: [0.05, 0.25, 0.998051339]
+    orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    apply_workspace_offset: false
+  - name: franka_right
+    prim_path: /franka_right
+    position: [0.95, 0.25, 0.998051339]
+    orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    apply_workspace_offset: false
+camera_specs:
+  - name: third_person_front
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+objects:
+  - name: fabrica_plumbers_block_0
+    kind: usd
+    prim_path: /fabrica_plumbers_block_0
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd
+    position: [0.729975526, -0.300890634, 0.059781015]
+    orientation_euler: [-0.537039969257, 0.0, 0.0]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: true
+    rigid_body: true
+    static_friction: 0.5
+    dynamic_friction: 0.5
+    restitution: 0.0
+    mass: 0.01
+  - name: fabrica_plumbers_block_1
+    kind: usd
+    prim_path: /fabrica_plumbers_block_1
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd
+    position: [0.661099095, -0.191089954, 0.053147345]
+    orientation_euler: [-0.000547503712, 0.247783086881, 1.568563948018]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: true
+    rigid_body: true
+    static_friction: 0.5
+    dynamic_friction: 0.5
+    restitution: 0.0
+    mass: 0.01
+  - name: fabrica_plumbers_block_2
+    kind: usd
+    prim_path: /fabrica_plumbers_block_2
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd
+    position: [0.668614066, -0.293987146, 0.103188624]
+    orientation_euler: [0.0, 1.017149809713, -1.570796326795]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: true
+    rigid_body: false
+    static_friction: 0.5
+    dynamic_friction: 0.5
+    restitution: 0.0
+    mass: 0.01
+    tracked: false
+  - name: fabrica_plumbers_block_3
+    kind: usd
+    prim_path: /fabrica_plumbers_block_3
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd
+    position: [0.728614066, -0.192175925, 0.057898473]
+    orientation_euler: [0.0, -0.624696768901, 1.570796326795]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: true
+    rigid_body: true
+    static_friction: 0.5
+    dynamic_friction: 0.5
+    restitution: 0.0
+    mass: 0.01
+  - name: fabrica_plumbers_block_4
+    kind: usd
+    prim_path: /fabrica_plumbers_block_4
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd
+    position: [0.661099095, -0.136444319, 0.05337142]
+    orientation_euler: [-0.000279185387, 0.12829301595, 1.568614194921]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: true
+    rigid_body: true
+    static_friction: 0.5
+    dynamic_friction: 0.5
+    restitution: 0.0
+    mass: 0.01
+  - name: optical_board
+    kind: usd
+    prim_path: /optical_board
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_support/optical_board.usda
+    position: [0.594975526, -0.134500145, 0.012551339]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: false
+    rigid_body: false
+    tracked: false
+    static_friction: 0.3
+    dynamic_friction: 0.3
+    restitution: 0.0
+  - name: fabrica_fixture
+    kind: usd
+    prim_path: /fabrica_fixture
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_fixture/plumbers_block/fixture_pickup_tray.usda
+    position: [0.699975526, -0.429500145, 0.013051339]
+    orientation: [1.0, 0.0, 0.0, 0.0]
+    scale: [1.0, 1.0, 1.0]
+    collider: true
+    auto_collider: false
+    rigid_body: false
+    tracked: false
+    static_friction: 0.8
+    dynamic_friction: 0.8
+    restitution: 0.0
+  - name: assembled_plumbers_preview
+    kind: usd
+    prim_path: /assembled_plumbers_preview
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/assembled/fabrica_plumbers_block_assembled.usda
+    position: [0.32, 0.42, 0.067459719]
+    scale: [1.0, 1.0, 1.0]
+    collider: false
+    auto_collider: false
+    rigid_body: false
+    tracked: false
+targets:
+  - name: part_0_seated
+    reference: world
+    position: [0.32000006, -0.18, 0.067459719]
+    orientation: [1.0, 0.0, 0.0, 0.0]
+  - name: part_1_seated
+    reference: world
+    position: [0.28, -0.1787342, 0.085551339]
+    orientation: [1.0, 0.0, 0.0, 0.0]
+  - name: part_2_seated
+    reference: world
+    position: [0.32, -0.1787342, 0.048051339]
+    orientation: [1.0, 0.0, 0.0, 0.0]
+  - name: part_3_seated
+    reference: world
+    position: [0.32, -0.1787342, 0.093624989]
+    orientation: [1.0, 0.0, 0.0, 0.0]
+  - name: part_4_seated
+    reference: world
+    position: [0.36, -0.1787342, 0.085551339]
+    orientation: [1.0, 0.0, 0.0, 0.0]
+phases: []
+success: []

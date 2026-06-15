@@ -1,0 +1,31 @@
+extends: fabrica_cooling_manifold
+task_name: fabrica_cooling_manifold_ur5e
+title: Fabrica cooling manifold UR5e
+summary: The cooling-manifold assembly scene using the bundled dual-UR5e + Robotiq Fabrica handoff assets.
+task_description: >-
+  A dual-UR5e Fabrica cooling-manifold variant. It reuses the original cooling-manifold
+  staged parts, base, fixture, targets, and assembly phase structure while replacing the
+  robots and part USD assets with the UR5e bundle assets.
+metadata:
+  tags:
+    - fabrica
+    - cooling-manifold
+    - ur5e
+    - robotiq
+    - dual-arm
+  object_roles:
+    fabrica_cooling_manifold_0:
+      owner: franka_right
+      summary: Loose physical Fabrica cooling-manifold part loaded from the UR5e bundle.
+    fabrica_cooling_manifold_1:
+      summary: Fabrica cooling-manifold base loaded from the UR5e bundle.
+    fabrica_cooling_manifold_2:
+      summary: Loose physical Fabrica cooling-manifold part loaded from the UR5e bundle.
+    fabrica_cooling_manifold_3:
+      summary: Loose physical Fabrica cooling-manifold part loaded from the UR5e bundle.
+    fabrica_cooling_manifold_4:
+      summary: Loose physical Fabrica cooling-manifold part loaded from the UR5e bundle.
+    fabrica_cooling_manifold_5:
+      summary: Loose physical Fabrica cooling-manifold part loaded from the UR5e bundle.
+    fabrica_cooling_manifold_6:
+      summary: Loose physical Fabrica cooling-manifold part loaded from the UR5e bundle.

@@ -1,0 +1,81 @@
+extends: fabrica_plumbers_block
+task_name: fabrica_plumbers_block_ur5e
+prompt: 'Two UR5e arms with Robotiq 2F-85 grippers replay the official Fabrica plumbers-block assembly scene in Isaac Sim.'
+source_config_path: roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+  robot_asset_source: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
+  asset_note: This variant keeps the Fabrica plumbers-block parts, fixture, optical board, preview, and scene coordinates from the plumbers-block bundle, while replacing the logical dual Franka robots with UR5e + Robotiq 2F-85 robots from the available UR5e bundle. The inherited phase names still use franka_left/franka_right as logical robot identifiers for compatibility.
+  asset_references:
+    - name: fabrica_franka_plumbers_block_fullbundle
+      kind: directory
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+      role: plumbers_block_source_bundle
+    - name: fabrica_ur5e_robot_bundle
+      kind: directory
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
+      role: ur5e_robot_source_bundle
+    - name: ur5e_robotiq_task_wrapper
+      kind: robot_usd
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
+      role: robot_wrapper_with_variants
+  tags:
+    - fabrica
+    - plumbers-block
+    - ur5e
+    - robotiq
+    - dual-arm
+  local_skills:
+    fabrica_fixplug_rl:
+      adapter_status: not_validated_for_ur5e_task_scene_only
+      require_success: false
+      note: The inherited plumbers-block FixPlug checkpoint was trained with plug fixed to a Franka hand. It is not automatically valid for UR5e without a retargeting or UR5e-specific local policy layer.
+  fabrica_official_layout:
+    robot_layout: dual_ur5e_robotiq_from_available_ur5e_bundle
+robots:
+  - name: franka_left
+    type: UR5eRobot
+    prim_path: /ur5e_left
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
+    position: [0.05, 0.25, 1.098051339]
+    orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    apply_workspace_offset: false
+    end_effector_prim_name: tool0
+    ik_base_prim_name: base_link
+    gripper_dof_name: finger_joint
+    gripper_open_position: 0.0
+    gripper_closed_position: 0.80
+    hand_link_name: wrist_3_link
+    left_finger_link_name: left_inner_finger
+    right_finger_link_name: right_inner_finger
+    initial_joint_positions:
+      shoulder_pan_joint: -1.5707963268
+      shoulder_lift_joint: -1.5707963268
+      elbow_joint: 1.5707963268
+      wrist_1_joint: -1.5707963268
+      wrist_2_joint: -1.5707963268
+      wrist_3_joint: 0.0
+      finger_joint: 0.0
+  - name: franka_right
+    type: UR5eRobot
+    prim_path: /ur5e_right
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
+    position: [0.95, 0.25, 1.098051339]
+    orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    apply_workspace_offset: false
+    end_effector_prim_name: tool0
+    ik_base_prim_name: base_link
+    gripper_dof_name: finger_joint
+    gripper_open_position: 0.0
+    gripper_closed_position: 0.80
+    hand_link_name: wrist_3_link
+    left_finger_link_name: left_inner_finger
+    right_finger_link_name: right_inner_finger
+    initial_joint_positions:
+      shoulder_pan_joint: -1.5707963268
+      shoulder_lift_joint: -1.5707963268
+      elbow_joint: 1.5707963268
+      wrist_1_joint: -1.5707963268
+      wrist_2_joint: -1.5707963268
+      wrist_3_joint: 0.0
+      finger_joint: 0.0

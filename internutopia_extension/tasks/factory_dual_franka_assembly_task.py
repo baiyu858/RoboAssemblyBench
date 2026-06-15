@@ -1065,13 +1065,28 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 return rigid_body
         return None
 
+    def _robot_config_link_name(self, robot_name: str, config_field: str, fallback: str) -> str:
+        robot = self.robots.get(robot_name)
+        config = getattr(robot, 'config', None) if robot is not None else None
+        value = getattr(config, config_field, None)
+        return str(value) if value else fallback
+
+    def _robot_hand_link_name(self, robot_name: str) -> str:
+        return self._robot_config_link_name(robot_name, 'hand_link_name', self._HAND_LINK_NAME)
+
+    def _robot_left_finger_link_name(self, robot_name: str) -> str:
+        return self._robot_config_link_name(robot_name, 'left_finger_link_name', self._LEFT_FINGER_LINK_NAME)
+
+    def _robot_right_finger_link_name(self, robot_name: str) -> str:
+        return self._robot_config_link_name(robot_name, 'right_finger_link_name', self._RIGHT_FINGER_LINK_NAME)
+
     def _get_robot_hand_rigid_body(self, robot_name: str):
-        return self._robot_rigid_body_by_suffix(robot_name, self._HAND_LINK_NAME)
+        return self._robot_rigid_body_by_suffix(robot_name, self._robot_hand_link_name(robot_name))
 
     def _get_robot_finger_rigid_bodies(self, robot_name: str):
         return {
-            'left': self._robot_rigid_body_by_suffix(robot_name, self._LEFT_FINGER_LINK_NAME),
-            'right': self._robot_rigid_body_by_suffix(robot_name, self._RIGHT_FINGER_LINK_NAME),
+            'left': self._robot_rigid_body_by_suffix(robot_name, self._robot_left_finger_link_name(robot_name)),
+            'right': self._robot_rigid_body_by_suffix(robot_name, self._robot_right_finger_link_name(robot_name)),
         }
 
     def _get_contact_probe(self, prim_path: str, filter_prim_path: str):
@@ -2265,6 +2280,21 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if self._current_gripper_command(phase_spec, robot_name) != 'close':
             return False
 
+        min_attach_steps = max(int(attach_spec.get('min_attach_steps', attach_spec.get('attach_min_steps', 0))), 0)
+        if self.phase_step_counter < min_attach_steps:
+            self._maybe_write_attach_debug(
+                {
+                    'step_counter': int(self.step_counter),
+                    'phase_step_counter': int(self.phase_step_counter),
+                    'phase': phase_spec.get('name'),
+                    'object': object_name,
+                    'robot': robot_name,
+                    'blocked_by': 'min_attach_steps',
+                    'min_attach_steps': min_attach_steps,
+                }
+            )
+            return False
+
         target_info = self._resolve_attach_target_info(phase_spec=phase_spec, attach_spec=attach_spec)
         if target_info is None:
             return False
@@ -2631,6 +2661,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if not phase_spec:
             return True
 
+        if not self._phase_payloads_held(phase_spec):
+            return False
+
         for attach_spec in self._as_list(phase_spec.get('attach')):
             attach_spec = self._normalized_attach_spec(attach_spec)
             if not attach_spec or 'object' not in attach_spec or 'robot' not in attach_spec:
@@ -2700,6 +2733,27 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             robot_name = attachment_state.get('robot_name')
             if robot_name is not None and self._current_gripper_command(phase_spec, robot_name) == 'open':
                 return False
+
+        return True
+
+    def _phase_payloads_held(self, phase_spec: dict) -> bool:
+        for robot_name, target_spec in phase_spec.get('robot_targets', {}).items():
+            if not isinstance(target_spec, dict):
+                continue
+            payload_object = target_spec.get('payload_object')
+            if payload_object is None:
+                continue
+            if target_spec.get('require_payload_attached') is False:
+                continue
+
+            payload_object = str(payload_object)
+            attachment_state = self._attachments.get(payload_object)
+            if attachment_state is None or attachment_state.get('robot_name') != robot_name:
+                return False
+
+            if attachment_state.get('mode') in {'physical_hold', 'pure_physical_grasp'}:
+                if not self._physical_hold_valid(payload_object, attachment_state):
+                    return False
 
         return True
 
@@ -2775,7 +2829,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _robot_targets_reached(self, phase_spec: dict, tolerance: float, orientation_tolerance: float | None) -> bool:
         effective_tolerance = self._effective_robot_target_tolerance(tolerance)
         for robot_name in phase_spec.get('robot_targets', {}):
-            if phase_spec.get('robot_targets', {}).get(robot_name) is None:
+            robot_target_spec = phase_spec.get('robot_targets', {}).get(robot_name)
+            if robot_target_spec is None:
+                continue
+            if isinstance(robot_target_spec, dict) and robot_target_spec.get('blocking') is False:
                 continue
             target_info = self._resolve_phase_robot_target(
                 phase_spec=phase_spec,
@@ -3062,6 +3119,39 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 linear_threshold=float(advance.get('linear_velocity_threshold', 1e-2)),
                 angular_threshold=float(advance.get('angular_velocity_threshold', 0.5)),
             )
+        if advance_type in {'object_attached', 'objects_attached', 'object_grasped', 'objects_grasped'}:
+            object_specs = advance.get('objects')
+            if object_specs is None:
+                object_specs = [
+                    {
+                        'object': advance.get('object'),
+                        'robot': advance.get('robot'),
+                    }
+                ]
+            for object_spec in object_specs:
+                if isinstance(object_spec, str):
+                    object_name = object_spec
+                    required_robot = advance.get('robot')
+                else:
+                    object_name = object_spec.get('object')
+                    required_robot = object_spec.get('robot', advance.get('robot'))
+                if object_name is None:
+                    return False
+                attachment_state = self._attachments.get(object_name)
+                if attachment_state is None:
+                    return False
+                if required_robot is not None and attachment_state.get('robot_name') != required_robot:
+                    return False
+            return True
+        if advance_type in {'object_detached', 'objects_detached', 'object_released', 'objects_released'}:
+            object_specs = advance.get('objects')
+            if object_specs is None:
+                object_specs = [advance.get('object')]
+            for object_spec in object_specs:
+                object_name = object_spec if isinstance(object_spec, str) else object_spec.get('object')
+                if object_name is None or object_name in self._attachments:
+                    return False
+            return True
         if advance_type in {'robot_object_contact', 'gripper_object_contact'}:
             contact_specs = advance.get('contacts')
             if contact_specs is None:

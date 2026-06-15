@@ -15,9 +15,15 @@ from internutopia_extension.configs.objects import (
 )
 from internutopia_extension.configs.robots.franka import (
     FrankaRobotCfg,
-    arm_ik_cfg,
-    arm_joint_cfg,
-    gripper_cfg,
+    arm_ik_cfg as franka_arm_ik_cfg,
+    arm_joint_cfg as franka_arm_joint_cfg,
+    gripper_cfg as franka_gripper_cfg,
+)
+from internutopia_extension.configs.robots.ur5e import (
+    UR5eRobotCfg,
+    arm_ik_cfg as ur5e_arm_ik_cfg,
+    arm_joint_cfg as ur5e_arm_joint_cfg,
+    gripper_cfg as ur5e_gripper_cfg,
 )
 from internutopia_extension.configs.sensors import RepCameraCfg
 from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task import (
@@ -46,21 +52,64 @@ def _resolve_camera_orientation(spec: dict) -> np.ndarray:
     return euler_xyz_intrinsic_to_quat(spec.get('orientation_euler', [0.0, 0.0, 0.0]))
 
 
-def _build_robot_cfgs(recipe_spec: dict) -> tuple[list[FrankaRobotCfg], tuple[str, ...]]:
+def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
     robots = []
     robot_names = []
     for robot_spec in recipe_spec['robots']:
         orientation = _resolve_orientation(robot_spec)
-        robots.append(
-            FrankaRobotCfg(
-                name=robot_spec['name'],
-                prim_path=robot_spec['prim_path'],
-                position=tuple(float(value) for value in robot_spec['position']),
-                orientation=tuple(float(value) for value in orientation),
-                controllers=[arm_ik_cfg.update(), arm_joint_cfg.update(), gripper_cfg.update()],
-                sensors=[],
-            )
+        robot_type = str(robot_spec.get('type', 'FrankaRobot'))
+        common_kwargs = dict(
+            name=robot_spec['name'],
+            prim_path=robot_spec['prim_path'],
+            position=tuple(float(value) for value in robot_spec['position']),
+            orientation=tuple(float(value) for value in orientation),
+            sensors=[],
         )
+        if robot_spec.get('usd_path') is not None:
+            common_kwargs['usd_path'] = robot_spec['usd_path']
+        if robot_spec.get('scale') is not None:
+            common_kwargs['scale'] = tuple(float(value) for value in robot_spec['scale'])
+
+        if robot_type in {'FrankaRobot', 'franka', 'Franka'}:
+            robots.append(
+                FrankaRobotCfg(
+                    controllers=[
+                        franka_arm_ik_cfg.update(),
+                        franka_arm_joint_cfg.update(),
+                        franka_gripper_cfg.update(),
+                    ],
+                    **common_kwargs,
+                )
+            )
+        elif robot_type in {'UR5eRobot', 'ur5e', 'UR5e'}:
+            ur5e_kwargs = {}
+            for field_name in (
+                'end_effector_prim_name',
+                'ik_base_prim_name',
+                'gripper_dof_name',
+                'gripper_open_position',
+                'gripper_closed_position',
+                'hand_link_name',
+                'left_finger_link_name',
+                'right_finger_link_name',
+                'initial_joint_positions',
+            ):
+                if field_name in robot_spec:
+                    ur5e_kwargs[field_name] = copy.deepcopy(robot_spec[field_name])
+            robots.append(
+                UR5eRobotCfg(
+                    type='UR5eRobot',
+                    controllers=[
+                        ur5e_arm_ik_cfg.update(),
+                        ur5e_arm_joint_cfg.update(),
+                        ur5e_gripper_cfg.update(),
+                    ],
+                    **common_kwargs,
+                    **ur5e_kwargs,
+                )
+            )
+        else:
+            raise ValueError(f'Unsupported robot type {robot_type!r} for robot {robot_spec["name"]!r}.')
         robot_names.append(robot_spec['name'])
     return robots, tuple(robot_names)
 

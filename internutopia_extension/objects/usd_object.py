@@ -42,7 +42,7 @@ class UsdObject(BaseObject):
         from omni.isaac.core.utils.prims import is_prim_path_valid
         from omni.isaac.core.utils.stage import add_reference_to_stage
         from omni.physx.scripts import utils
-        from pxr import UsdPhysics
+        from pxr import UsdGeom, UsdPhysics
 
         def set_nested_collision_enabled(prim, enabled: bool) -> None:
             if prim is None or not prim.IsValid():
@@ -53,13 +53,27 @@ class UsdObject(BaseObject):
             for child in prim.GetChildren():
                 set_nested_collision_enabled(child, enabled)
 
+        def set_nested_rigid_body_enabled(prim, enabled: bool) -> None:
+            if prim is None or not prim.IsValid():
+                return
+            if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                rigid_body_api = UsdPhysics.RigidBodyAPI(prim)
+                rigid_body_api.GetRigidBodyEnabledAttr().Set(enabled)
+            for child in prim.GetChildren():
+                set_nested_rigid_body_enabled(child, enabled)
+
         def set_nested_colliders(prim) -> None:
             if prim is None or not prim.IsValid():
                 return
-            try:
-                utils.setCollider(prim, approximationShape=None)
-            except Exception:
-                pass
+            # Preserve collision approximation authored in referenced assets.
+            # Fabrica parts carry PhysX SDF settings; calling setCollider with
+            # approximationShape=None replaces those settings with a triangle
+            # mesh, which PhysX cannot use on a dynamic rigid body.
+            if prim.IsA(UsdGeom.Gprim) and not prim.HasAPI(UsdPhysics.CollisionAPI):
+                try:
+                    utils.setCollider(prim, approximationShape=None)
+                except Exception:
+                    pass
             for child in prim.GetChildren():
                 set_nested_colliders(child)
 
@@ -88,6 +102,9 @@ class UsdObject(BaseObject):
                     if mass is None:
                         mass = 1
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
+                set_nested_rigid_body_enabled(prim, False)
+                rigid_body_api = UsdPhysics.RigidBodyAPI.Apply(prim)
+                rigid_body_api.GetRigidBodyEnabledAttr().Set(True)
                 if collider and auto_collider:
                     set_nested_colliders(prim)
                 elif not collider:
@@ -158,6 +175,7 @@ class UsdObject(BaseObject):
                 restitution: Optional[float] = None,
             ) -> None:
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
+                set_nested_rigid_body_enabled(prim, False)
                 if collider and auto_collider:
                     set_nested_colliders(prim)
                 elif not collider:

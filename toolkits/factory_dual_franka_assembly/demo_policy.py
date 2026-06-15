@@ -6,6 +6,7 @@ from collections import OrderedDict
 import numpy as np
 
 from internutopia_extension.configs.robots.franka import arm_ik_cfg, arm_joint_cfg, gripper_cfg
+from toolkits.factory_dual_franka_assembly.local_skills import LocalSkillExecutor
 from toolkits.factory_dual_franka_assembly.robofactory_planner import (
     FrankaRobofactoryPlanner,
     PlannerWaypoint,
@@ -126,10 +127,16 @@ class DualFrankaAssemblyDemoPolicy:
         self._policy_step = 0
         self._robot_execution_state: dict[str, dict] = {}
         self._planner_bridge = FrankaRobofactoryPlanner()
+        self._local_skill_executor = LocalSkillExecutor()
 
     def _reset_policy_state(self):
         self._policy_step = 0
         self._robot_execution_state = {}
+        self._local_skill_executor.reset()
+
+    @property
+    def local_skill_diagnostics(self):
+        return self._local_skill_executor.diagnostics
 
     def _task_signature_for(self, task):
         cfg = getattr(task, 'cfg', None)
@@ -164,6 +171,7 @@ class DualFrankaAssemblyDemoPolicy:
                 'gripper_close_latched_phase_key': None,
                 'grasp_close_started_step': None,
                 'grasp_close_hold_until_step': None,
+                'grasp_close_pose': None,
                 'precision_lock': None,
                 'planned_joint_trajectory': [],
                 'planned_joint_index': 0,
@@ -498,11 +506,11 @@ class DualFrankaAssemblyDemoPolicy:
         return attach_targets
 
     def _should_freeze_for_release(self, phase_spec: dict, robot_name: str, tracked_objects: dict) -> bool:
-        attached_object_name, _ = self._attached_object_state(tracked_objects, robot_name)
-        if attached_object_name is None:
-            return False
         if str(phase_spec.get('gripper_commands', {}).get(robot_name, '')).lower() != 'open':
             return False
+        attached_object_name, _ = self._attached_object_state(tracked_objects, robot_name)
+        if attached_object_name is None:
+            return bool(phase_spec.get('freeze_after_detach', False) and self._robot_release_targets(phase_spec, robot_name))
         attached_state = tracked_objects.get(attached_object_name, {})
         attachment = attached_state.get('attachment') or {}
         if str(attachment.get('mode', '')).lower() == 'pure_physical_grasp':
@@ -524,6 +532,7 @@ class DualFrankaAssemblyDemoPolicy:
     def _clear_grasp_close_state(state: dict):
         state['grasp_close_started_step'] = None
         state['grasp_close_hold_until_step'] = None
+        state['grasp_close_pose'] = None
 
     def _should_freeze_for_grasp_close(
         self,
@@ -693,10 +702,13 @@ class DualFrankaAssemblyDemoPolicy:
         target_pose: dict,
         mode: str,
         waypoint_tolerance: float | None = None,
+        ignore_orientation: bool = False,
     ) -> bool:
         position_tolerance = self._command_position_tolerance(mode, waypoint_tolerance=waypoint_tolerance)
         if self._distance(current_position, target_pose['position']) > position_tolerance:
             return False
+        if ignore_orientation:
+            return True
         target_orientation = target_pose.get('orientation')
         orientation_tolerance = self._command_orientation_tolerance(mode)
         if target_orientation is None or orientation_tolerance is None:
@@ -788,6 +800,40 @@ class DualFrankaAssemblyDemoPolicy:
         # directly.
         return [target_joint_positions.tolist()]
 
+    def _joint_action_disabled_for_phase(
+        self,
+        *,
+        task,
+        robot_name: str,
+        phase_spec: dict,
+        tracked_objects: dict,
+    ) -> bool:
+        cfg = getattr(task, 'config', getattr(task, 'cfg', None))
+        task_metadata = getattr(cfg, 'task_metadata', {}) if cfg is not None else {}
+        raw_target_spec = phase_spec.get('robot_targets', {}).get(robot_name)
+        attached_objects = self._attached_object_names(tracked_objects, robot_name)
+
+        if isinstance(task_metadata, dict):
+            if bool(task_metadata.get('disable_joint_action', False)):
+                return True
+            if attached_objects and bool(task_metadata.get('disable_joint_action_when_attached', False)):
+                return True
+
+        if isinstance(raw_target_spec, dict):
+            if any(
+                bool(raw_target_spec.get(key, False))
+                for key in (
+                    'disable_joint_action',
+                    'disable_joint_controller',
+                    'cartesian_only',
+                )
+            ):
+                return True
+            if raw_target_spec.get('payload_object') is not None:
+                return True
+
+        return False
+
     def _planner_joint_tolerance(self, mode: str) -> float:
         return max(float(self._MAX_JOINT_STEP.get(mode, 0.06)) * 0.8, 0.025)
 
@@ -860,7 +906,19 @@ class DualFrankaAssemblyDemoPolicy:
         current_orientation,
         tracked_objects: dict,
     ) -> list[dict] | None:
+        cfg = getattr(task, 'config', getattr(task, 'cfg', None))
+        task_metadata = getattr(cfg, 'task_metadata', {}) if cfg is not None else {}
+        if isinstance(task_metadata, dict) and bool(task_metadata.get('disable_joint_planner', False)):
+            return None
+        if (
+            isinstance(task_metadata, dict)
+            and bool(task_metadata.get('disable_joint_planner_when_attached', False))
+            and self._attached_object_names(tracked_objects, robot_name)
+        ):
+            return None
         raw_target_spec = phase_spec.get('robot_targets', {}).get(robot_name)
+        if isinstance(raw_target_spec, dict) and bool(raw_target_spec.get('disable_joint_planner', False)):
+            return None
         if isinstance(raw_target_spec, dict) and raw_target_spec.get('payload_object') is not None:
             return None
         if not self._planner_bridge.available:
@@ -1099,6 +1157,7 @@ class DualFrankaAssemblyDemoPolicy:
                     'name': label,
                     'pose': pose,
                     'mode': mode,
+                    'ignore_orientation': waypoint_tolerance is None or step_index < step_count,
                     'tolerance': self._command_position_tolerance(
                         mode,
                         waypoint_tolerance=waypoint_tolerance if step_index == step_count else None,
@@ -1281,6 +1340,7 @@ class DualFrankaAssemblyDemoPolicy:
                 target_pose=active_entry['pose'],
                 mode=active_entry['mode'],
                 waypoint_tolerance=active_entry.get('tolerance'),
+                ignore_orientation=bool(active_entry.get('ignore_orientation', False)),
             ):
                 break
             state['trajectory_index'] += 1
@@ -1541,6 +1601,11 @@ class DualFrankaAssemblyDemoPolicy:
                 target_position[2] -= grasp_search_depth
         near_center = target_position[0] > self._CENTER_X_THRESHOLD and abs(target_position[1]) < self._CENTER_Y_THRESHOLD
         clearance = self._effective_clearance(tracked_objects, robot_name, other_robot_name)
+        raw_target_spec = phase_spec.get('robot_targets', {}).get(robot_name)
+        disable_interarm_gating = bool(
+            isinstance(raw_target_spec, dict)
+            and raw_target_spec.get('disable_interarm_gating', False)
+        )
 
         if explicit_waypoint:
             planned_pose = {
@@ -1550,7 +1615,6 @@ class DualFrankaAssemblyDemoPolicy:
             if precision_lock is not None:
                 planned_pose['position'][:2] = np.asarray(precision_lock['xy'], dtype=float)
                 planned_pose['orientation'] = np.asarray(precision_lock['orientation'], dtype=float)
-            raw_target_spec = phase_spec.get('robot_targets', {}).get(robot_name)
             ignore_payload_floor = bool(
                 isinstance(raw_target_spec, dict)
                 and raw_target_spec.get('direct_payload_ignore_floor_height', False)
@@ -1558,7 +1622,7 @@ class DualFrankaAssemblyDemoPolicy:
             min_payload_height = self._payload_floor_height(tracked_objects, robot_name)
             if min_payload_height is not None and not ignore_payload_floor:
                 planned_pose['position'][2] = max(float(planned_pose['position'][2]), min_payload_height)
-            if self._interarm_conflict_with_clearance(
+            if not disable_interarm_gating and self._interarm_conflict_with_clearance(
                 planned_pose['position'],
                 other_position,
                 other_target_position,
@@ -1612,7 +1676,7 @@ class DualFrankaAssemblyDemoPolicy:
             lane_y = self._side_sign(robot_name) * self._CENTER_Y_THRESHOLD
         lane_position = np.array([target_position[0], lane_y, safe_z], dtype=float)
 
-        if self._should_wait_for_other_robot(
+        if not disable_interarm_gating and self._should_wait_for_other_robot(
             task=task,
             phase_spec=phase_spec,
             robot_name=robot_name,
@@ -1692,6 +1756,8 @@ class DualFrankaAssemblyDemoPolicy:
             }
 
         if (
+            not disable_interarm_gating
+            and
             other_position is not None
             and other_target_reached is not True
             and self._requires_center_lane(target_position, mode)
@@ -1702,7 +1768,7 @@ class DualFrankaAssemblyDemoPolicy:
         ):
             return self._wait_pose(task, robot_name, target_orientation)
 
-        if self._interarm_conflict_with_clearance(
+        if not disable_interarm_gating and self._interarm_conflict_with_clearance(
             planned_pose['position'],
             other_position,
             other_target_position,
@@ -1780,6 +1846,21 @@ class DualFrankaAssemblyDemoPolicy:
                     self._clear_grasp_close_state(state)
                     return 0.0
                 if state.get('grasp_close_started_step') is None:
+                    final_waypoint_chain = state.get('latched_waypoint_chain') or []
+                    final_pose = (
+                        target_entry.get('pose')
+                        if target_entry is not None and not final_waypoint_chain
+                        else (
+                            final_waypoint_chain[-1].get('pose')
+                            if final_waypoint_chain
+                            else None
+                        )
+                    )
+                    if final_pose is not None:
+                        state['grasp_close_pose'] = {
+                            'position': np.asarray(final_pose['position'], dtype=float),
+                            'orientation': self._normalize_quat(final_pose['orientation']),
+                        }
                     close_ramp_steps = max(
                         int(attach_spec.get('grasp_close_ramp_steps', self._GRASP_CLOSE_RAMP_STEPS)),
                         0,
@@ -1861,6 +1942,10 @@ class DualFrankaAssemblyDemoPolicy:
                 if xy_error > close_xy_threshold or z_error > close_z_threshold:
                     return self._GRASP_CLOSE_DEFAULT_OPENNESS
                 state['grasp_close_started_step'] = self._policy_step
+                state['grasp_close_pose'] = {
+                    'position': final_position.copy(),
+                    'orientation': self._normalize_quat(final_pose['orientation']),
+                }
                 close_ramp_steps = max(
                     int(attach_spec.get('grasp_close_ramp_steps', self._GRASP_CLOSE_RAMP_STEPS)),
                     0,
@@ -1916,7 +2001,20 @@ class DualFrankaAssemblyDemoPolicy:
                     state,
                 )
             ):
-                frozen_pose = [current_position.tolist(), current_orientation.tolist()]
+                hold_grasp_target = bool(
+                    (self._phase_attach_spec_for_robot(phase_spec, robot_name) or {}).get(
+                        'hold_grasp_target_during_close',
+                        True,
+                    )
+                )
+                grasp_close_pose = state.get('grasp_close_pose') if hold_grasp_target else None
+                if isinstance(grasp_close_pose, dict):
+                    frozen_position = np.asarray(grasp_close_pose['position'], dtype=float)
+                    frozen_orientation = self._normalize_quat(grasp_close_pose['orientation'])
+                else:
+                    frozen_position = current_position
+                    frozen_orientation = current_orientation
+                frozen_pose = [frozen_position.tolist(), frozen_orientation.tolist()]
                 action[arm_ik_cfg.name] = frozen_pose
                 joint_hold = _joint_hold_action()
                 if joint_hold is not None:
@@ -1924,8 +2022,8 @@ class DualFrankaAssemblyDemoPolicy:
                 state['last_action'] = frozen_pose
                 state['last_joint_action'] = joint_hold
                 state['active_command_pose'] = {
-                    'position': current_position.copy(),
-                    'orientation': current_orientation.copy(),
+                    'position': frozen_position.copy(),
+                    'orientation': frozen_orientation.copy(),
                 }
                 gripper_command = _resolved_gripper_command(current_position=current_position, target_entry=trajectory_target)
                 if gripper_command is not None:
@@ -2053,7 +2151,12 @@ class DualFrankaAssemblyDemoPolicy:
                 robot_name,
                 constrained_pose,
                 mode=trajectory_target['mode'],
-            )
+            ) if not self._joint_action_disabled_for_phase(
+                task=task,
+                robot_name=robot_name,
+                phase_spec=phase_spec,
+                tracked_objects=tracked_objects,
+            ) else None
             if precision_lock_phase:
                 joint_action = None
             if joint_action is not None:
@@ -2082,13 +2185,34 @@ class DualFrankaAssemblyDemoPolicy:
         phase_spec = task.get_current_phase_spec()
         tracked_robots = task.get_tracked_robot_states(phase_spec=phase_spec)
         tracked_objects = task.get_tracked_object_states()
-        return {
-            robot_name: self._compose_robot_action(
+        actions = {}
+        for robot_name in task.config.robot_names:
+            action = self._local_skill_executor.action_for(
                 task=task,
                 robot_name=robot_name,
                 phase_spec=phase_spec,
                 tracked_robots=tracked_robots,
                 tracked_objects=tracked_objects,
             )
-            for robot_name in task.config.robot_names
-        }
+            if isinstance(action, dict) and action.get('__local_skill_failure__'):
+                if hasattr(task, '_set_terminal_state'):
+                    task._set_terminal_state(
+                        'failed',
+                        reason=f"local-skill-failure:{action.get('reason', 'unknown')}",
+                        status='failed',
+                        detail=action.get('diagnostics', {}),
+                    )
+                else:
+                    task.failed = True
+                    task.terminal_reason = f"local-skill-failure:{action.get('reason', 'unknown')}"
+                action = OrderedDict()
+            if action is None:
+                action = self._compose_robot_action(
+                    task=task,
+                    robot_name=robot_name,
+                    phase_spec=phase_spec,
+                    tracked_robots=tracked_robots,
+                    tracked_objects=tracked_objects,
+                )
+            actions[robot_name] = action
+        return actions

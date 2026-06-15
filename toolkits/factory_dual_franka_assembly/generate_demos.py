@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,14 @@ def _task_export_metadata(task) -> dict:
         'robot_metadata': _to_jsonable(getattr(config, 'robot_metadata', [])),
         'object_metadata': _to_jsonable(getattr(config, 'object_metadata', [])),
     }
+
+
+def _attach_policy_diagnostics(metrics: dict, policy: DualFrankaAssemblyDemoPolicy) -> dict:
+    diagnostics = getattr(policy, 'local_skill_diagnostics', [])
+    if diagnostics:
+        metrics = dict(metrics)
+        metrics['local_skill_diagnostics'] = _to_jsonable(diagnostics)
+    return metrics
 
 
 class EpisodeRecorder:
@@ -258,19 +267,38 @@ class LiveRolloutVideoRecorder:
             self._sampled_steps.append(step_payload)
 
     def finalize(self):
+        from toolkits.factory_dual_franka_assembly.export_lerobot import _encode_mp4_from_pngs
+
+        videos = {}
         summaries = {}
+        video_root_dir = self.output_dir / f'episode_{self.episode_idx:04d}_live_videos'
+        video_root_dir.mkdir(parents=True, exist_ok=True)
         for camera_video_key, frame_dir in list(self._frame_dirs.items()):
             width, height = self._frame_shapes.get(camera_video_key, (0, 0))
+            video_path = video_root_dir / f'{camera_video_key.replace(".", "_")}.mp4'
+            encode_summary = _encode_mp4_from_pngs(frame_dir, video_path, self.fps)
+            videos[camera_video_key] = str(video_path)
             summaries[camera_video_key] = {
                 'frames_dir': str(frame_dir),
+                'video_path': str(video_path),
                 'fps': int(self.fps),
-                'width': int(width),
-                'height': int(height),
+                'width': int(encode_summary.get('width', width)),
+                'height': int(encode_summary.get('height', height)),
                 'renderer': 'live_rollout_frame_capture',
                 'frame_count': int(self._written_png_counts.get(camera_video_key, 0)),
-                'image_stats': self._image_stats[camera_video_key].to_dict(),
+                'image_stats': encode_summary.get('image_stats', self._image_stats[camera_video_key].to_dict()),
             }
+            if not self.keep_frames:
+                shutil.rmtree(frame_dir, ignore_errors=True)
+        if not self.keep_frames:
+            try:
+                self.frames_root_dir.rmdir()
+            except OSError:
+                pass
         return {
+            'videos': videos,
+            'summaries': summaries,
+            'video_mode': 'live_rollout_mp4',
             'frames': {key: str(path) for key, path in self._frame_dirs.items()},
             'frame_summaries': summaries,
             'frame_mode': 'live_rollout_frames',
@@ -332,10 +360,16 @@ def _run_task_sequence(
     policy = DualFrankaAssemblyDemoPolicy()
     obs_list, task_cfgs = env.reset()
     results = []
+    if results_output_path is not None:
+        _write_json(results_output_path, results)
     episode_idx = 0
     recorder = None
     video_recorder = None
     runtime_checker = None
+    last_task = None
+    initial_tasks = getattr(env.runner, 'current_tasks', {})
+    if initial_tasks:
+        last_task = next(iter(initial_tasks.values()))
     if runtime_robochecker:
         runtime_checker = RuntimeRoboChecker(
             output_dir=runtime_observation_dir or ((output_dir / 'runtime_observations') if output_dir is not None else None),
@@ -353,6 +387,7 @@ def _run_task_sequence(
         while task_cfgs and task_cfgs[0] is not None and not env.finished():
             task_name = next(iter(env.runner.current_tasks.keys()))
             task = env.runner.current_tasks[task_name]
+            last_task = task
             if output_dir is not None and recorder is None:
                 recorder = EpisodeRecorder(output_dir=output_dir)
             if record_live_video and video_recorder is None:
@@ -399,10 +434,12 @@ def _run_task_sequence(
                     terminated[0] = True
 
             if terminated[0]:
-                metrics = task.calculate_metrics()
+                metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
                 if runtime_checker is not None:
                     metrics['runtime_robochecker'] = runtime_checker.finalize()
                 results.append(metrics)
+                if results_output_path is not None:
+                    _write_json(results_output_path, results)
                 recorded_videos = {}
                 recorded_video_summaries = {}
                 recorded_video_mode = None
@@ -435,6 +472,19 @@ def _run_task_sequence(
                 obs_list, task_cfgs = env.reset([0])
                 if not task_cfgs or task_cfgs[0] is None:
                     break
+        if not results:
+            try:
+                finished_metrics = getattr(env.runner, 'last_finished_task_metrics', [])
+                if finished_metrics:
+                    results.extend(finished_metrics)
+                active_tasks = getattr(env.runner, 'current_tasks', {})
+                task = next(iter(active_tasks.values())) if active_tasks else last_task
+                if not results and task is not None:
+                    metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
+                    metrics.setdefault('terminal_reason', 'rollout-ended-without-termination')
+                    results.append(metrics)
+            except Exception:
+                pass
         if results_output_path is not None:
             _write_json(results_output_path, results)
     finally:
@@ -493,11 +543,15 @@ def _worker_mode(args, *, headless: bool):
                 recipe=args.worker_recipe,
                 seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
                 scene_profile=scene_profile,
-                attach_runtime_cameras=bool(args.runtime_capture_rgb),
+                attach_runtime_cameras=bool(args.record_live_video or args.runtime_capture_rgb),
             ),
             headless=headless,
             results_output_path=Path(args.worker_results_path).resolve(),
             output_dir=Path(args.output_dir).resolve(),
+            record_live_video=bool(args.record_live_video),
+            live_video_fps=max(int(args.live_video_fps), 1),
+            live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
+            keep_video_frames=bool(args.keep_video_frames),
             runtime_robochecker=bool(args.runtime_robochecker),
             runtime_feedback_path=None
             if args.runtime_feedback_path is None

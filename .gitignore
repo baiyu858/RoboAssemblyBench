@@ -144,3 +144,6 @@ third_part/RoboFactory/**/__pycache__/
 third_part/RoboFactory/robofactory/logs/
 third_part/RoboFactory/robofactory/assets/assets.zip
 roboassemblybench/outputs
+
+outputs/
+checkpoints/

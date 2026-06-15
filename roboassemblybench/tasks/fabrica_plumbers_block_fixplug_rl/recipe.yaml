@@ -1,0 +1,1276 @@
+extends: _dual_franka_assembly_base.yaml
+task_name: fabrica_plumbers_block_fixplug_rl
+prompt: Two Franka arms assemble the Fabrica plumbers-block task with official pickup/transport joint plans and local Fabrica
+  FixPlug RL insertion windows.
+scene_profile: taoyuan_grscenes_tabletop
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
+max_steps: 7600
+phase_timeout_steps: 520
+phase_timeout_action: fail
+source_benchmark: fabrica
+source_config_path: roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+  asset_references:
+  - name: fabrica_franka_plumbers_block_fullbundle
+    kind: directory
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001
+    role: source_bundle
+  - name: fabrica_plumbers_scene_usda
+    kind: scene
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/scene/scene.usda
+    role: source_scene_reference
+  - name: fabrica_plumbers_manifest
+    kind: manifest
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/manifest.json
+    role: assembly_metadata
+  - name: fabrica_plumbers_assembled_preview
+    kind: usd
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/assembled/fabrica_plumbers_block_assembled.usda
+    role: assembled_reference_visual
+  - name: fabrica_plumbers_pickup_fixture_usd
+    kind: usd
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_fixture/plumbers_block/fixture_pickup_tray.usda
+    role: official_pickup_fixture_visual
+  tags:
+  - fabrica
+  - plumbers-block
+  - official-plan
+  - fixplug-rl
+  - isaacgym-checkpoint
+  local_skills:
+    fabrica_fixplug_rl:
+      backend: fabrica_fixplug
+      checkpoint: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/sr_gen_plumbers_block.pth
+      plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+      config: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/config.yaml
+      adapter: toolkits.factory_dual_franka_assembly.factory_insert_adapter:FabricaFixPlugPolicyAdapter
+      observation_space: 3
+      action_space: 3
+      device: cpu
+      path_transform: true
+      residual_action: true
+      pos_action_scale:
+      - 0.005
+      - 0.005
+      - 0.005
+      max_position_step: 0.006
+      trained_task: FabricaFixPlugTaskAssemble
+      trained_backend: Isaac Gym PhysX
+      trained_assumption: plug fixed to Franka hand; policy controls only the local insertion residual
+    fabrica_official_joint_pose:
+      adapter: toolkits.factory_dual_franka_assembly.factory_insert_adapter:FabricaOfficialJointPoseAdapter
+      motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+      plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+  fabrica_official_layout:
+    source_scene: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/scene/scene.usda
+    source_scene_spec: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/scene/scene_spec.json
+    pickup_fixture_source: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/fixture/fixture.obj
+    pickup_pose_source: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/fixture/pickup.json
+    assembly_order:
+    - 2
+    - 0
+    - 3
+    - 1
+    - 4
+    base_part_id: 2
+    note: All mesh scales remain [1, 1, 1]; coordinates are copied from the plumbers-block full-bundle scene_spec and converted
+      to recipe-local z by subtracting the workspace offset.
+    execution_mode: phase_flow_with_official_joint_trajectory_and_fixplug_rl_insertions
+    fixplug_pairs:
+    - - '0'
+      - '2'
+    - - '3'
+      - '2'
+    - - '1'
+      - '3'
+    - - '4'
+      - '3'
+  rl_checkpoint_source: ssh://pcl@192.168.251.34:30737/data/baiyongjie/Fabrica/learning/isaacgymenvs/runs/sr_gen_plumbers_block_11-07-09-12
+robots:
+- name: franka_left
+  prim_path: /franka_left
+  position:
+  - -0.13000000000233186
+  - 0.16999999999236293
+  - 1.005551338975353
+  orientation:
+  - 0.7071067811885694
+  - -2.544499201319955e-11
+  - -2.485042837508848e-11
+  - -0.7071067811845257
+  apply_workspace_offset: false
+- name: franka_right
+  prim_path: /franka_right
+  position:
+  - 0.7699999999976681
+  - 0.16999999999750925
+  - 1.0055513389745963
+  orientation:
+  - 0.7071067811885694
+  - -2.544499201319955e-11
+  - -2.485042837508848e-11
+  - -0.7071067811845257
+  apply_workspace_offset: false
+camera_specs:
+- name: third_person_front
+  translation:
+  - 5.0
+  - 0.0
+  - 3.2
+  orientation_euler:
+  - 0.0
+  - 1.1868238914
+  - 1.5707963268
+objects:
+- name: fabrica_plumbers_block_0
+  kind: usd
+  prim_path: /fabrica_plumbers_block_0
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd
+  position:
+  - 0.327514971
+  - 0.138142468
+  - 0.062522024
+  orientation:
+  - 0.962660526
+  - -0.270711491
+  - 0.0
+  - 0.0
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  rigid_body: true
+  static_friction: 0.9
+  dynamic_friction: 0.8
+  restitution: 0.0
+  mass: 0.01
+- name: fabrica_plumbers_block_1
+  kind: usd
+  prim_path: /fabrica_plumbers_block_1
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd
+  position:
+  - 0.38136146
+  - 0.191128957
+  - 0.055647345
+  orientation:
+  - 0.702445846
+  - -0.087475325
+  - 0.087286216
+  - 0.700927256
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  rigid_body: true
+  static_friction: 0.9
+  dynamic_friction: 0.8
+  restitution: 0.0
+  mass: 0.01
+- name: fabrica_plumbers_block_2
+  kind: usd
+  prim_path: /fabrica_plumbers_block_2
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd
+  position:
+  - 0.266153511
+  - 0.14496027
+  - 0.105733198
+  orientation:
+  - -0.617076959
+  - -0.345276739
+  - -0.345276739
+  - 0.617076959
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  rigid_body: true
+  static_friction: 0.9
+  dynamic_friction: 0.8
+  restitution: 0.0
+  mass: 0.02
+  tracked: true
+- name: fabrica_plumbers_block_3
+  kind: usd
+  prim_path: /fabrica_plumbers_block_3
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd
+  position:
+  - 0.326153511
+  - 0.246863217
+  - 0.060398473
+  orientation:
+  - 0.672893101
+  - 0.21728984
+  - -0.21728984
+  - 0.672893101
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  rigid_body: true
+  static_friction: 0.9
+  dynamic_friction: 0.8
+  restitution: 0.0
+  mass: 0.01
+- name: fabrica_plumbers_block_4
+  kind: usd
+  prim_path: /fabrica_plumbers_block_4
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd
+  position:
+  - 0.38136151
+  - 0.122594762
+  - 0.044364558
+  orientation:
+  - -0.625568882
+  - 0.327990864
+  - 0.328703751
+  - 0.626928553
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  rigid_body: true
+  static_friction: 0.9
+  dynamic_friction: 0.8
+  restitution: 0.0
+  mass: 0.01
+- name: optical_board
+  kind: usd
+  prim_path: /optical_board
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_support/optical_board.usda
+  position:
+  - 0.594975526
+  - -0.134500145
+  - 0.012551339
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: false
+  rigid_body: false
+  tracked: false
+  static_friction: 0.3
+  dynamic_friction: 0.3
+  restitution: 0.0
+- name: fabrica_fixture
+  kind: usd
+  prim_path: /fabrica_fixture
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_fixture/plumbers_block/fixture_pickup_tray.usda
+  position:
+  - 0.32
+  - -0.03
+  - 0.015551339
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: false
+  rigid_body: false
+  tracked: false
+  static_friction: 0.8
+  dynamic_friction: 0.8
+  restitution: 0.0
+- name: assembled_plumbers_preview
+  kind: usd
+  prim_path: /assembled_plumbers_preview
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/assembled/fabrica_plumbers_block_assembled.usda
+  position:
+  - 0.32
+  - 0.42
+  - 0.067459719
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: false
+  auto_collider: false
+  rigid_body: false
+  tracked: false
+targets:
+- name: part_0_seated
+  reference: world
+  position:
+  - 0.32000006
+  - -0.18
+  - 0.067459719
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+- name: part_1_seated
+  reference: world
+  position:
+  - 0.28
+  - -0.1787342
+  - 0.085551339
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+- name: part_2_seated
+  reference: world
+  position:
+  - 0.32
+  - -0.1787342
+  - 0.048051339
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+- name: part_3_seated
+  reference: world
+  position:
+  - 0.32
+  - -0.1787342
+  - 0.093624989
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+- name: part_4_seated
+  reference: world
+  position:
+  - 0.36
+  - -0.1787342
+  - 0.085551339
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+- name: part_0_pickup
+  reference: world
+  position:
+  - 0.327514971
+  - 0.138142468
+  - 0.062522024
+  orientation:
+  - 0.962660526
+  - -0.270711491
+  - 0.0
+  - 0.0
+- name: part_1_pickup
+  reference: world
+  position:
+  - 0.38136146
+  - 0.191128957
+  - 0.055647345
+  orientation:
+  - 0.702445846
+  - -0.087475325
+  - 0.087286216
+  - 0.700927256
+- name: part_2_pickup
+  reference: world
+  position:
+  - 0.266153511
+  - 0.14496027
+  - 0.105733198
+  orientation:
+  - -0.617076959
+  - -0.345276739
+  - -0.345276739
+  - 0.617076959
+- name: part_3_pickup
+  reference: world
+  position:
+  - 0.326153511
+  - 0.246863217
+  - 0.060398473
+  orientation:
+  - 0.672893101
+  - 0.21728984
+  - -0.21728984
+  - 0.672893101
+- name: part_4_pickup
+  reference: world
+  position:
+  - 0.38136151
+  - 0.122594762
+  - 0.044364558
+  orientation:
+  - -0.625568882
+  - 0.327990864
+  - 0.328703751
+  - 0.626928553
+- name: left_wait
+  reference: world
+  position:
+  - 0.24
+  - -0.42
+  - 0.52
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: true
+- name: right_wait
+  reference: world
+  position:
+  - 0.24
+  - 0.42
+  - 0.52
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: true
+- name: left_retreat
+  reference: world
+  position:
+  - 0.14
+  - -0.58
+  - 0.56
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: true
+- name: right_retreat
+  reference: world
+  position:
+  - 0.14
+  - 0.58
+  - 0.56
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: true
+phases:
+- name: initial_wait
+  robot_targets:
+    franka_left: left_wait
+    franka_right: right_wait
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  lock:
+  - object: fabrica_plumbers_block_0
+    target: part_0_pickup
+    position_tolerance: 0.03
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_1
+    target: part_1_pickup
+    position_tolerance: 0.03
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_2
+    target: part_2_pickup
+    position_tolerance: 0.03
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_3
+    target: part_3_pickup
+    position_tolerance: 0.03
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_4
+    target: part_4_pickup
+    position_tolerance: 0.03
+    orientation_tolerance: 3.1416
+  advance:
+    type: timer
+    min_steps: 24
+- name: approach_base_part_2_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_right: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_left
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 5
+    trajectory_stride: 6
+    gripper_ratio: 0.6
+  advance:
+    type: timer
+    min_steps: 60
+- name: grasp_base_part_2_fixed_to_gripper
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: close
+    franka_right: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_left
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 5
+    trajectory_endpoint: last
+    gripper_ratio: 0.5
+  attach:
+  - object: fabrica_plumbers_block_2
+    robot: franka_left
+    target: part_2_pickup
+    attachment_mode: fixed_joint
+    disable_collision_on_attach: false
+    require_contact: false
+    require_physical_contact: false
+    require_target_reached_for_attach: false
+    position_tolerance: 2.0
+    orientation_tolerance: 3.1416
+    support_height_tolerance: null
+    gripper_closed_threshold: 0.05
+    hold_position_slip_tolerance: 0.08
+    hold_orientation_slip_tolerance: 1.2
+  advance:
+    type: timer
+    min_steps: 36
+- name: place_base_part_2_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: close
+    franka_right: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_left
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 7
+    trajectory_stride: 6
+    gripper_ratio: 0.5
+  advance:
+    type: timer
+    min_steps: 72
+- name: lock_part_2_seated
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.18
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  lock:
+  - object: fabrica_plumbers_block_2
+    target: part_2_seated
+    position_tolerance: 0.05
+    orientation_tolerance: 3.1416
+  advance:
+    type: timer
+    min_steps: 48
+- name: approach_part_0_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 10
+    trajectory_stride: 6
+    gripper_ratio: 0.6340365
+  advance:
+    type: timer
+    min_steps: 60
+- name: grasp_part_0_fixed_to_gripper
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 10
+    trajectory_endpoint: last
+    gripper_ratio: 0.5340365
+  attach:
+  - object: fabrica_plumbers_block_0
+    robot: franka_right
+    target: part_0_pickup
+    attachment_mode: fixed_joint
+    disable_collision_on_attach: false
+    require_contact: false
+    require_physical_contact: false
+    require_target_reached_for_attach: false
+    position_tolerance: 2.0
+    orientation_tolerance: 3.1416
+    support_height_tolerance: null
+    gripper_closed_threshold: 0.05
+    hold_position_slip_tolerance: 0.08
+    hold_orientation_slip_tolerance: 1.2
+  advance:
+    type: timer
+    min_steps: 36
+- name: transport_part_0_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 12
+    trajectory_stride: 6
+    gripper_ratio: 0.5340365
+  advance:
+    type: timer
+    min_steps: 72
+- name: preinsert_part_0_official_q
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    plug_socket_pair:
+    - '0'
+    - '2'
+    which: preassembly
+    gripper_ratio: 0.5340365
+  advance:
+    type: timer
+    min_steps: 36
+- name: insert_part_0_fixplug_rl
+  timeout_steps: 980
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_fixplug_rl
+    robot: franka_right
+    held_object: fabrica_plumbers_block_0
+    socket_object: fabrica_plumbers_block_2
+    held_target: part_0_seated
+    plug_socket_pair:
+    - '0'
+    - '2'
+    backend: fabrica_fixplug
+    checkpoint: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/sr_gen_plumbers_block.pth
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    fallback: fail
+    require_success: true
+    activation_payload_distance: 0.0
+    max_position_step: 0.006
+  advance:
+    type: all_of
+    min_steps: 1
+    conditions:
+    - type: object_targets_reached
+      objects:
+      - object: fabrica_plumbers_block_0
+        target: part_0_seated
+        position_tolerance: 0.018
+        orientation_tolerance: 3.1416
+- name: lock_part_0_seated
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.18
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  lock:
+  - object: fabrica_plumbers_block_0
+    target: part_0_seated
+    position_tolerance: 0.05
+    orientation_tolerance: 3.1416
+  advance:
+    type: timer
+    min_steps: 40
+- name: approach_part_3_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 17
+    trajectory_stride: 6
+    gripper_ratio: 0.6
+  advance:
+    type: timer
+    min_steps: 67
+- name: grasp_part_3_fixed_to_gripper
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 17
+    trajectory_endpoint: last
+    gripper_ratio: 0.5
+  attach:
+  - object: fabrica_plumbers_block_3
+    robot: franka_right
+    target: part_3_pickup
+    attachment_mode: fixed_joint
+    disable_collision_on_attach: false
+    require_contact: false
+    require_physical_contact: false
+    require_target_reached_for_attach: false
+    position_tolerance: 2.0
+    orientation_tolerance: 3.1416
+    support_height_tolerance: null
+    gripper_closed_threshold: 0.05
+    hold_position_slip_tolerance: 0.08
+    hold_orientation_slip_tolerance: 1.2
+  advance:
+    type: timer
+    min_steps: 36
+- name: transport_part_3_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 19
+    trajectory_stride: 6
+    gripper_ratio: 0.5
+  advance:
+    type: timer
+    min_steps: 72
+- name: preinsert_part_3_official_q
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    plug_socket_pair:
+    - '3'
+    - '2'
+    which: preassembly
+    gripper_ratio: 0.5
+  advance:
+    type: timer
+    min_steps: 36
+- name: insert_part_3_fixplug_rl
+  timeout_steps: 980
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_fixplug_rl
+    robot: franka_right
+    held_object: fabrica_plumbers_block_3
+    socket_object: fabrica_plumbers_block_2
+    held_target: part_3_seated
+    plug_socket_pair:
+    - '3'
+    - '2'
+    backend: fabrica_fixplug
+    checkpoint: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/sr_gen_plumbers_block.pth
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    fallback: fail
+    require_success: true
+    activation_payload_distance: 0.0
+    max_position_step: 0.006
+  advance:
+    type: all_of
+    min_steps: 1
+    conditions:
+    - type: object_targets_reached
+      objects:
+      - object: fabrica_plumbers_block_3
+        target: part_3_seated
+        position_tolerance: 0.018
+        orientation_tolerance: 3.1416
+- name: lock_part_3_seated
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.18
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  lock:
+  - object: fabrica_plumbers_block_3
+    target: part_3_seated
+    position_tolerance: 0.05
+    orientation_tolerance: 3.1416
+  advance:
+    type: timer
+    min_steps: 40
+- name: approach_part_1_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 27
+    trajectory_stride: 6
+    gripper_ratio: 0.41212537041071695
+  advance:
+    type: timer
+    min_steps: 60
+- name: grasp_part_1_fixed_to_gripper
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 27
+    trajectory_endpoint: last
+    gripper_ratio: 0.3121253704107169
+  attach:
+  - object: fabrica_plumbers_block_1
+    robot: franka_right
+    target: part_1_pickup
+    attachment_mode: fixed_joint
+    disable_collision_on_attach: false
+    require_contact: false
+    require_physical_contact: false
+    require_target_reached_for_attach: false
+    position_tolerance: 2.0
+    orientation_tolerance: 3.1416
+    support_height_tolerance: null
+    gripper_closed_threshold: 0.05
+    hold_position_slip_tolerance: 0.08
+    hold_orientation_slip_tolerance: 1.2
+  advance:
+    type: timer
+    min_steps: 36
+- name: transport_part_1_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 29
+    trajectory_stride: 6
+    gripper_ratio: 0.3121253704107169
+  advance:
+    type: timer
+    min_steps: 72
+- name: preinsert_part_1_official_q
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    plug_socket_pair:
+    - '1'
+    - '3'
+    which: preassembly
+    gripper_ratio: 0.3121253704107169
+  advance:
+    type: timer
+    min_steps: 36
+- name: insert_part_1_fixplug_rl
+  timeout_steps: 980
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_fixplug_rl
+    robot: franka_right
+    held_object: fabrica_plumbers_block_1
+    socket_object: fabrica_plumbers_block_3
+    held_target: part_1_seated
+    plug_socket_pair:
+    - '1'
+    - '3'
+    backend: fabrica_fixplug
+    checkpoint: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/sr_gen_plumbers_block.pth
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    fallback: fail
+    require_success: true
+    activation_payload_distance: 0.0
+    max_position_step: 0.006
+  advance:
+    type: all_of
+    min_steps: 1
+    conditions:
+    - type: object_targets_reached
+      objects:
+      - object: fabrica_plumbers_block_1
+        target: part_1_seated
+        position_tolerance: 0.018
+        orientation_tolerance: 3.1416
+- name: lock_part_1_seated
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.18
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  lock:
+  - object: fabrica_plumbers_block_1
+    target: part_1_seated
+    position_tolerance: 0.05
+    orientation_tolerance: 3.1416
+  advance:
+    type: timer
+    min_steps: 40
+- name: approach_part_4_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 34
+    trajectory_stride: 6
+    gripper_ratio: 0.41212470114446387
+  advance:
+    type: timer
+    min_steps: 60
+- name: grasp_part_4_fixed_to_gripper
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 34
+    trajectory_endpoint: last
+    gripper_ratio: 0.31212470114446383
+  attach:
+  - object: fabrica_plumbers_block_4
+    robot: franka_right
+    target: part_4_pickup
+    attachment_mode: fixed_joint
+    disable_collision_on_attach: false
+    require_contact: false
+    require_physical_contact: false
+    require_target_reached_for_attach: false
+    position_tolerance: 2.0
+    orientation_tolerance: 3.1416
+    support_height_tolerance: null
+    gripper_closed_threshold: 0.05
+    hold_position_slip_tolerance: 0.08
+    hold_orientation_slip_tolerance: 1.2
+  advance:
+    type: timer
+    min_steps: 36
+- name: transport_part_4_official
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    motion_path: third_part/Fabrica/logs/codex_plumbers_block_official/plumbers_block/motion.pkl
+    motion_index: 36
+    trajectory_stride: 6
+    gripper_ratio: 0.31212470114446383
+  advance:
+    type: timer
+    min_steps: 72
+- name: preinsert_part_4_official_q
+  timeout_steps: 520
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+  local_skill:
+    name: fabrica_official_joint_pose
+    robot: franka_right
+    fallback: fail
+    require_success: true
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    plug_socket_pair:
+    - '4'
+    - '3'
+    which: preassembly
+    gripper_ratio: 0.31212470114446383
+  advance:
+    type: timer
+    min_steps: 36
+- name: insert_part_4_fixplug_rl
+  timeout_steps: 980
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+  gripper_commands:
+    franka_left: open
+    franka_right: close
+  local_skill:
+    name: fabrica_fixplug_rl
+    robot: franka_right
+    held_object: fabrica_plumbers_block_4
+    socket_object: fabrica_plumbers_block_3
+    held_target: part_4_seated
+    plug_socket_pair:
+    - '4'
+    - '3'
+    backend: fabrica_fixplug
+    checkpoint: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/sr_gen_plumbers_block.pth
+    plan_info: roboassemblybench/assets/Fabrica/checkpoints/plumbers_block_fixplug_rl/plumbers_block_plan_info.pkl
+    fallback: fail
+    require_success: true
+    activation_payload_distance: 0.0
+    max_position_step: 0.006
+  advance:
+    type: all_of
+    min_steps: 1
+    conditions:
+    - type: object_targets_reached
+      objects:
+      - object: fabrica_plumbers_block_4
+        target: part_4_seated
+        position_tolerance: 0.018
+        orientation_tolerance: 3.1416
+- name: lock_part_4_seated
+  timeout_steps: 260
+  timeout_action: fail
+  robot_targets:
+    franka_left:
+      target: left_wait
+      position_tolerance: 0.12
+    franka_right:
+      target: right_wait
+      position_tolerance: 0.18
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  lock:
+  - object: fabrica_plumbers_block_4
+    target: part_4_seated
+    position_tolerance: 0.05
+    orientation_tolerance: 3.1416
+  advance:
+    type: timer
+    min_steps: 40
+- name: retreat
+  robot_targets:
+    franka_left: left_retreat
+    franka_right: right_retreat
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  advance:
+    type: robot_targets_reached
+    min_steps: 80
+    tolerance: 0.1
+success:
+- object: fabrica_plumbers_block_0
+  target: part_0_seated
+  position_tolerance: 0.035
+  orientation_tolerance: 3.1416
+  require_released: true
+  require_static: false
+- object: fabrica_plumbers_block_1
+  target: part_1_seated
+  position_tolerance: 0.035
+  orientation_tolerance: 3.1416
+  require_released: true
+  require_static: false
+- object: fabrica_plumbers_block_2
+  target: part_2_seated
+  position_tolerance: 0.035
+  orientation_tolerance: 3.1416
+  require_released: true
+  require_static: false
+- object: fabrica_plumbers_block_3
+  target: part_3_seated
+  position_tolerance: 0.035
+  orientation_tolerance: 3.1416
+  require_released: true
+  require_static: false
+- object: fabrica_plumbers_block_4
+  target: part_4_seated
+  position_tolerance: 0.035
+  orientation_tolerance: 3.1416
+  require_released: true
+  require_static: false
