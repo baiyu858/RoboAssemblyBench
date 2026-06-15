@@ -51,7 +51,10 @@ class Franka(IsaacsimArticulation):
         if gripper_dof_names is None:
             gripper_dof_names = ['panda_finger_joint1', 'panda_finger_joint2']
         if gripper_open_position is None:
-            gripper_open_position = np.array([0.05, 0.05]) / get_stage_units()
+            # Fabrica's Panda model and the Franka joint limits both use a
+            # 4 cm maximum displacement per finger.  A 5 cm range changes all
+            # official grasp ratios and leaves the jaws visibly off the part.
+            gripper_open_position = np.array([0.04, 0.04]) / get_stage_units()
         if gripper_closed_position is None:
             gripper_closed_position = np.array([0.0, 0.0])
         if deltas is None:

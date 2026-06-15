@@ -1,0 +1,40 @@
+extends: _base.yaml
+task_name: fabrica_plumbers_block_fixplug_rl
+title: Fabrica plumbers block FixPlug RL
+summary: Official Fabrica plumbers-block phase flow using official joint trajectories for pickup/transport and local FixPlug
+  RL for insertion.
+task_description: Two Franka arms execute a phase-based plumbers-block assembly. The right arm uses official Fabrica joint
+  trajectories for approach, pickup, and transport, fixes the active plug to the gripper with a physical joint, then switches
+  to the trained Fabrica FixPlug RL checkpoint for the contact insertion window.
+metadata:
+  tags:
+  - fabrica
+  - plumbers-block
+  - fixplug-rl
+  - official-plan
+  object_roles:
+    fabrica_plumbers_block_0:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    fabrica_plumbers_block_1:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    fabrica_plumbers_block_2:
+      role: movable_then_locked_base_socket
+      summary: Base part moved from the pickup fixture using the official plan, then locked as the fixed socket reference
+        for insertion.
+    fabrica_plumbers_block_3:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    fabrica_plumbers_block_4:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    optical_board:
+      role: locating_board
+      summary: Black Fabrica optical-board mesh loaded from the plumbers-block full bundle.
+    fabrica_fixture:
+      role: official_pickup_fixture
+      summary: Official Fabrica generated pickup fixture for plumbers_block.
+    assembled_plumbers_preview:
+      role: assembled_reference_visual
+      summary: Complete plumbers-block assembled USD preview placed beside the active task.

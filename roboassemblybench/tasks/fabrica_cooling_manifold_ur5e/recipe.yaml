@@ -1,0 +1,124 @@
+extends: fabrica_cooling_manifold
+task_name: fabrica_cooling_manifold_ur5e
+prompt: 'Two UR5e arms with Robotiq 2F-85 grippers assemble a Fabrica cooling-manifold module in the shared factory workcell.'
+source_config_path: roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
+  asset_note: This variant replaces the Franka robots and cooling-manifold USDs with the bundled UR5e + Robotiq Fabrica handoff assets. The inherited phase names still use franka_left/franka_right as logical robot identifiers for compatibility.
+  asset_references:
+  - name: fabrica_ur5e_cooling_fullbundle
+    kind: directory
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
+    role: source_bundle
+  - name: fabrica_ur5e_scene_usda
+    kind: scene
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/scene/scene.usda
+    role: source_scene_reference
+  - name: fabrica_ur5e_scene_spec
+    kind: manifest
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/scene/scene_spec.json
+    role: source_scene_layout
+  - name: ur5e_robotiq_task_wrapper
+    kind: robot_usd
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
+    role: robot_wrapper_with_variants
+  - name: fabrica_ur5e_cooling_manifest
+    kind: manifest
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/manifest.json
+    role: assembly_metadata
+  - name: fabrica_ur5e_cooling_assembled_preview
+    kind: usd
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/assembled/fabrica_cooling_manifold_assembled.usda
+    role: assembled_reference_visual
+  tags:
+  - fabrica
+  - cooling-manifold
+  - ur5e
+  - robotiq
+  - dual-arm
+  local_skills:
+    factory_insert_rl:
+      trained_robot: franka1
+      adapter_status: not_validated_for_ur5e_task_scene_only
+      require_success: false
+      note: The inherited Franka checkpoint metadata is kept only as provenance. A UR5e policy or retargeting layer is required before RL insertion can be considered valid.
+  fabrica_official_layout:
+    source_scene: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/scene/scene.usda
+    source_scene_spec: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/scene/scene_spec.json
+    robot_layout: dual_ur5e_robotiq_from_bundle_scene_spec
+robots:
+- name: franka_left
+  type: UR5eRobot
+  prim_path: /ur5e_left
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
+  position:
+  - 0.05
+  - 0.25
+  - 0.998051
+  orientation:
+  - 0.707106781
+  - 0.0
+  - 0.0
+  - -0.707106781
+  end_effector_prim_name: tool0
+  ik_base_prim_name: base_link
+  gripper_dof_name: finger_joint
+  gripper_open_position: 0.0
+  gripper_closed_position: 0.80
+  hand_link_name: wrist_3_link
+  left_finger_link_name: left_inner_finger
+  right_finger_link_name: right_inner_finger
+  initial_joint_positions:
+    shoulder_pan_joint: -1.5707963268
+    shoulder_lift_joint: -1.5707963268
+    elbow_joint: 1.5707963268
+    wrist_1_joint: -1.5707963268
+    wrist_2_joint: -1.5707963268
+    wrist_3_joint: 0.0
+    finger_joint: 0.0
+- name: franka_right
+  type: UR5eRobot
+  prim_path: /ur5e_right
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
+  position:
+  - 0.95
+  - 0.25
+  - 0.998051
+  orientation:
+  - 0.707106781
+  - 0.0
+  - 0.0
+  - -0.707106781
+  end_effector_prim_name: tool0
+  ik_base_prim_name: base_link
+  gripper_dof_name: finger_joint
+  gripper_open_position: 0.0
+  gripper_closed_position: 0.80
+  hand_link_name: wrist_3_link
+  left_finger_link_name: left_inner_finger
+  right_finger_link_name: right_inner_finger
+  initial_joint_positions:
+    shoulder_pan_joint: -1.5707963268
+    shoulder_lift_joint: -1.5707963268
+    elbow_joint: 1.5707963268
+    wrist_1_joint: -1.5707963268
+    wrist_2_joint: -1.5707963268
+    wrist_3_joint: 0.0
+    finger_joint: 0.0
+objects:
+- name: fabrica_cooling_manifold_0
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd
+- name: fabrica_cooling_manifold_1
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd
+- name: fabrica_cooling_manifold_2
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd
+- name: fabrica_cooling_manifold_3
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd
+- name: fabrica_cooling_manifold_4
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd
+- name: fabrica_cooling_manifold_5
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd
+- name: fabrica_cooling_manifold_6
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd
+- name: assembled_manifold_preview
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/assembled/fabrica_cooling_manifold_assembled.usda

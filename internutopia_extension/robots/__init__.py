@@ -8,4 +8,5 @@ from internutopia_extension.robots import (
     humanoidbench_h1,
     jetbot,
     mocap_controlled_franka,
+    ur5e,
 )

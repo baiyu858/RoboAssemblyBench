@@ -1,17 +1,21 @@
 extends: _dual_franka_assembly_base.yaml
-task_name: fabrica_cooling_manifold
-prompt: 'Two Franka arms assemble a Fabrica cooling-manifold module in the shared factory workcell: the right arm sequentially picks six loose manifold parts and inserts them into the fixed base plate.'
+task_name: fabrica_cooling_manifold_hardcoded
+prompt: 'Two Franka arms run a deterministic hardcoded Fabrica cooling-manifold assembly:
+  the right arm carries each part and inserts six components into the fixed base.'
 scene_profile: taoyuan_grscenes_tabletop
 scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
 scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
 max_steps: 9800
-phase_timeout_steps: 420
+phase_timeout_steps: 900
 phase_timeout_action: fail
 source_benchmark: fabrica
 source_config_path: roboassemblybench/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001.zip
 metadata:
   asset_source: ${BENCHMARK_ROOT}/assets/Fabrica
-  asset_note: This task reuses the existing RoboAssemblyBench factory scene profile and references the Fabrica Franka cooling-manifold full bundle for the assembly parts. Unzip the full bundle next to the zip file to make the per-part USD paths below directly loadable.
+  asset_note: This task reuses the existing RoboAssemblyBench factory scene profile
+    and references the Fabrica Franka cooling-manifold full bundle for the assembly
+    parts. Unzip the full bundle next to the zip file to make the per-part USD paths
+    below directly loadable.
   asset_references:
   - name: fabrica_franka_cooling_fullbundle
     kind: zip
@@ -37,14 +41,6 @@ metadata:
     kind: obj
     path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_support/optical_board.obj
     role: original_source_mesh
-  - name: fabrica_pickup_fixture_usd
-    kind: usd
-    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_fixture/cooling_manifold/fixture_pickup_tray.usda
-    role: official_pickup_fixture_visual
-  - name: fabrica_pickup_fixture_source_obj
-    kind: obj
-    path: ${BENCHMARK_ROOT}/../third_part/Fabrica/logs/codex_cooling_manifold_official/cooling_manifold/fixture/fixture.obj
-    role: official_pickup_fixture_source
   tags:
   - fabrica
   - cooling-manifold
@@ -52,7 +48,9 @@ metadata:
   - usd-asset
   - dual-arm
   disable_joint_planner: true
-  planner_note: The full cooling-manifold sequence uses many close-contact insertions. Disable the optional mplib/TOPPRA joint preplanner so the scripted policy uses its online IK fallback instead of aborting on a badly conditioned path.
+  planner_note: The full cooling-manifold sequence uses many close-contact insertions.
+    Disable the optional mplib/TOPPRA joint preplanner so the scripted policy uses
+    its online IK fallback instead of aborting on a badly conditioned path.
   local_skills:
     factory_insert_rl:
       backend: isaaclab_factory
@@ -75,21 +73,32 @@ metadata:
       trained_robot: franka1
       adapter_status: checkpoint_driven_ik_delta_adapter_not_official_cooling_manifold_policy
       require_success: true
+    hardcoded_insert:
+      backend: deterministic_payload_delta
+      adapter: toolkits.factory_dual_franka_assembly.factory_insert_adapter:HardcodedFabricaInsertAdapter
+      coarse_step: 0.006
+      fine_step: 0.002
+      final_step: 0.0006
+      coarse_distance: 0.035
+      fine_distance: 0.01
+      snap_when_close: false
+      keep_current_orientation: true
+      fallback: fail
+      require_success: true
   fabrica_official_layout:
     source_scene: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/scene/scene.usda
     source_scene_spec: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/scene/scene_spec.json
     fixed_base_pose: assembled_display_part_1
-    loose_part_pose_source: official traj[0] part poses on generated pickup fixture
-    pickup_fixture_source: third_part/Fabrica/logs/codex_cooling_manifold_official/cooling_manifold/fixture/fixture.obj
-    pickup_pose_source: third_part/Fabrica/logs/codex_cooling_manifold_official/cooling_manifold/fixture/pickup.json
-    assembly_order: &id001
+    loose_part_pose_source: scene.usda loose part Xforms
+    assembly_order:
     - 6
     - 2
     - 5
     - 3
     - 0
     - 4
-    note: All mesh scales remain [1, 1, 1]; coordinates are converted to recipe-local z by subtracting the active workspace_offset z.
+    note: All mesh scales remain [1, 1, 1]; coordinates are converted to recipe-local
+      z by subtracting the active workspace_offset z.
   fabrica_official_grasps:
     '6':
       selected_move_grasp_id: 1089
@@ -157,6 +166,11 @@ metadata:
       - 0.05519818
       - -0.00726612
       - 0.09764284
+  hardcoded_demo:
+    mode: deterministic_fixplug_style_insert
+    note: No RL checkpoint is used. Transport uses fixed-joint payload carry; insertion
+      uses small deterministic payload-position steps toward seated targets, then
+      locks each part after release.
 robots:
 - name: franka_left
   prim_path: /franka_left
@@ -194,14 +208,9 @@ objects:
   prim_path: /fabrica_cooling_manifold_0
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd
   position:
-  - 0.323437668
-  - 0.245356877
-  - 0.044393867
-  orientation:
-  - 0.50229179
-  - 0.073647224
-  - -0.124987079
-  - 0.852441948
+  - 0.51
+  - -0.185499855
+  - 0.038801339
   scale:
   - 1.0
   - 1.0
@@ -218,8 +227,8 @@ objects:
   prim_path: /fabrica_cooling_manifold_1
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd
   position:
-  - 0.27995105
-  - -0.1699034
+  - 0.12995105
+  - -0.035403255
   - 0.033051339
   scale:
   - 1.0
@@ -238,14 +247,9 @@ objects:
   prim_path: /fabrica_cooling_manifold_2
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd
   position:
-  - 0.218291557
-  - 0.244711188
-  - 0.038252924
-  orientation:
-  - -0.362635619
-  - 0.117192345
-  - 0.284302451
-  - 0.879734891
+  - 0.81
+  - -0.185499855
+  - 0.033051339
   scale:
   - 1.0
   - 1.0
@@ -262,14 +266,9 @@ objects:
   prim_path: /fabrica_cooling_manifold_3
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd
   position:
-  - 0.276291532
-  - 0.239941214
-  - 0.038790792
-  orientation:
-  - 0.928883153
-  - -0.075531611
-  - 0.029386759
-  - 0.361396573
+  - 0.51
+  - -0.035499855
+  - 0.033051339
   scale:
   - 1.0
   - 1.0
@@ -286,14 +285,9 @@ objects:
   prim_path: /fabrica_cooling_manifold_4
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd
   position:
-  - 0.323437668
-  - 0.293011674
-  - 0.044395086
-  orientation:
-  - 0.858369679
-  - 0.074030658
-  - 0.043621729
-  - -0.505784639
+  - 0.66
+  - -0.035499855
+  - 0.038801339
   scale:
   - 1.0
   - 1.0
@@ -310,14 +304,9 @@ objects:
   prim_path: /fabrica_cooling_manifold_5
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd
   position:
-  - 0.276291579
-  - 0.283428573
-  - 0.038336096
-  orientation:
-  - 0.424031364
-  - -0.01088362
-  - 0.023235939
-  - 0.905283955
+  - 0.81
+  - -0.035499855
+  - 0.033051339
   scale:
   - 1.0
   - 1.0
@@ -334,14 +323,9 @@ objects:
   prim_path: /fabrica_cooling_manifold_6
   usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd
   position:
-  - 0.218291557
-  - 0.29368158
-  - 0.038865226
-  orientation:
-  - 0.382561331
-  - -0.036132403
-  - 0.086810858
-  - 0.919132826
+  - 0.51
+  - 0.114500145
+  - 0.033051339
   scale:
   - 1.0
   - 1.0
@@ -371,30 +355,6 @@ objects:
   tracked: false
   static_friction: 0.3
   dynamic_friction: 0.3
-  restitution: 0.0
-- name: fabrica_fixture
-  kind: usd
-  prim_path: /fabrica_fixture
-  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/assets/fabrica_fixture/cooling_manifold/fixture_pickup_tray.usda
-  position:
-  - 0.28
-  - -0.02
-  - 0.015551339
-  orientation:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
-  scale:
-  - 1.0
-  - 1.0
-  - 1.0
-  collider: true
-  auto_collider: false
-  rigid_body: false
-  tracked: false
-  static_friction: 0.8
-  dynamic_friction: 0.8
   restitution: 0.0
 - name: assembled_manifold_preview
   kind: usd
@@ -950,7 +910,7 @@ phases:
     min_steps: 12
     tolerance: 0.04
 - name: right_grasp_part_6
-  timeout_steps: 380
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -968,32 +928,25 @@ phases:
     object: fabrica_cooling_manifold_6
     target: part_6_grasp_close
     fallback: native_phase_policy
+    note: Hardcoded recipe uses fixed_joint attach below after reaching grasp pose.
   advance:
-    type: all_of
-    min_steps: 36
-    conditions:
-    - type: robot_targets_reached
-      tolerance: 0.035
-    - type: robot_object_contact
-      object: fabrica_cooling_manifold_6
-      robot: franka_right
-      attachment_mode: pure_physical_grasp
-      require_contact: true
-      require_physical_contact: true
-      require_dual_finger_contact: true
-      allow_top_contact_fallback: false
-      allow_enclosure_fallback: false
-      finger_contact_distance: 0.01
-      physical_contact_axes: y
-      physical_attach_surface_gap: 0.01
-      contact_box_offset:
-      - 0.0
-      - 0.0
-      - 0.02
-      contact_box_scale:
-      - 0.08
-      - 0.06
-      - 0.05
+    type: object_attached
+    object: fabrica_cooling_manifold_6
+    robot: franka_right
+    min_steps: 10
+  attach:
+  - object: fabrica_cooling_manifold_6
+    robot: franka_right
+    target: part_6_grasp_close
+    attachment_mode: fixed_joint
+    disable_collision_on_attach: false
+    require_contact: false
+    require_physical_contact: false
+    require_target_reached_for_attach: true
+    position_tolerance: 0.05
+    orientation_tolerance: 0.8
+    gripper_closed_threshold: 0.05
+    post_attach_settle_steps: 8
 - name: right_lift_part_6
   timeout_steps: 340
   timeout_action: fail
@@ -1004,20 +957,14 @@ phases:
     franka_right:
       target: part_6_lift
       position_tolerance: 0.07
+      payload_object: fabrica_cooling_manifold_6
   gripper_commands:
     franka_left: open
     franka_right: close
   advance:
-    type: all_of
-    min_steps: 24
-    conditions:
-    - type: robot_targets_reached
-      tolerance: 0.07
-    - type: object_lifted
-      object: fabrica_cooling_manifold_6
-      robot: franka_right
-      require_attached: false
-      min_lift: 0.035
+    type: robot_targets_reached
+    min_steps: 10
+    tolerance: 0.07
 - name: right_preseat_part_6
   timeout_steps: 420
   timeout_action: fail
@@ -1028,6 +975,7 @@ phases:
     franka_right:
       target: part_6_preseat
       position_tolerance: 0.08
+      payload_object: fabrica_cooling_manifold_6
   gripper_commands:
     franka_left: open
     franka_right: close
@@ -1036,7 +984,7 @@ phases:
     min_steps: 12
     tolerance: 0.07
 - name: right_seat_part_6
-  timeout_steps: 900
+  timeout_steps: 1200
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1045,41 +993,39 @@ phases:
     franka_right:
       target: part_6_seat_robot
       payload_target: part_6_seated
-      orientation_tolerance: 0.45
+      orientation_tolerance: 0.8
       position_tolerance: 0.09
+      payload_object: fabrica_cooling_manifold_6
+      payload_relative_pose_source: attached
   gripper_commands:
     franka_left: open
     franka_right: close
   local_skill:
-    name: factory_insert_rl
+    name: hardcoded_insert
     robot: franka_right
     held_object: fabrica_cooling_manifold_6
     socket_object: fabrica_cooling_manifold_1
     held_target: part_6_seated
-    checkpoint: checkpoints/Factory/test/nn/Factory.pth
-    backend: isaaclab_factory
-    fallback: native_phase_policy
-    require_success: false
-    official_fabrica_order: *id001
-    official_fabrica_pair:
-    - '6'
-    - '1'
-    trained_task: external Factory peg insertion checkpoint, not official cooling_manifold policy
+    coarse_step: 0.006
+    fine_step: 0.002
+    final_step: 0.0006
+    coarse_distance: 0.035
+    fine_distance: 0.01
+    fallback: fail
+    require_success: true
   advance:
     type: all_of
-    min_steps: 40
+    min_steps: 30
     conditions:
-    - type: robot_targets_reached
-      tolerance: 0.06
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_6
         target: part_6_seated
-        position_tolerance: 0.012
+        position_tolerance: 0.006
         orientation_tolerance: 3.1416
 - name: release_part_6
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1093,9 +1039,18 @@ phases:
     franka_right: open
   advance:
     type: timer
-    min_steps: 28
+    min_steps: 24
+  detach:
+  - fabrica_cooling_manifold_6
+  lock:
+  - object: fabrica_cooling_manifold_6
+    target: part_6_seated
+    snap_on_open: true
+    release_snap_steps: 10
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: settle_part_6
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1109,20 +1064,26 @@ phases:
     franka_right: open
   advance:
     type: all_of
-    min_steps: 16
+    min_steps: 12
     conditions:
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_6
         target: part_6_seated
-        position_tolerance: 0.04
+        position_tolerance: 0.012
         orientation_tolerance: 3.1416
     - type: objects_static
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 1.0
-      objects:
-      - fabrica_cooling_manifold_6
+      linear_velocity_threshold: 0.04
+    - type: robot_targets_reached
+      tolerance: 0.08
+  lock:
+  - object: fabrica_cooling_manifold_6
+    target: part_6_seated
+    snap_on_open: true
+    release_snap_steps: 1
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: right_approach_part_2
   robot_targets:
     franka_left:
@@ -1156,7 +1117,7 @@ phases:
     min_steps: 12
     tolerance: 0.04
 - name: right_grasp_part_2
-  timeout_steps: 380
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1174,38 +1135,25 @@ phases:
     object: fabrica_cooling_manifold_2
     target: part_2_grasp_close
     fallback: native_phase_policy
+    note: Hardcoded recipe uses fixed_joint attach below after reaching grasp pose.
   attach:
   - object: fabrica_cooling_manifold_2
     robot: franka_right
     target: part_2_grasp_close
-    position_tolerance: 0.025
-    attachment_mode: pure_physical_grasp
+    attachment_mode: fixed_joint
     disable_collision_on_attach: false
-    require_contact: true
-    require_physical_contact: true
+    require_contact: false
+    require_physical_contact: false
     require_target_reached_for_attach: true
-    require_dual_finger_contact: true
-    allow_top_contact_fallback: false
-    allow_enclosure_fallback: false
-    finger_contact_distance: 0.01
-    physical_contact_axes: y
-    physical_attach_surface_gap: 0.01
-    contact_box_offset:
-    - 0.0
-    - 0.0
-    - 0.02
-    contact_box_scale:
-    - 0.08
-    - 0.06
-    - 0.05
-    gripper_closed_threshold: 0.03
-    gripper_closed_margin: 0.006
-    post_attach_settle_steps: 18
+    position_tolerance: 0.05
+    orientation_tolerance: 0.8
+    gripper_closed_threshold: 0.05
+    post_attach_settle_steps: 8
   advance:
     type: object_attached
     object: fabrica_cooling_manifold_2
     robot: franka_right
-    min_steps: 20
+    min_steps: 10
 - name: right_lift_part_2
   timeout_steps: 340
   timeout_action: fail
@@ -1222,7 +1170,7 @@ phases:
     franka_right: close
   advance:
     type: robot_targets_reached
-    min_steps: 12
+    min_steps: 10
     tolerance: 0.07
 - name: right_preseat_part_2
   timeout_steps: 420
@@ -1243,7 +1191,7 @@ phases:
     min_steps: 12
     tolerance: 0.07
 - name: right_seat_part_2
-  timeout_steps: 900
+  timeout_steps: 1200
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1253,41 +1201,38 @@ phases:
       target: part_2_seat_robot
       payload_object: fabrica_cooling_manifold_2
       payload_target: part_2_seated
-      orientation_tolerance: 0.45
+      orientation_tolerance: 0.8
       position_tolerance: 0.09
+      payload_relative_pose_source: attached
   gripper_commands:
     franka_left: open
     franka_right: close
   local_skill:
-    name: factory_insert_rl
+    name: hardcoded_insert
     robot: franka_right
     held_object: fabrica_cooling_manifold_2
     socket_object: fabrica_cooling_manifold_1
     held_target: part_2_seated
-    checkpoint: checkpoints/Factory/test/nn/Factory.pth
-    backend: isaaclab_factory
+    coarse_step: 0.006
+    fine_step: 0.002
+    final_step: 0.0006
+    coarse_distance: 0.035
+    fine_distance: 0.01
     fallback: fail
     require_success: true
-    official_fabrica_order: *id001
-    official_fabrica_pair:
-    - '2'
-    - '1'
-    trained_task: external Factory peg insertion checkpoint, not official cooling_manifold policy
   advance:
     type: all_of
-    min_steps: 40
+    min_steps: 30
     conditions:
-    - type: robot_targets_reached
-      tolerance: 0.06
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_2
         target: part_2_seated
-        position_tolerance: 0.025
+        position_tolerance: 0.006
         orientation_tolerance: 3.1416
 - name: release_part_2
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1303,9 +1248,16 @@ phases:
   - fabrica_cooling_manifold_2
   advance:
     type: timer
-    min_steps: 28
+    min_steps: 24
+  lock:
+  - object: fabrica_cooling_manifold_2
+    target: part_2_seated
+    snap_on_open: true
+    release_snap_steps: 10
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: settle_part_2
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1319,20 +1271,26 @@ phases:
     franka_right: open
   advance:
     type: all_of
-    min_steps: 16
+    min_steps: 12
     conditions:
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_2
         target: part_2_seated
-        position_tolerance: 0.04
+        position_tolerance: 0.012
         orientation_tolerance: 3.1416
     - type: objects_static
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 1.0
-      objects:
-      - fabrica_cooling_manifold_2
+      linear_velocity_threshold: 0.04
+    - type: robot_targets_reached
+      tolerance: 0.08
+  lock:
+  - object: fabrica_cooling_manifold_2
+    target: part_2_seated
+    snap_on_open: true
+    release_snap_steps: 1
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: right_approach_part_5
   robot_targets:
     franka_left:
@@ -1366,7 +1324,7 @@ phases:
     min_steps: 12
     tolerance: 0.04
 - name: right_grasp_part_5
-  timeout_steps: 380
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1384,38 +1342,25 @@ phases:
     object: fabrica_cooling_manifold_5
     target: part_5_grasp_close
     fallback: native_phase_policy
+    note: Hardcoded recipe uses fixed_joint attach below after reaching grasp pose.
   attach:
   - object: fabrica_cooling_manifold_5
     robot: franka_right
     target: part_5_grasp_close
-    position_tolerance: 0.025
-    attachment_mode: pure_physical_grasp
+    attachment_mode: fixed_joint
     disable_collision_on_attach: false
-    require_contact: true
-    require_physical_contact: true
+    require_contact: false
+    require_physical_contact: false
     require_target_reached_for_attach: true
-    require_dual_finger_contact: true
-    allow_top_contact_fallback: false
-    allow_enclosure_fallback: false
-    finger_contact_distance: 0.01
-    physical_contact_axes: y
-    physical_attach_surface_gap: 0.01
-    contact_box_offset:
-    - 0.0
-    - 0.0
-    - 0.02
-    contact_box_scale:
-    - 0.08
-    - 0.06
-    - 0.05
-    gripper_closed_threshold: 0.03
-    gripper_closed_margin: 0.006
-    post_attach_settle_steps: 18
+    position_tolerance: 0.05
+    orientation_tolerance: 0.8
+    gripper_closed_threshold: 0.05
+    post_attach_settle_steps: 8
   advance:
     type: object_attached
     object: fabrica_cooling_manifold_5
     robot: franka_right
-    min_steps: 20
+    min_steps: 10
 - name: right_lift_part_5
   timeout_steps: 340
   timeout_action: fail
@@ -1432,7 +1377,7 @@ phases:
     franka_right: close
   advance:
     type: robot_targets_reached
-    min_steps: 12
+    min_steps: 10
     tolerance: 0.07
 - name: right_preseat_part_5
   timeout_steps: 420
@@ -1453,7 +1398,7 @@ phases:
     min_steps: 12
     tolerance: 0.07
 - name: right_seat_part_5
-  timeout_steps: 900
+  timeout_steps: 1200
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1463,41 +1408,38 @@ phases:
       target: part_5_seat_robot
       payload_object: fabrica_cooling_manifold_5
       payload_target: part_5_seated
-      orientation_tolerance: 0.45
+      orientation_tolerance: 0.8
       position_tolerance: 0.09
+      payload_relative_pose_source: attached
   gripper_commands:
     franka_left: open
     franka_right: close
   local_skill:
-    name: factory_insert_rl
+    name: hardcoded_insert
     robot: franka_right
     held_object: fabrica_cooling_manifold_5
     socket_object: fabrica_cooling_manifold_1
     held_target: part_5_seated
-    checkpoint: checkpoints/Factory/test/nn/Factory.pth
-    backend: isaaclab_factory
+    coarse_step: 0.006
+    fine_step: 0.002
+    final_step: 0.0006
+    coarse_distance: 0.035
+    fine_distance: 0.01
     fallback: fail
     require_success: true
-    official_fabrica_order: *id001
-    official_fabrica_pair:
-    - '5'
-    - '1'
-    trained_task: external Factory peg insertion checkpoint, not official cooling_manifold policy
   advance:
     type: all_of
-    min_steps: 40
+    min_steps: 30
     conditions:
-    - type: robot_targets_reached
-      tolerance: 0.06
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_5
         target: part_5_seated
-        position_tolerance: 0.012
+        position_tolerance: 0.006
         orientation_tolerance: 3.1416
 - name: release_part_5
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1513,9 +1455,16 @@ phases:
   - fabrica_cooling_manifold_5
   advance:
     type: timer
-    min_steps: 28
+    min_steps: 24
+  lock:
+  - object: fabrica_cooling_manifold_5
+    target: part_5_seated
+    snap_on_open: true
+    release_snap_steps: 10
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: settle_part_5
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1529,20 +1478,26 @@ phases:
     franka_right: open
   advance:
     type: all_of
-    min_steps: 16
+    min_steps: 12
     conditions:
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_5
         target: part_5_seated
-        position_tolerance: 0.04
+        position_tolerance: 0.012
         orientation_tolerance: 3.1416
     - type: objects_static
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 1.0
-      objects:
-      - fabrica_cooling_manifold_5
+      linear_velocity_threshold: 0.04
+    - type: robot_targets_reached
+      tolerance: 0.08
+  lock:
+  - object: fabrica_cooling_manifold_5
+    target: part_5_seated
+    snap_on_open: true
+    release_snap_steps: 1
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: right_approach_part_3
   robot_targets:
     franka_left:
@@ -1576,7 +1531,7 @@ phases:
     min_steps: 12
     tolerance: 0.04
 - name: right_grasp_part_3
-  timeout_steps: 380
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1594,38 +1549,25 @@ phases:
     object: fabrica_cooling_manifold_3
     target: part_3_grasp_close
     fallback: native_phase_policy
+    note: Hardcoded recipe uses fixed_joint attach below after reaching grasp pose.
   attach:
   - object: fabrica_cooling_manifold_3
     robot: franka_right
     target: part_3_grasp_close
-    position_tolerance: 0.025
-    attachment_mode: pure_physical_grasp
+    attachment_mode: fixed_joint
     disable_collision_on_attach: false
-    require_contact: true
-    require_physical_contact: true
+    require_contact: false
+    require_physical_contact: false
     require_target_reached_for_attach: true
-    require_dual_finger_contact: true
-    allow_top_contact_fallback: false
-    allow_enclosure_fallback: false
-    finger_contact_distance: 0.01
-    physical_contact_axes: y
-    physical_attach_surface_gap: 0.01
-    contact_box_offset:
-    - 0.0
-    - 0.0
-    - 0.02
-    contact_box_scale:
-    - 0.08
-    - 0.06
-    - 0.05
-    gripper_closed_threshold: 0.03
-    gripper_closed_margin: 0.006
-    post_attach_settle_steps: 18
+    position_tolerance: 0.05
+    orientation_tolerance: 0.8
+    gripper_closed_threshold: 0.05
+    post_attach_settle_steps: 8
   advance:
     type: object_attached
     object: fabrica_cooling_manifold_3
     robot: franka_right
-    min_steps: 20
+    min_steps: 10
 - name: right_lift_part_3
   timeout_steps: 340
   timeout_action: fail
@@ -1642,7 +1584,7 @@ phases:
     franka_right: close
   advance:
     type: robot_targets_reached
-    min_steps: 12
+    min_steps: 10
     tolerance: 0.07
 - name: right_preseat_part_3
   timeout_steps: 420
@@ -1663,7 +1605,7 @@ phases:
     min_steps: 12
     tolerance: 0.07
 - name: right_seat_part_3
-  timeout_steps: 900
+  timeout_steps: 1200
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1673,41 +1615,38 @@ phases:
       target: part_3_seat_robot
       payload_object: fabrica_cooling_manifold_3
       payload_target: part_3_seated
-      orientation_tolerance: 0.45
+      orientation_tolerance: 0.8
       position_tolerance: 0.09
+      payload_relative_pose_source: attached
   gripper_commands:
     franka_left: open
     franka_right: close
   local_skill:
-    name: factory_insert_rl
+    name: hardcoded_insert
     robot: franka_right
     held_object: fabrica_cooling_manifold_3
     socket_object: fabrica_cooling_manifold_1
     held_target: part_3_seated
-    checkpoint: checkpoints/Factory/test/nn/Factory.pth
-    backend: isaaclab_factory
+    coarse_step: 0.006
+    fine_step: 0.002
+    final_step: 0.0006
+    coarse_distance: 0.035
+    fine_distance: 0.01
     fallback: fail
     require_success: true
-    official_fabrica_order: *id001
-    official_fabrica_pair:
-    - '3'
-    - '1'
-    trained_task: external Factory peg insertion checkpoint, not official cooling_manifold policy
   advance:
     type: all_of
-    min_steps: 40
+    min_steps: 30
     conditions:
-    - type: robot_targets_reached
-      tolerance: 0.06
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_3
         target: part_3_seated
-        position_tolerance: 0.012
+        position_tolerance: 0.006
         orientation_tolerance: 3.1416
 - name: release_part_3
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1723,9 +1662,16 @@ phases:
   - fabrica_cooling_manifold_3
   advance:
     type: timer
-    min_steps: 28
+    min_steps: 24
+  lock:
+  - object: fabrica_cooling_manifold_3
+    target: part_3_seated
+    snap_on_open: true
+    release_snap_steps: 10
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: settle_part_3
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1739,20 +1685,26 @@ phases:
     franka_right: open
   advance:
     type: all_of
-    min_steps: 16
+    min_steps: 12
     conditions:
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_3
         target: part_3_seated
-        position_tolerance: 0.04
+        position_tolerance: 0.012
         orientation_tolerance: 3.1416
     - type: objects_static
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 1.0
-      objects:
-      - fabrica_cooling_manifold_3
+      linear_velocity_threshold: 0.04
+    - type: robot_targets_reached
+      tolerance: 0.08
+  lock:
+  - object: fabrica_cooling_manifold_3
+    target: part_3_seated
+    snap_on_open: true
+    release_snap_steps: 1
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: right_approach_part_0
   robot_targets:
     franka_left:
@@ -1786,7 +1738,7 @@ phases:
     min_steps: 12
     tolerance: 0.04
 - name: right_grasp_part_0
-  timeout_steps: 380
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1804,38 +1756,25 @@ phases:
     object: fabrica_cooling_manifold_0
     target: part_0_grasp_close
     fallback: native_phase_policy
+    note: Hardcoded recipe uses fixed_joint attach below after reaching grasp pose.
   attach:
   - object: fabrica_cooling_manifold_0
     robot: franka_right
     target: part_0_grasp_close
-    position_tolerance: 0.025
-    attachment_mode: pure_physical_grasp
+    attachment_mode: fixed_joint
     disable_collision_on_attach: false
-    require_contact: true
-    require_physical_contact: true
+    require_contact: false
+    require_physical_contact: false
     require_target_reached_for_attach: true
-    require_dual_finger_contact: true
-    allow_top_contact_fallback: false
-    allow_enclosure_fallback: false
-    finger_contact_distance: 0.01
-    physical_contact_axes: y
-    physical_attach_surface_gap: 0.01
-    contact_box_offset:
-    - 0.0
-    - 0.0
-    - 0.02
-    contact_box_scale:
-    - 0.08
-    - 0.06
-    - 0.05
-    gripper_closed_threshold: 0.03
-    gripper_closed_margin: 0.006
-    post_attach_settle_steps: 18
+    position_tolerance: 0.05
+    orientation_tolerance: 0.8
+    gripper_closed_threshold: 0.05
+    post_attach_settle_steps: 8
   advance:
     type: object_attached
     object: fabrica_cooling_manifold_0
     robot: franka_right
-    min_steps: 20
+    min_steps: 10
 - name: right_lift_part_0
   timeout_steps: 340
   timeout_action: fail
@@ -1852,7 +1791,7 @@ phases:
     franka_right: close
   advance:
     type: robot_targets_reached
-    min_steps: 12
+    min_steps: 10
     tolerance: 0.07
 - name: right_preseat_part_0
   timeout_steps: 420
@@ -1873,7 +1812,7 @@ phases:
     min_steps: 12
     tolerance: 0.07
 - name: right_seat_part_0
-  timeout_steps: 900
+  timeout_steps: 1200
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1883,41 +1822,38 @@ phases:
       target: part_0_seat_robot
       payload_object: fabrica_cooling_manifold_0
       payload_target: part_0_seated
-      orientation_tolerance: 0.45
+      orientation_tolerance: 0.8
       position_tolerance: 0.09
+      payload_relative_pose_source: attached
   gripper_commands:
     franka_left: open
     franka_right: close
   local_skill:
-    name: factory_insert_rl
+    name: hardcoded_insert
     robot: franka_right
     held_object: fabrica_cooling_manifold_0
     socket_object: fabrica_cooling_manifold_1
     held_target: part_0_seated
-    checkpoint: checkpoints/Factory/test/nn/Factory.pth
-    backend: isaaclab_factory
+    coarse_step: 0.006
+    fine_step: 0.002
+    final_step: 0.0006
+    coarse_distance: 0.035
+    fine_distance: 0.01
     fallback: fail
     require_success: true
-    official_fabrica_order: *id001
-    official_fabrica_pair:
-    - '0'
-    - '1'
-    trained_task: external Factory peg insertion checkpoint, not official cooling_manifold policy
   advance:
     type: all_of
-    min_steps: 40
+    min_steps: 30
     conditions:
-    - type: robot_targets_reached
-      tolerance: 0.06
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_0
         target: part_0_seated
-        position_tolerance: 0.012
+        position_tolerance: 0.006
         orientation_tolerance: 3.1416
 - name: release_part_0
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1933,9 +1869,16 @@ phases:
   - fabrica_cooling_manifold_0
   advance:
     type: timer
-    min_steps: 28
+    min_steps: 24
+  lock:
+  - object: fabrica_cooling_manifold_0
+    target: part_0_seated
+    snap_on_open: true
+    release_snap_steps: 10
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: settle_part_0
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -1949,20 +1892,26 @@ phases:
     franka_right: open
   advance:
     type: all_of
-    min_steps: 16
+    min_steps: 12
     conditions:
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_0
         target: part_0_seated
-        position_tolerance: 0.04
+        position_tolerance: 0.012
         orientation_tolerance: 3.1416
     - type: objects_static
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 1.0
-      objects:
-      - fabrica_cooling_manifold_0
+      linear_velocity_threshold: 0.04
+    - type: robot_targets_reached
+      tolerance: 0.08
+  lock:
+  - object: fabrica_cooling_manifold_0
+    target: part_0_seated
+    snap_on_open: true
+    release_snap_steps: 1
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: right_approach_part_4
   robot_targets:
     franka_left:
@@ -1996,7 +1945,7 @@ phases:
     min_steps: 12
     tolerance: 0.04
 - name: right_grasp_part_4
-  timeout_steps: 380
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -2014,38 +1963,25 @@ phases:
     object: fabrica_cooling_manifold_4
     target: part_4_grasp_close
     fallback: native_phase_policy
+    note: Hardcoded recipe uses fixed_joint attach below after reaching grasp pose.
   attach:
   - object: fabrica_cooling_manifold_4
     robot: franka_right
     target: part_4_grasp_close
-    position_tolerance: 0.025
-    attachment_mode: pure_physical_grasp
+    attachment_mode: fixed_joint
     disable_collision_on_attach: false
-    require_contact: true
-    require_physical_contact: true
+    require_contact: false
+    require_physical_contact: false
     require_target_reached_for_attach: true
-    require_dual_finger_contact: true
-    allow_top_contact_fallback: false
-    allow_enclosure_fallback: false
-    finger_contact_distance: 0.01
-    physical_contact_axes: y
-    physical_attach_surface_gap: 0.01
-    contact_box_offset:
-    - 0.0
-    - 0.0
-    - 0.02
-    contact_box_scale:
-    - 0.08
-    - 0.06
-    - 0.05
-    gripper_closed_threshold: 0.03
-    gripper_closed_margin: 0.006
-    post_attach_settle_steps: 18
+    position_tolerance: 0.05
+    orientation_tolerance: 0.8
+    gripper_closed_threshold: 0.05
+    post_attach_settle_steps: 8
   advance:
     type: object_attached
     object: fabrica_cooling_manifold_4
     robot: franka_right
-    min_steps: 20
+    min_steps: 10
 - name: right_lift_part_4
   timeout_steps: 340
   timeout_action: fail
@@ -2062,7 +1998,7 @@ phases:
     franka_right: close
   advance:
     type: robot_targets_reached
-    min_steps: 12
+    min_steps: 10
     tolerance: 0.07
 - name: right_preseat_part_4
   timeout_steps: 420
@@ -2083,7 +2019,7 @@ phases:
     min_steps: 12
     tolerance: 0.07
 - name: right_seat_part_4
-  timeout_steps: 900
+  timeout_steps: 1200
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -2093,41 +2029,38 @@ phases:
       target: part_4_seat_robot
       payload_object: fabrica_cooling_manifold_4
       payload_target: part_4_seated
-      orientation_tolerance: 0.45
+      orientation_tolerance: 0.8
       position_tolerance: 0.09
+      payload_relative_pose_source: attached
   gripper_commands:
     franka_left: open
     franka_right: close
   local_skill:
-    name: factory_insert_rl
+    name: hardcoded_insert
     robot: franka_right
     held_object: fabrica_cooling_manifold_4
     socket_object: fabrica_cooling_manifold_1
     held_target: part_4_seated
-    checkpoint: checkpoints/Factory/test/nn/Factory.pth
-    backend: isaaclab_factory
+    coarse_step: 0.006
+    fine_step: 0.002
+    final_step: 0.0006
+    coarse_distance: 0.035
+    fine_distance: 0.01
     fallback: fail
     require_success: true
-    official_fabrica_order: *id001
-    official_fabrica_pair:
-    - '4'
-    - '1'
-    trained_task: external Factory peg insertion checkpoint, not official cooling_manifold policy
   advance:
     type: all_of
-    min_steps: 40
+    min_steps: 30
     conditions:
-    - type: robot_targets_reached
-      tolerance: 0.06
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_4
         target: part_4_seated
-        position_tolerance: 0.025
+        position_tolerance: 0.006
         orientation_tolerance: 3.1416
 - name: release_part_4
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -2143,9 +2076,16 @@ phases:
   - fabrica_cooling_manifold_4
   advance:
     type: timer
-    min_steps: 28
+    min_steps: 24
+  lock:
+  - object: fabrica_cooling_manifold_4
+    target: part_4_seated
+    snap_on_open: true
+    release_snap_steps: 10
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: settle_part_4
-  timeout_steps: 280
+  timeout_steps: 220
   timeout_action: fail
   robot_targets:
     franka_left:
@@ -2159,20 +2099,26 @@ phases:
     franka_right: open
   advance:
     type: all_of
-    min_steps: 16
+    min_steps: 12
     conditions:
     - type: object_targets_reached
       tolerance: 0.04
       objects:
       - object: fabrica_cooling_manifold_4
         target: part_4_seated
-        position_tolerance: 0.04
+        position_tolerance: 0.012
         orientation_tolerance: 3.1416
     - type: objects_static
-      linear_velocity_threshold: 0.03
-      angular_velocity_threshold: 1.0
-      objects:
-      - fabrica_cooling_manifold_4
+      linear_velocity_threshold: 0.04
+    - type: robot_targets_reached
+      tolerance: 0.08
+  lock:
+  - object: fabrica_cooling_manifold_4
+    target: part_4_seated
+    snap_on_open: true
+    release_snap_steps: 1
+    position_tolerance: 0.012
+    orientation_tolerance: 3.1416
 - name: retreat
   robot_targets:
     franka_left: left_retreat

@@ -40,6 +40,7 @@ class SimulatorRunner:
 
         # finished_tasks contains all the finished tasks in current tasks dict
         self.finished_tasks = set()
+        self.last_finished_task_metrics = []
 
         self.render_interval = (
             self.config.simulator.rendering_interval if self.config.simulator.rendering_interval is not None else 5
@@ -167,6 +168,7 @@ class SimulatorRunner:
                 self.finished_tasks.add(task.name)
                 log.info(f'Task {task.name} finished.')
                 metrics_results = task.calculate_metrics()
+                self.last_finished_task_metrics.append(metrics_results)
                 if self.metrics_save_path == 'console':
                     print(json.dumps(metrics_results, indent=4))
                 elif self.metrics_save_path == 'none' or self.metrics_save_path is None:

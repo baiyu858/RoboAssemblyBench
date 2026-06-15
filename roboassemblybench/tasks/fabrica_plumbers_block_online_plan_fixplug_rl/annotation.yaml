@@ -1,0 +1,41 @@
+extends: _base.yaml
+task_name: fabrica_plumbers_block_online_plan_fixplug_rl
+title: Fabrica plumbers block online plan FixPlug RL
+summary: Fabrica plumbers-block phase flow using Isaac Sim online planning for pickup/transport/preinsert and local FixPlug
+  RL for insertion.
+task_description: Two Franka arms execute a phase-based plumbers-block assembly. Fabrica motion and plan artifacts provide
+  discrete gripper targets only; Isaac Sim online planning drives pickup, transport, and preinsert motion. The active plug is
+  fixed to the gripper for the FixPlug insertion window, matching the official FixPlug assumption.
+metadata:
+  tags:
+  - fabrica
+  - plumbers-block
+  - fixplug-rl
+  - online-plan
+  - isaacsim-online-planning
+  object_roles:
+    fabrica_plumbers_block_0:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    fabrica_plumbers_block_1:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    fabrica_plumbers_block_2:
+      role: movable_then_locked_base_socket
+      summary: Base part moved from the pickup fixture using the official plan, then locked as the fixed socket reference
+        for insertion.
+    fabrica_plumbers_block_3:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    fabrica_plumbers_block_4:
+      role: inserted_workpiece
+      summary: Fabrica plumbers-block loose part replayed into the placed base.
+    optical_board:
+      role: locating_board
+      summary: Black Fabrica optical-board mesh loaded from the plumbers-block full bundle.
+    fabrica_fixture:
+      role: official_pickup_fixture
+      summary: Official Fabrica generated pickup fixture for plumbers_block.
+    assembled_plumbers_preview:
+      role: assembled_reference_visual
+      summary: Complete plumbers-block assembled USD preview placed beside the active task.

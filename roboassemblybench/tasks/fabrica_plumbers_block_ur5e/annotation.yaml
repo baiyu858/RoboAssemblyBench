@@ -1,0 +1,27 @@
+extends: fabrica_plumbers_block
+task_name: fabrica_plumbers_block_ur5e
+title: Fabrica plumbers block UR5e
+summary: Fabrica plumbers-block scene variant using dual UR5e + Robotiq robots.
+task_description: >-
+  A UR5e variant of the Fabrica plumbers-block task. It preserves the plumbers-block
+  components, pickup fixture, optical board, assembled preview, and target coordinates
+  from the existing Fabrica plumbers-block task, while replacing the logical dual Franka
+  robot instances with UR5e + Robotiq 2F-85 robots.
+metadata:
+  tags:
+    - fabrica
+    - plumbers-block
+    - ur5e
+    - robotiq
+    - dual-arm
+  object_roles:
+    fabrica_plumbers_block_0:
+      summary: Fabrica plumbers-block part reused unchanged from the plumbers-block bundle.
+    fabrica_plumbers_block_1:
+      summary: Fabrica plumbers-block part reused unchanged from the plumbers-block bundle.
+    fabrica_plumbers_block_2:
+      summary: Fabrica plumbers-block base part reused unchanged from the plumbers-block bundle.
+    fabrica_plumbers_block_3:
+      summary: Fabrica plumbers-block part reused unchanged from the plumbers-block bundle.
+    fabrica_plumbers_block_4:
+      summary: Fabrica plumbers-block part reused unchanged from the plumbers-block bundle.
