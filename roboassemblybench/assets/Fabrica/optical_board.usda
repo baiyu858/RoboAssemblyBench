@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    defaultPrim = "OpticalBoard"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "OpticalBoard" (
+    prepend references = @fabrica_franka_cooling_optical_board_black_fullbundle_sdf001/scene/scene.usda@</World/envs/env_0/BlackFabricaOpticalBoard>
+)
+{
+}

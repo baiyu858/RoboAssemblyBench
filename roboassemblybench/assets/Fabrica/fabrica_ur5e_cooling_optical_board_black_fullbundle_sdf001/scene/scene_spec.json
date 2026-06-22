@@ -1,0 +1,1893 @@
+{
+  "schema_version": "fabrica_isaaclab_scene_only/v0.3",
+  "scene_name": "fabrica_dual_ur5e_cooling_manifold_black_optical_board",
+  "output": {
+    "scene_usda": "scene/scene.usda",
+    "scene_spec_json": "scene/scene_spec.json",
+    "isaaclab_cfg_py": "isaaclab_cfg/fabrica_dual_ur5e_scene_cfg.py",
+    "json_to_usd_py": "scripts/json_to_usd.py"
+  },
+  "assets": {
+    "table": {
+      "path": "scene/clean_packing_table.usda",
+      "source_path": "assets/isaac_official/Isaac/Props/PackingTable/packing_table.usd",
+      "library": "isaac_official",
+      "source_task": "IsaacLab pickplace_gr1t2_env_cfg.py",
+      "removed_prims": [
+        "/Root/container_h20"
+      ]
+    },
+    "robot": {
+      "path": "assets/isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd",
+      "library": "isaac_official",
+      "variants": {
+        "Physics": "PhysX",
+        "Sensor": "Sensors",
+        "Gripper": "Robotiq_2f_85"
+      }
+    },
+    "fabrica_assembly_manifest": {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/manifest.json",
+      "library": "fabrica_isaaclab",
+      "assembly": "cooling_manifold",
+      "variant": "aligned"
+    },
+    "optical_board": {
+      "path": "assets/fabrica_support/optical_board.obj",
+      "source_path": "/data/hjj/src/Fabrica/assets/optical_board.obj",
+      "library": "fabrica",
+      "asset_type": "optical_breadboard_fixture_plate",
+      "description": "Fabrica optical board used as the black locating/support board on the shared workspace."
+    }
+  },
+  "fabrica_consistency": {
+    "source_root": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold",
+    "scale": 0.01,
+    "collision_approximation": "sdf",
+    "assembled_reference_is_composed_from_individual_parts": true,
+    "assembly_target_pose_source": "manifest.parts[].assembled_child_translate_m",
+    "fabrica_workcell_reference_m": {
+      "move_arm_xy": [
+        0.45,
+        0.25
+      ],
+      "hold_arm_xy": [
+        -0.45,
+        0.25
+      ],
+      "assembly_center_xy": [
+        0.0,
+        -0.15
+      ],
+      "yaw_deg": -90.0
+    }
+  },
+  "background": {
+    "prim_path": null,
+    "translation": null,
+    "note": "factory_core_scene_has_no_warehouse_background"
+  },
+  "table": {
+    "layout": "single_clean_long_packing_table",
+    "worktable_ids": [
+      "main_table"
+    ],
+    "work_surface_z": 1.002551339,
+    "table_surface_local_z": 0.994051,
+    "note": "Fabrica parts rest on the black optical board top surface, not directly on the table."
+  },
+  "worktables": [
+    {
+      "id": "main_table",
+      "prim_name": "MainTable",
+      "prim_path": "/World/envs/env_0/MainTable",
+      "translation": [
+        0.5,
+        0.0,
+        0.0
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "clean_long_packing_table_shared_by_both_robots"
+    }
+  ],
+  "robots": [
+    {
+      "id": "robot_left",
+      "prim_path": "/World/envs/env_0/RobotLeft",
+      "translation": [
+        0.05,
+        0.25,
+        0.998051
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "rotation_wxyz": [
+        0.707106781,
+        0.0,
+        0.0,
+        -0.707106781
+      ],
+      "joint_targets_degrees": {
+        "shoulder_pan_joint": -90.0,
+        "shoulder_lift_joint": -90.0,
+        "elbow_joint": 90.0,
+        "wrist_1_joint": -90.0,
+        "wrist_2_joint": -90.0,
+        "wrist_3_joint": 0.0
+      },
+      "mounting": "directly_on_side_worktable_top"
+    },
+    {
+      "id": "robot_right",
+      "prim_path": "/World/envs/env_0/RobotRight",
+      "translation": [
+        0.95,
+        0.25,
+        0.998051
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "rotation_wxyz": [
+        0.707106781,
+        0.0,
+        0.0,
+        -0.707106781
+      ],
+      "joint_targets_degrees": {
+        "shoulder_pan_joint": -90.0,
+        "shoulder_lift_joint": -90.0,
+        "elbow_joint": 90.0,
+        "wrist_1_joint": -90.0,
+        "wrist_2_joint": -90.0,
+        "wrist_3_joint": 0.0
+      },
+      "mounting": "directly_on_side_worktable_top"
+    }
+  ],
+  "assembled_display": {
+    "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+    "assembly": "cooling_manifold",
+    "translation": [
+      0.28,
+      -0.17,
+      1.036301339
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "dynamic": true,
+    "assembly_target_poses": {
+      "fabrica_cooling_manifold_0": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/0.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          -0.03122185,
+          9.66e-05,
+          0.0075
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.24877815,
+          -0.1699034,
+          1.043801339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          -0.031221850000000002,
+          9.66000000000005e-05,
+          0.038250000000000006
+        ],
+        "raw_to_aligned_translation_m": [
+          0.031221850000000002,
+          -9.66000000000005e-05,
+          -0.038250000000000006
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      },
+      "fabrica_cooling_manifold_1": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/1.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          -4.895e-05,
+          9.66e-05,
+          -0.01325
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.27995105,
+          -0.1699034,
+          1.023051339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          -4.8949999999998994e-05,
+          9.65999999999953e-05,
+          0.0175
+        ],
+        "raw_to_aligned_translation_m": [
+          4.8949999999998994e-05,
+          -9.65999999999953e-05,
+          -0.0175
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.12599747587513907,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      },
+      "fabrica_cooling_manifold_2": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/2.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          -0.05004895,
+          -0.0499034,
+          -0.01325
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.22995105,
+          -0.2199034,
+          1.023051339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          -0.050048949999999995,
+          -0.0499034,
+          0.0175
+        ],
+        "raw_to_aligned_translation_m": [
+          0.050048949999999995,
+          0.0499034,
+          -0.0175
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      },
+      "fabrica_cooling_manifold_3": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/3.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          0.04995105,
+          0.0500966,
+          -0.01325
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.32995105,
+          -0.1199034,
+          1.023051339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          0.04995105,
+          0.050096600000000005,
+          0.0175
+        ],
+        "raw_to_aligned_translation_m": [
+          -0.04995105,
+          -0.050096600000000005,
+          -0.0175
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      },
+      "fabrica_cooling_manifold_4": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/4.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          0.03112395,
+          9.66e-05,
+          0.0075
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.31112395,
+          -0.1699034,
+          1.043801339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          0.03112395,
+          9.66000000000005e-05,
+          0.038250000000000006
+        ],
+        "raw_to_aligned_translation_m": [
+          -0.03112395,
+          -9.66000000000005e-05,
+          -0.038250000000000006
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      },
+      "fabrica_cooling_manifold_5": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/5.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          0.04995105,
+          -0.0499034,
+          -0.01325
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.32995105,
+          -0.2199034,
+          1.023051339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          0.04995105,
+          -0.0499034,
+          0.0175
+        ],
+        "raw_to_aligned_translation_m": [
+          -0.04995105,
+          0.0499034,
+          -0.0175
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      },
+      "fabrica_cooling_manifold_6": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/6.obj",
+        "target_frame": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "target_translation_local_m": [
+          -0.05004895,
+          0.0500966,
+          -0.01325
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.22995105,
+          -0.1199034,
+          1.023051339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          -0.050048949999999995,
+          0.050096600000000005,
+          0.0175
+        ],
+        "raw_to_aligned_translation_m": [
+          0.050048949999999995,
+          -0.050096600000000005,
+          -0.0175
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf"
+      }
+    },
+    "rotation_xyz_degrees": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "objects": [
+    {
+      "id": "assembled_display_part_0",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd",
+      "translation": [
+        0.248778,
+        -0.169903,
+        1.035301
+      ],
+      "translation_local_in_assembly_frame": [
+        -0.03122185,
+        9.66e-05,
+        0.0075
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "assembled_display_part_1",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd",
+      "translation": [
+        0.279951,
+        -0.169903,
+        1.014551
+      ],
+      "translation_local_in_assembly_frame": [
+        -4.895e-05,
+        9.66e-05,
+        -0.01325
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.12599747587513907,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "assembled_display_part_2",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd",
+      "translation": [
+        0.229951,
+        -0.219903,
+        1.014551
+      ],
+      "translation_local_in_assembly_frame": [
+        -0.05004895,
+        -0.0499034,
+        -0.01325
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "assembled_display_part_3",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd",
+      "translation": [
+        0.329951,
+        -0.119903,
+        1.014551
+      ],
+      "translation_local_in_assembly_frame": [
+        0.04995105,
+        0.0500966,
+        -0.01325
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "assembled_display_part_4",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd",
+      "translation": [
+        0.311124,
+        -0.169903,
+        1.035301
+      ],
+      "translation_local_in_assembly_frame": [
+        0.03112395,
+        9.66e-05,
+        0.0075
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "assembled_display_part_5",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd",
+      "translation": [
+        0.329951,
+        -0.219903,
+        1.014551
+      ],
+      "translation_local_in_assembly_frame": [
+        0.04995105,
+        -0.0499034,
+        -0.01325
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "assembled_display_part_6",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd",
+      "translation": [
+        0.229951,
+        -0.119903,
+        1.014551
+      ],
+      "translation_local_in_assembly_frame": [
+        -0.05004895,
+        0.0500966,
+        -0.01325
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5
+    },
+    {
+      "id": "fabrica_cooling_manifold_0",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd",
+      "translation": [
+        0.66,
+        -0.32,
+        1.020301
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_0"
+    },
+    {
+      "id": "fabrica_cooling_manifold_1",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd",
+      "translation": [
+        0.81,
+        -0.32,
+        1.014551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.12599747587513907,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_1"
+    },
+    {
+      "id": "fabrica_cooling_manifold_2",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd",
+      "translation": [
+        0.96,
+        -0.32,
+        1.014551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_2"
+    },
+    {
+      "id": "fabrica_cooling_manifold_3",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd",
+      "translation": [
+        0.66,
+        -0.17,
+        1.014551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_3"
+    },
+    {
+      "id": "fabrica_cooling_manifold_4",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd",
+      "translation": [
+        0.81,
+        -0.17,
+        1.020301
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_4"
+    },
+    {
+      "id": "fabrica_cooling_manifold_5",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd",
+      "translation": [
+        0.96,
+        -0.17,
+        1.014551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_5"
+    },
+    {
+      "id": "fabrica_cooling_manifold_6",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd",
+      "translation": [
+        0.66,
+        -0.02,
+        1.014551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "assembly_target_pose_ref": "fabrica_cooling_manifold_6"
+    }
+  ],
+  "layout_quality": {
+    "loose_and_assembled_footprints_checked": true,
+    "footprint_overlap_margin_m": 0.015
+  },
+  "isaaclab_notes": [
+    "This package is scene-only. It does not define actions, observations, rewards, resets, or policy logic.",
+    "Use the JSON assembly_target_poses to build future insertion objectives.",
+    "Run generation with an Isaac/Omniverse USD Python environment, not plain system Python."
+  ],
+  "handoff_package": {
+    "package_name": "fabrica_ur5e_cooling_isaaclab_fullbundle_sdf001",
+    "isaaclab_cfg": "isaaclab_cfg/fabrica_dual_ur5e_scene_cfg.py",
+    "direct_usd_scene": "scene/scene.usda",
+    "requires_external_isaac_assets": true,
+    "isaac_asset_root_env": "ISAAC_ASSET_ROOT",
+    "bundles_isaac_official_assets": true,
+    "bundled_isaac_asset_root": "assets/isaac_official/Isaac",
+    "bundled_extra_dependencies": [
+      "assets/isaac_official/Isaac/Robots/Robotiq/2F-85",
+      "assets/isaac_official/Isaac/Props/PackingTable/materials/textures"
+    ]
+  },
+  "fabrica_official_physics": {
+    "part_density_kg_per_m3": 1250.0,
+    "part_static_friction": 0.5,
+    "part_dynamic_friction": 0.5,
+    "support_density_kg_per_m3": 1000.0,
+    "support_static_friction": 0.3,
+    "support_dynamic_friction": 0.3,
+    "rolling_friction": 0.0,
+    "torsion_friction": 0.0,
+    "restitution": 0.0
+  },
+  "support_surfaces": [
+    {
+      "id": "black_fabrica_optical_board",
+      "prim_path": "/World/envs/env_0/BlackFabricaOpticalBoard",
+      "asset_path": "assets/fabrica_support/optical_board.obj",
+      "source_path": "/data/hjj/src/Fabrica/assets/optical_board.obj",
+      "role": "shared_workspace_locating_board",
+      "translation": [
+        0.594975526,
+        -0.134500145,
+        1.002551339
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "obj_to_m": 0.01,
+      "board_scale": 0.85,
+      "extents_m": [
+        0.78625,
+        0.53125,
+        0.0085
+      ],
+      "top_z_m": 1.002551339,
+      "bottom_z_m": 0.994051339,
+      "bounds_xy_m": {
+        "min_x": 0.201850526,
+        "max_x": 0.988100526,
+        "min_y": -0.400125145,
+        "max_y": 0.131124855
+      },
+      "visual_material": {
+        "name": "BlackOpticalBoard_Material",
+        "diffuse_color": [
+          0.005,
+          0.005,
+          0.004
+        ],
+        "roughness": 0.72,
+        "metallic": 0.0
+      },
+      "physics": {
+        "collision_enabled": true,
+        "static_friction": 0.3,
+        "dynamic_friction": 0.3,
+        "density_kg_per_m3": 1000.0,
+        "restitution": 0.0,
+        "rolling_friction": 0.0,
+        "torsion_friction": 0.0
+      }
+    }
+  ],
+  "layout_constraints": {
+    "all_fabrica_parts_on_support_surface": "/World/envs/env_0/BlackFabricaOpticalBoard",
+    "part_min_z_above_board_top_m": 0.003,
+    "robots_share_common_workspace": true,
+    "robot_pair": [
+      "RobotLeft",
+      "RobotRight"
+    ]
+  },
+  "scene_graph": {
+    "authoritative_for_editing": true,
+    "note": "Modify translations/rotations/scales here, then run scripts/json_to_usd.py to update scene/scene.usda.",
+    "objects": [
+      {
+        "prim_path": "/World/IndustrialDomeLight",
+        "prim_name": "IndustrialDomeLight",
+        "type_name": "DomeLight",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "role": "lighting"
+      },
+      {
+        "prim_path": "/World/TopWorkcellLight",
+        "prim_name": "TopWorkcellLight",
+        "type_name": "RectLight",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.5,
+            0.0,
+            2.65
+          ],
+          "rotation_xyz_degrees": [
+            -90.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            -1.0,
+            0.0,
+            1.65
+          ],
+          "max": [
+            2.0,
+            0.0,
+            3.65
+          ]
+        },
+        "role": "lighting"
+      },
+      {
+        "prim_path": "/World/envs/env_0/MainTable",
+        "prim_name": "MainTable",
+        "type_name": "Xform",
+        "asset_reference": "clean_packing_table.usda",
+        "transform": {
+          "translation": [
+            0.5,
+            0.0,
+            0.0
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            -0.736823245,
+            -0.400625145,
+            0.0
+          ],
+          "max": [
+            1.736823245,
+            0.380999976,
+            0.994051339
+          ]
+        },
+        "role": "single clean shared packing/work table"
+      },
+      {
+        "prim_path": "/World/envs/env_0/RobotLeft",
+        "prim_name": "RobotLeft",
+        "type_name": "Xform",
+        "asset_reference": "../assets/isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd",
+        "transform": {
+          "translation": [
+            0.05,
+            0.25,
+            0.998051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            -90.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            -0.025525418,
+            -0.644441629,
+            0.998050648
+          ],
+          "max": [
+            0.431320185,
+            0.325499021,
+            1.232075695
+          ]
+        },
+        "role": "manipulator mounted on the shared work table"
+      },
+      {
+        "prim_path": "/World/envs/env_0/RobotRight",
+        "prim_name": "RobotRight",
+        "type_name": "Xform",
+        "asset_reference": "../assets/isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd",
+        "transform": {
+          "translation": [
+            0.95,
+            0.25,
+            0.998051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            -90.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.874474582,
+            -0.644441629,
+            0.998050648
+          ],
+          "max": [
+            1.331320185,
+            0.325499021,
+            1.232075695
+          ]
+        },
+        "role": "manipulator mounted on the shared work table"
+      },
+      {
+        "prim_path": "/World/envs/env_0/BlackFabricaOpticalBoard",
+        "prim_name": "BlackFabricaOpticalBoard",
+        "type_name": "Xform",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.594975526,
+            -0.134500145,
+            1.002551339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.201850528,
+            -0.400125145,
+            0.994051338
+          ],
+          "max": [
+            0.988100524,
+            0.131124855,
+            1.002551339
+          ]
+        },
+        "role": "black Fabrica optical board placed on shared workspace; supports all loose and assembled parts",
+        "physics": {
+          "rigid_body": "static support surface",
+          "collision_enabled": true,
+          "static_friction": 0.3,
+          "dynamic_friction": 0.3,
+          "restitution": 0.0,
+          "density_kg_per_m3": 1000.0
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display",
+        "prim_name": "assembled_cooling_manifold_display",
+        "type_name": "Xform",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.28,
+            -0.17,
+            1.036301339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.219903751,
+            -0.230143899,
+            1.005551339
+          ],
+          "max": [
+            0.340096249,
+            -0.109856101,
+            1.067051341
+          ]
+        },
+        "role": "assembled reference composed from individual Fabrica parts"
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_0",
+        "prim_name": "assembled_display_part_0",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd",
+        "transform": {
+          "translation": [
+            -0.03122185,
+            9.66e-05,
+            0.0075
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.23995105,
+            -0.17865202,
+            1.020551338
+          ],
+          "max": [
+            0.25760525,
+            -0.161154779,
+            1.067051341
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_1",
+        "prim_name": "assembled_display_part_1",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd",
+        "transform": {
+          "translation": [
+            -4.895e-05,
+            9.66e-05,
+            -0.01325
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.219951651,
+            -0.229902799,
+            1.005551339
+          ],
+          "max": [
+            0.339950449,
+            -0.109904001,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_2",
+        "prim_name": "assembled_display_part_2",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd",
+        "transform": {
+          "translation": [
+            -0.05004895,
+            -0.0499034,
+            -0.01325
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.219903751,
+            -0.229932299,
+            1.005551339
+          ],
+          "max": [
+            0.239998351,
+            -0.209874501,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_3",
+        "prim_name": "assembled_display_part_3",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd",
+        "transform": {
+          "translation": [
+            0.04995105,
+            0.0500966,
+            -0.01325
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.319805848,
+            -0.1298157,
+            1.005551339
+          ],
+          "max": [
+            0.340096249,
+            -0.109991102,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_4",
+        "prim_name": "assembled_display_part_4",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd",
+        "transform": {
+          "translation": [
+            0.03112395,
+            9.66e-05,
+            0.0075
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.302296849,
+            -0.17865202,
+            1.020551338
+          ],
+          "max": [
+            0.319951049,
+            -0.161154779,
+            1.067051341
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_5",
+        "prim_name": "assembled_display_part_5",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd",
+        "transform": {
+          "translation": [
+            0.04995105,
+            -0.0499034,
+            -0.01325
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.320197651,
+            -0.230143899,
+            1.005551339
+          ],
+          "max": [
+            0.339704449,
+            -0.209662901,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_cooling_manifold_display/assembled_display_part_6",
+        "prim_name": "assembled_display_part_6",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd",
+        "transform": {
+          "translation": [
+            -0.05004895,
+            0.0500966,
+            -0.01325
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.21992215,
+            -0.129950701,
+            1.005551339
+          ],
+          "max": [
+            0.239979952,
+            -0.109856101,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_0",
+        "prim_name": "fabrica_cooling_manifold_0",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd",
+        "transform": {
+          "translation": [
+            0.66,
+            -0.32,
+            1.028801339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.6511729,
+            -0.32874862,
+            1.005551338
+          ],
+          "max": [
+            0.6688271,
+            -0.311251379,
+            1.052051341
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_1",
+        "prim_name": "fabrica_cooling_manifold_1",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd",
+        "transform": {
+          "translation": [
+            0.81,
+            -0.32,
+            1.023051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.750000601,
+            -0.379999399,
+            1.005551339
+          ],
+          "max": [
+            0.869999399,
+            -0.260000601,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_2",
+        "prim_name": "fabrica_cooling_manifold_2",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd",
+        "transform": {
+          "translation": [
+            0.96,
+            -0.32,
+            1.023051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.949952701,
+            -0.330028899,
+            1.005551339
+          ],
+          "max": [
+            0.970047301,
+            -0.309971101,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_3",
+        "prim_name": "fabrica_cooling_manifold_3",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd",
+        "transform": {
+          "translation": [
+            0.66,
+            -0.17,
+            1.023051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.649854798,
+            -0.1799123,
+            1.005551339
+          ],
+          "max": [
+            0.670145199,
+            -0.160087702,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_4",
+        "prim_name": "fabrica_cooling_manifold_4",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd",
+        "transform": {
+          "translation": [
+            0.81,
+            -0.17,
+            1.028801339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.801172899,
+            -0.17874862,
+            1.005551338
+          ],
+          "max": [
+            0.818827099,
+            -0.161251379,
+            1.052051341
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_5",
+        "prim_name": "fabrica_cooling_manifold_5",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd",
+        "transform": {
+          "translation": [
+            0.96,
+            -0.17,
+            1.023051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.950246601,
+            -0.180240499,
+            1.005551339
+          ],
+          "max": [
+            0.969753399,
+            -0.159759501,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_cooling_manifold_6",
+        "prim_name": "fabrica_cooling_manifold_6",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd",
+        "transform": {
+          "translation": [
+            0.66,
+            -0.02,
+            1.023051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.6499711,
+            -0.030047301,
+            1.005551339
+          ],
+          "max": [
+            0.670028902,
+            -0.009952701,
+            1.040551339
+          ]
+        },
+        "role": "Fabrica cooling_manifold part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0.0,
+          "collision_approximation": "sdf"
+        }
+      }
+    ]
+  }
+}

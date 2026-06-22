@@ -32,15 +32,65 @@ metadata:
       note: The inherited plumbers-block FixPlug checkpoint was trained with plug fixed to a Franka hand. It is not automatically valid for UR5e without a retargeting or UR5e-specific local policy layer.
   fabrica_official_layout:
     robot_layout: dual_ur5e_robotiq_from_available_ur5e_bundle
+
+camera_specs:
+  - name: third_person_front
+    owner: franka_left
+    prim_path: /World/env_0/cameras/third_person_front
+    view_type: front
+    video_key: observation.images.isaac_3d
+    description: Forward-facing third-person camera looking at both UR5e arms and the shared fixture.
+    resolution: [960, 540]
+    rgba: true
+    attach_runtime_sensor: true
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+  - name: left_wrist
+    owner: franka_left
+    robot: franka_left
+    prim_path: wrist_3_link/left_wrist_camera
+    view_type: wrist
+    video_key: observation.images.left_wrist
+    description: Left wrist camera mounted on the UR5e wrist_3_link; initial pose copied from the Franka wrist camera for UI tuning.
+    resolution: [640, 480]
+    rgba: true
+    attach_runtime_sensor: true
+    translation: [-0.1, 0.0, -0.03]
+    orientation_euler: [3.1415926536, -0.0872664626, 0.0]
+    focal_length: 12.0
+    horizontal_aperture: 20.955
+    clipping_range: [0.01, 10.0]
+    mount_offset: [-0.1, 0.0, -0.03]
+    look_offset: [0.16, 0.0, -0.05]
+    target_source: task_target
+  - name: right_wrist
+    owner: franka_right
+    robot: franka_right
+    prim_path: wrist_3_link/right_wrist_camera
+    view_type: wrist
+    video_key: observation.images.right_wrist
+    description: Right wrist camera mounted on the UR5e wrist_3_link; initial pose copied from the Franka wrist camera for UI tuning.
+    resolution: [640, 480]
+    rgba: true
+    attach_runtime_sensor: true
+    translation: [-0.1, 0.0, -0.03]
+    orientation_euler: [3.1415926536, -0.0872664626, 0.0]
+    focal_length: 12.0
+    horizontal_aperture: 20.955
+    clipping_range: [0.01, 10.0]
+    mount_offset: [-0.1, 0.0, -0.03]
+    look_offset: [0.16, 0.0, -0.05]
+    target_source: task_target
+
 robots:
   - name: franka_left
     type: UR5eRobot
     prim_path: /ur5e_left
     usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
-    position: [0.05, 0.25, 1.098051339]
-    orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    position: [0.5, 0.36, 0.998]
+    orientation: [1.0, 0.0, 0.0, 0.0]
     apply_workspace_offset: false
-    end_effector_prim_name: tool0
+    end_effector_prim_name: Gripper/Robotiq_2F_85/base_link
     ik_base_prim_name: base_link
     gripper_dof_name: finger_joint
     gripper_open_position: 0.0
@@ -48,8 +98,13 @@ robots:
     hand_link_name: wrist_3_link
     left_finger_link_name: left_inner_finger
     right_finger_link_name: right_inner_finger
+    gripper_xform_orient: [0.707106781, -0.707106781, 0.0, 0.0]
+    gripper_mount_local_pos0: [0.0, 0.0, 0.0]
+    gripper_mount_local_pos1: [0.0, 0.0, 0.0]
+    gripper_mount_local_rot0: [0.0, 0.0, 0.0, -1.0]
+    gripper_mount_local_rot1: [1.0, 0.0, 0.0, 0.0]
     initial_joint_positions:
-      shoulder_pan_joint: -1.5707963268
+      shoulder_pan_joint: 0.0
       shoulder_lift_joint: -1.5707963268
       elbow_joint: 1.5707963268
       wrist_1_joint: -1.5707963268
@@ -60,10 +115,10 @@ robots:
     type: UR5eRobot
     prim_path: /ur5e_right
     usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
-    position: [0.95, 0.25, 1.098051339]
-    orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    position: [0.5, -0.8, 0.998]
+    orientation: [1.0, 0.0, 0.0, 0.0]
     apply_workspace_offset: false
-    end_effector_prim_name: tool0
+    end_effector_prim_name: Gripper/Robotiq_2F_85/base_link
     ik_base_prim_name: base_link
     gripper_dof_name: finger_joint
     gripper_open_position: 0.0
@@ -71,11 +126,53 @@ robots:
     hand_link_name: wrist_3_link
     left_finger_link_name: left_inner_finger
     right_finger_link_name: right_inner_finger
+    gripper_xform_orient: [0.707106781, -0.707106781, 0.0, 0.0]
+    gripper_mount_local_pos0: [0.0, 0.0, 0.0]
+    gripper_mount_local_pos1: [0.0, 0.0, 0.0]
+    gripper_mount_local_rot0: [0.0, 0.0, 0.0, -1.0]
+    gripper_mount_local_rot1: [1.0, 0.0, 0.0, 0.0]
     initial_joint_positions:
-      shoulder_pan_joint: -1.5707963268
+      shoulder_pan_joint: 0.0
       shoulder_lift_joint: -1.5707963268
       elbow_joint: 1.5707963268
       wrist_1_joint: -1.5707963268
       wrist_2_joint: -1.5707963268
       wrist_3_joint: 0.0
       finger_joint: 0.0
+
+objects:
+  - name: fabrica_plumbers_block_0
+    position: [0.313150265, -0.213805407, 0.059781015]
+    orientation: [0.0, 0.0, -0.265304749, 0.964164607]
+  - name: fabrica_plumbers_block_1
+    position: [0.382026696, -0.323606087, 0.053147345]
+    orientation: [-0.700927256, -0.087286216, -0.087475325, 0.702445846]
+  - name: fabrica_plumbers_block_2
+    position: [0.374511725, -0.220708895, 0.103188624]
+    orientation: [0.617614866, -0.344313632, 0.344313632, 0.617614866]
+  - name: fabrica_plumbers_block_3
+    position: [0.314511725, -0.322520116, 0.057898473]
+    orientation: [-0.672893101, 0.21728984, 0.21728984, 0.672893101]
+  - name: fabrica_plumbers_block_4
+    position: [0.382026696, -0.378251722, 0.05337142]
+    orientation: [-0.704888482, -0.045278362, -0.045376459, 0.706415653]
+  - name: fabrica_fixture
+    position: [0.343150265, -0.085195896, 0.013051339]
+    orientation: [0.0, 0.0, 0.0, 1.0]
+
+targets:
+  - name: part_0_seated
+    position: [0.723125731, -0.334696041, 0.067459719]
+    orientation: [0.0, 0.0, 0.0, 1.0]
+  - name: part_1_seated
+    position: [0.763125791, -0.335961841, 0.085551339]
+    orientation: [0.0, 0.0, 0.0, 1.0]
+  - name: part_2_seated
+    position: [0.723125791, -0.335961841, 0.048051339]
+    orientation: [0.0, 0.0, 0.0, 1.0]
+  - name: part_3_seated
+    position: [0.723125791, -0.335961841, 0.093624989]
+    orientation: [0.0, 0.0, 0.0, 1.0]
+  - name: part_4_seated
+    position: [0.683125791, -0.335961841, 0.085551339]
+    orientation: [0.0, 0.0, 0.0, 1.0]

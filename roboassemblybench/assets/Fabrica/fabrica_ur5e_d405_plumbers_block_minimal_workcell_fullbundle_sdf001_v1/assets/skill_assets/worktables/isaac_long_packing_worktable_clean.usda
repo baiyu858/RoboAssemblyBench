@@ -1,0 +1,19 @@
+#usda 1.0
+(
+    defaultPrim = "LongPackingWorktable"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "LongPackingWorktable" (
+    kind = "component"
+)
+{
+    def Xform "TableBody" (
+        prepend references = @../../isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/SM_HeavyDutyPackingTable_C02_01_physics.usd@
+    )
+    {
+        double3 xformOp:scale = (0.01, 0.01, 0.01)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+    }
+}

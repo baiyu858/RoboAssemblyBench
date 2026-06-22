@@ -1,0 +1,531 @@
+{
+  "assembly": "cooling_manifold",
+  "variant": "aligned",
+  "part_count": 7,
+  "source_dir": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold",
+  "manifest_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/manifest.json",
+  "assembled_preview_usd": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/assembled/fabrica_cooling_manifold_assembled.usda",
+  "bbox_min_m": [
+    -0.06009625,
+    -0.0601439,
+    -0.030750000000000003
+  ],
+  "bbox_max_m": [
+    0.06009625,
+    0.0601439,
+    0.030750000000000003
+  ],
+  "bbox_size_m": [
+    0.1201925,
+    0.1202878,
+    0.061500000000000006
+  ],
+  "raw_bbox_min_m": [
+    -0.06009625,
+    -0.0601439,
+    0.0
+  ],
+  "raw_bbox_max_m": [
+    0.06009625,
+    0.0601439,
+    0.061500000000000006
+  ],
+  "raw_bbox_center_m": [
+    0.0,
+    0.0,
+    0.030750000000000003
+  ],
+  "parts": [
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_0.usd",
+      "default_prim": "/fabrica_cooling_manifold_0",
+      "variant": "aligned",
+      "vertex_count": 10240,
+      "triangle_count": 20476,
+      "bbox_min_m": [
+        -0.008827099420452116,
+        -0.008748620245790482,
+        -0.023250000335276133
+      ],
+      "bbox_max_m": [
+        0.008827099732732775,
+        0.008748620319926738,
+        0.02325000169873237
+      ],
+      "bbox_size_m": [
+        0.01765419915318489,
+        0.01749724056571722,
+        0.0465000020340085
+      ],
+      "bbox_center_m": [
+        1.561403298322439e-10,
+        3.70681280809082e-11,
+        6.817281184012813e-10
+      ],
+      "raw_bbox_min_m": [
+        -0.04004895000000001,
+        -0.00865202,
+        0.015
+      ],
+      "raw_bbox_max_m": [
+        -0.02239475,
+        0.00884522,
+        0.061500000000000006
+      ],
+      "raw_bbox_size_m": [
+        0.017654200000000005,
+        0.01749724,
+        0.04650000000000001
+      ],
+      "raw_bbox_center_m": [
+        -0.031221850000000002,
+        9.66000000000005e-05,
+        0.038250000000000006
+      ],
+      "raw_to_variant_translation_m": [
+        0.031221850000000002,
+        -9.66000000000005e-05,
+        -0.038250000000000006
+      ],
+      "variant_to_raw_translation_m": [
+        -0.031221850000000002,
+        9.66000000000005e-05,
+        0.038250000000000006
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_0",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/0.obj",
+      "assembled_child_translate_m": [
+        -0.031221850000000002,
+        9.66000000000005e-05,
+        0.007500000000000003
+      ]
+    },
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_1.usd",
+      "default_prim": "/fabrica_cooling_manifold_1",
+      "variant": "aligned",
+      "vertex_count": 3203,
+      "triangle_count": 6418,
+      "bbox_min_m": [
+        -0.05999939920167923,
+        -0.05999939838442802,
+        -0.0175
+      ],
+      "bbox_max_m": [
+        0.05999939857263565,
+        0.05999939938988686,
+        0.01750000014901161
+      ],
+      "bbox_size_m": [
+        0.11999879777431488,
+        0.11999879777431488,
+        0.03500000014901161
+      ],
+      "bbox_center_m": [
+        -3.145217905564657e-10,
+        5.027294205928179e-10,
+        7.450580430390374e-11
+      ],
+      "raw_bbox_min_m": [
+        -0.06004835,
+        -0.059902800000000006,
+        0.0
+      ],
+      "raw_bbox_max_m": [
+        0.05995045,
+        0.060096,
+        0.035
+      ],
+      "raw_bbox_size_m": [
+        0.1199988,
+        0.1199988,
+        0.035
+      ],
+      "raw_bbox_center_m": [
+        -4.8949999999998994e-05,
+        9.65999999999953e-05,
+        0.0175
+      ],
+      "raw_to_variant_translation_m": [
+        4.8949999999998994e-05,
+        -9.65999999999953e-05,
+        -0.0175
+      ],
+      "variant_to_raw_translation_m": [
+        -4.8949999999998994e-05,
+        9.65999999999953e-05,
+        0.0175
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.12599747587513907,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_1",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/1.obj",
+      "assembled_child_translate_m": [
+        -4.8949999999998994e-05,
+        9.65999999999953e-05,
+        -0.013250000000000001
+      ]
+    },
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_2.usd",
+      "default_prim": "/fabrica_cooling_manifold_2",
+      "variant": "aligned",
+      "vertex_count": 325,
+      "triangle_count": 646,
+      "bbox_min_m": [
+        -0.010047298984336858,
+        -0.010028898958301544,
+        -0.0175
+      ],
+      "bbox_max_m": [
+        0.010047300590467448,
+        0.010028898473644257,
+        0.01750000014901161
+      ],
+      "bbox_size_m": [
+        0.020094599574804306,
+        0.0200577974319458,
+        0.03500000014901161
+      ],
+      "bbox_center_m": [
+        8.030652948187722e-10,
+        -2.4232864326290127e-10,
+        7.450580430390374e-11
+      ],
+      "raw_bbox_min_m": [
+        -0.06009625,
+        -0.059932299999999994,
+        0.0
+      ],
+      "raw_bbox_max_m": [
+        -0.04000165,
+        -0.0398745,
+        0.035
+      ],
+      "raw_bbox_size_m": [
+        0.020094599999999997,
+        0.020057799999999994,
+        0.035
+      ],
+      "raw_bbox_center_m": [
+        -0.050048949999999995,
+        -0.0499034,
+        0.0175
+      ],
+      "raw_to_variant_translation_m": [
+        0.050048949999999995,
+        0.0499034,
+        -0.0175
+      ],
+      "variant_to_raw_translation_m": [
+        -0.050048949999999995,
+        -0.0499034,
+        0.0175
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_2",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/2.obj",
+      "assembled_child_translate_m": [
+        -0.050048949999999995,
+        -0.0499034,
+        -0.013250000000000001
+      ]
+    },
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_3.usd",
+      "default_prim": "/fabrica_cooling_manifold_3",
+      "variant": "aligned",
+      "vertex_count": 325,
+      "triangle_count": 646,
+      "bbox_min_m": [
+        -0.010145201848554608,
+        -0.00991229960713387,
+        -0.0175
+      ],
+      "bbox_max_m": [
+        0.010145198984336856,
+        0.009912298377418513,
+        0.01750000014901161
+      ],
+      "bbox_size_m": [
+        0.020290400832891464,
+        0.019824597984552383,
+        0.03500000014901161
+      ],
+      "bbox_center_m": [
+        -1.4321088759317036e-09,
+        -6.148576786602078e-10,
+        7.450580430390374e-11
+      ],
+      "raw_bbox_min_m": [
+        0.039805850000000004,
+        0.040184300000000006,
+        0.0
+      ],
+      "raw_bbox_max_m": [
+        0.06009625,
+        0.060008900000000004,
+        0.035
+      ],
+      "raw_bbox_size_m": [
+        0.020290399999999993,
+        0.019824599999999998,
+        0.035
+      ],
+      "raw_bbox_center_m": [
+        0.04995105,
+        0.050096600000000005,
+        0.0175
+      ],
+      "raw_to_variant_translation_m": [
+        -0.04995105,
+        -0.050096600000000005,
+        -0.0175
+      ],
+      "variant_to_raw_translation_m": [
+        0.04995105,
+        0.050096600000000005,
+        0.0175
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_3",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/3.obj",
+      "assembled_child_translate_m": [
+        0.04995105,
+        0.050096600000000005,
+        -0.013250000000000001
+      ]
+    },
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_4.usd",
+      "default_prim": "/fabrica_cooling_manifold_4",
+      "variant": "aligned",
+      "vertex_count": 10240,
+      "triangle_count": 20476,
+      "bbox_min_m": [
+        -0.008827100361776353,
+        -0.008748620245790482,
+        -0.023250000335276133
+      ],
+      "bbox_max_m": [
+        0.008827098791408538,
+        0.008748620319926738,
+        0.02325000169873237
+      ],
+      "bbox_size_m": [
+        0.01765419915318489,
+        0.01749724056571722,
+        0.0465000020340085
+      ],
+      "bbox_center_m": [
+        -7.851839074757283e-10,
+        3.70681280809082e-11,
+        6.817281184012813e-10
+      ],
+      "raw_bbox_min_m": [
+        0.02229685,
+        -0.00865202,
+        0.015
+      ],
+      "raw_bbox_max_m": [
+        0.03995105,
+        0.00884522,
+        0.061500000000000006
+      ],
+      "raw_bbox_size_m": [
+        0.017654200000000002,
+        0.01749724,
+        0.04650000000000001
+      ],
+      "raw_bbox_center_m": [
+        0.03112395,
+        9.66000000000005e-05,
+        0.038250000000000006
+      ],
+      "raw_to_variant_translation_m": [
+        -0.03112395,
+        -9.66000000000005e-05,
+        -0.038250000000000006
+      ],
+      "variant_to_raw_translation_m": [
+        0.03112395,
+        9.66000000000005e-05,
+        0.038250000000000006
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_4",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/4.obj",
+      "assembled_child_translate_m": [
+        0.03112395,
+        9.66000000000005e-05,
+        0.007500000000000003
+      ]
+    },
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_5.usd",
+      "default_prim": "/fabrica_cooling_manifold_5",
+      "variant": "aligned",
+      "vertex_count": 325,
+      "triangle_count": 646,
+      "bbox_min_m": [
+        -0.009753398166704175,
+        -0.010240499172544479,
+        -0.0175
+      ],
+      "bbox_max_m": [
+        0.009753399027776721,
+        0.010240498687887192,
+        0.01750000014901161
+      ],
+      "bbox_size_m": [
+        0.019506797194480896,
+        0.02048099786043167,
+        0.03500000014901161
+      ],
+      "bbox_center_m": [
+        4.305362732992535e-10,
+        -2.4232864326290127e-10,
+        7.450580430390374e-11
+      ],
+      "raw_bbox_min_m": [
+        0.040197649999999994,
+        -0.0601439,
+        0.0
+      ],
+      "raw_bbox_max_m": [
+        0.05970445,
+        -0.0396629,
+        0.035
+      ],
+      "raw_bbox_size_m": [
+        0.019506800000000005,
+        0.020481,
+        0.035
+      ],
+      "raw_bbox_center_m": [
+        0.04995105,
+        -0.0499034,
+        0.0175
+      ],
+      "raw_to_variant_translation_m": [
+        -0.04995105,
+        0.0499034,
+        -0.0175
+      ],
+      "variant_to_raw_translation_m": [
+        0.04995105,
+        -0.0499034,
+        0.0175
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_5",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/5.obj",
+      "assembled_child_translate_m": [
+        0.04995105,
+        -0.0499034,
+        -0.013250000000000001
+      ]
+    },
+    {
+      "usd_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/cooling_manifold/parts/fabrica_cooling_manifold_6.usd",
+      "default_prim": "/fabrica_cooling_manifold_6",
+      "variant": "aligned",
+      "vertex_count": 325,
+      "triangle_count": 646,
+      "bbox_min_m": [
+        -0.010028899775552755,
+        -0.010047300402259832,
+        -0.0175
+      ],
+      "bbox_max_m": [
+        0.010028901381683344,
+        0.010047299172544474,
+        0.01750000014901161
+      ],
+      "bbox_size_m": [
+        0.0200578011572361,
+        0.020094599574804306,
+        0.03500000014901161
+      ],
+      "bbox_center_m": [
+        8.030652948187722e-10,
+        -6.148576786602078e-10,
+        7.450580430390374e-11
+      ],
+      "raw_bbox_min_m": [
+        -0.06007785,
+        0.0400493,
+        0.0
+      ],
+      "raw_bbox_max_m": [
+        -0.040020049999999995,
+        0.0601439,
+        0.035
+      ],
+      "raw_bbox_size_m": [
+        0.020057800000000008,
+        0.020094599999999997,
+        0.035
+      ],
+      "raw_bbox_center_m": [
+        -0.050048949999999995,
+        0.050096600000000005,
+        0.0175
+      ],
+      "raw_to_variant_translation_m": [
+        0.050048949999999995,
+        -0.050096600000000005,
+        -0.0175
+      ],
+      "variant_to_raw_translation_m": [
+        -0.050048949999999995,
+        0.050096600000000005,
+        0.0175
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "cooling_manifold",
+      "part_name": "cooling_manifold_6",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/cooling_manifold/6.obj",
+      "assembled_child_translate_m": [
+        -0.050048949999999995,
+        0.050096600000000005,
+        -0.013250000000000001
+      ]
+    }
+  ],
+  "sdf_margin_m": 0.001
+}

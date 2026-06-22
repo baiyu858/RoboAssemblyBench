@@ -187,9 +187,15 @@ class RoboChecker:
                     errors.append(f"Phase {phase_name!r} attach references unknown robot {attach_spec.get('robot')!r}.")
                 if attach_spec.get('object') not in object_by_name:
                     errors.append(f"Phase {phase_name!r} attach references unknown object {attach_spec.get('object')!r}.")
-                target_name = attach_spec.get('target')
-                if target_name and target_name not in target_by_name:
-                    errors.append(f"Phase {phase_name!r} attach references unknown target {target_name!r}.")
+                target = attach_spec.get('target')
+                if isinstance(target, dict):
+                    reference = target.get('reference')
+                    if reference and reference != 'world' and reference not in object_by_name:
+                        errors.append(
+                            f"Phase {phase_name!r} attach inline target references unknown object {reference!r}."
+                        )
+                elif target and target not in target_by_name:
+                    errors.append(f"Phase {phase_name!r} attach references unknown target {target!r}.")
 
             for detach_spec in as_list(phase.get('detach')):
                 if isinstance(detach_spec, str):

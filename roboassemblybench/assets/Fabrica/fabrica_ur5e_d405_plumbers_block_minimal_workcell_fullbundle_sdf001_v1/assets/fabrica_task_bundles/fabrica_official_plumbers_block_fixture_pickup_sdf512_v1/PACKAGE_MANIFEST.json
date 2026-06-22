@@ -1,0 +1,27 @@
+{
+  "package_name": "fabrica_official_plumbers_block_fixture_pickup_sdf512_v1",
+  "package_type": "fabrica_official_aligned_fixture_pickup_scene",
+  "assembly": "plumbers_block",
+  "entrypoints": {
+    "scene_usda": "scene/scene.usda",
+    "scene_spec_json": "scene/scene_spec.json",
+    "validation_json": "validation/validation.json",
+    "plan_info_pkl": "metadata/plan_info.pkl",
+    "pickup_json": "assets/fabrica_official_fixture/plumbers_block/pickup.json"
+  },
+  "official_alignment": {
+    "uses_raw_frame_parts": true,
+    "uses_official_fixture_obj": true,
+    "uses_official_pickup_json": true,
+    "uses_merged_official_plan_info": true,
+    "uses_physx_sdf_collision": true,
+    "gravity_enabled_for_pickup_parts": true,
+    "assembled_reference_parts_are_dynamic_rigid_bodies": true,
+    "uses_internal_official_fabrica_table": false,
+    "recipe_origin_is_optical_board_plane": true,
+    "support_surface": "optical_board_only"
+  },
+  "part_count": 5,
+  "plan_steps": 4,
+  "validation_status": "pass"
+}

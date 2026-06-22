@@ -1,0 +1,26 @@
+#usda 1.0
+(
+    defaultPrim = "D405"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "D405"
+{
+    def Mesh "Visual" (
+        prepend references = @../../RealSense_D405.usda@
+    )
+    {
+        double3 xformOp:scale = (0.001, 0.001, 0.001)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+    }
+
+    def Camera "Camera_Color"
+    {
+        float focalLength = 1.93
+        float focusDistance = 0.4
+        float horizontalAperture = 3.68
+        float verticalAperture = 2.76
+        float2 clippingRange = (0.01, 10)
+    }
+}

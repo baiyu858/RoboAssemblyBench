@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    defaultPrim = "fabrica_plumbers_block_assembled"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "fabrica_plumbers_block_assembled"
+{
+    def Xform "plumbers_block_0" (
+        prepend references = @../parts/fabrica_plumbers_block_0.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (5.999999999964367e-8, 0, -0.0005916199999999941)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "plumbers_block_1" (
+        prepend references = @../parts/fabrica_plumbers_block_1.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (-0.04, 0.0012658, 0.01750000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "plumbers_block_2" (
+        prepend references = @../parts/fabrica_plumbers_block_2.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0, 0.0012657999999999992, -0.019999999999999997)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "plumbers_block_3" (
+        prepend references = @../parts/fabrica_plumbers_block_3.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0, 0.0012657999999999992, 0.025573649999999996)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "plumbers_block_4" (
+        prepend references = @../parts/fabrica_plumbers_block_4.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0.04, 0.0012658, 0.01750000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}
+

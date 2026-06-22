@@ -1,0 +1,391 @@
+{
+  "assembly": "plumbers_block",
+  "variant": "aligned",
+  "part_count": 5,
+  "source_dir": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block",
+  "manifest_path": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/manifest.json",
+  "assembled_preview_usd": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/assembled/fabrica_plumbers_block_assembled.usda",
+  "bbox_min_m": [
+    -0.08,
+    -0.04,
+    -0.0525
+  ],
+  "bbox_max_m": [
+    0.08,
+    0.04,
+    0.0525
+  ],
+  "bbox_size_m": [
+    0.16,
+    0.08,
+    0.105
+  ],
+  "raw_bbox_min_m": [
+    -0.08,
+    -0.04,
+    0.0
+  ],
+  "raw_bbox_max_m": [
+    0.08,
+    0.04,
+    0.105
+  ],
+  "raw_bbox_center_m": [
+    0.0,
+    0.0,
+    0.0525
+  ],
+  "parts": [
+    {
+      "usd_path": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+      "default_prim": "/fabrica_plumbers_block_0",
+      "variant": "aligned",
+      "vertex_count": 484,
+      "triangle_count": 968,
+      "bbox_min_m": [
+        -0.021361459441957473,
+        -0.03999999910593033,
+        -0.02475001907170296
+      ],
+      "bbox_max_m": [
+        0.021361460513892174,
+        0.03999999910593033,
+        0.024750017912979122
+      ],
+      "bbox_size_m": [
+        0.04272291995584965,
+        0.07999999821186066,
+        0.04950003698468208
+      ],
+      "bbox_center_m": [
+        5.359673503624318e-10,
+        0.0,
+        -5.793619195504363e-10
+      ],
+      "raw_bbox_min_m": [
+        -0.021361400000000003,
+        -0.04,
+        0.02715836
+      ],
+      "raw_bbox_max_m": [
+        0.021361520000000002,
+        0.04,
+        0.0766584
+      ],
+      "raw_bbox_size_m": [
+        0.042722920000000005,
+        0.08,
+        0.04950004
+      ],
+      "raw_bbox_center_m": [
+        5.999999999964367e-08,
+        0.0,
+        0.051908380000000004
+      ],
+      "raw_to_variant_translation_m": [
+        -5.999999999964367e-08,
+        -0.0,
+        -0.051908380000000004
+      ],
+      "variant_to_raw_translation_m": [
+        5.999999999964367e-08,
+        0.0,
+        0.051908380000000004
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.04229572141278033,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "plumbers_block",
+      "part_name": "plumbers_block_0",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/0.obj",
+      "assembled_child_translate_m": [
+        5.999999999964367e-08,
+        0.0,
+        -0.0005916199999999941
+      ]
+    },
+    {
+      "usd_path": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+      "default_prim": "/fabrica_plumbers_block_1",
+      "variant": "aligned",
+      "vertex_count": 313,
+      "triangle_count": 622,
+      "bbox_min_m": [
+        -0.01441639944911003,
+        -0.012500600331294538,
+        -0.034999999850988395
+      ],
+      "bbox_max_m": [
+        0.014416399374604226,
+        0.012500599584710597,
+        0.03499999672174453
+      ],
+      "bbox_size_m": [
+        0.028832798823714256,
+        0.025001199916005135,
+        0.06999999657273293
+      ],
+      "bbox_center_m": [
+        -3.725290215195187e-11,
+        -3.732919702514881e-10,
+        -1.564621932015342e-09
+      ],
+      "raw_bbox_min_m": [
+        -0.0544164,
+        -0.011234800000000001,
+        0.035
+      ],
+      "raw_bbox_max_m": [
+        -0.0255836,
+        0.013766400000000002,
+        0.105
+      ],
+      "raw_bbox_size_m": [
+        0.028832799999999995,
+        0.0250012,
+        0.06999999999999999
+      ],
+      "raw_bbox_center_m": [
+        -0.04,
+        0.0012658,
+        0.07
+      ],
+      "raw_to_variant_translation_m": [
+        0.04,
+        -0.0012658,
+        -0.07
+      ],
+      "variant_to_raw_translation_m": [
+        -0.04,
+        0.0012658,
+        0.07
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01261495431412838,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "plumbers_block",
+      "part_name": "plumbers_block_1",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/1.obj",
+      "assembled_child_translate_m": [
+        -0.04,
+        0.0012658,
+        0.01750000000000001
+      ]
+    },
+    {
+      "usd_path": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+      "default_prim": "/fabrica_plumbers_block_2",
+      "variant": "aligned",
+      "vertex_count": 1376,
+      "triangle_count": 2756,
+      "bbox_min_m": [
+        -0.07999999821186066,
+        -0.01999999992625713,
+        -0.0325
+      ],
+      "bbox_max_m": [
+        0.07999999821186066,
+        0.019999999179673197,
+        0.03249999761581421
+      ],
+      "bbox_size_m": [
+        0.1599999964237213,
+        0.03999999910593033,
+        0.06499999761581421
+      ],
+      "bbox_center_m": [
+        0.0,
+        -3.7329196678204113e-10,
+        -1.1920928966180355e-09
+      ],
+      "raw_bbox_min_m": [
+        -0.08,
+        -0.018734200000000003,
+        0.0
+      ],
+      "raw_bbox_max_m": [
+        0.08,
+        0.0212658,
+        0.065
+      ],
+      "raw_bbox_size_m": [
+        0.16,
+        0.04000000000000001,
+        0.065
+      ],
+      "raw_bbox_center_m": [
+        0.0,
+        0.0012657999999999992,
+        0.0325
+      ],
+      "raw_to_variant_translation_m": [
+        -0.0,
+        -0.0012657999999999992,
+        -0.0325
+      ],
+      "variant_to_raw_translation_m": [
+        0.0,
+        0.0012657999999999992,
+        0.0325
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.10399999153614066,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "plumbers_block",
+      "part_name": "plumbers_block_2",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/2.obj",
+      "assembled_child_translate_m": [
+        0.0,
+        0.0012657999999999992,
+        -0.019999999999999997
+      ]
+    },
+    {
+      "usd_path": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+      "default_prim": "/fabrica_plumbers_block_3",
+      "variant": "aligned",
+      "vertex_count": 758,
+      "triangle_count": 1520,
+      "bbox_min_m": [
+        -0.05000000074505806,
+        -0.01999999992625713,
+        -0.013073652384185785
+      ],
+      "bbox_max_m": [
+        0.05000000074505806,
+        0.019999999179673197,
+        0.013073653581237799
+      ],
+      "bbox_size_m": [
+        0.10000000149011612,
+        0.03999999910593033,
+        0.026147305965423584
+      ],
+      "bbox_center_m": [
+        0.0,
+        -3.7329196678204113e-10,
+        5.985260065344278e-10
+      ],
+      "raw_bbox_min_m": [
+        -0.05,
+        -0.018734200000000003,
+        0.065
+      ],
+      "raw_bbox_max_m": [
+        0.05,
+        0.0212658,
+        0.0911473
+      ],
+      "raw_bbox_size_m": [
+        0.1,
+        0.04000000000000001,
+        0.0261473
+      ],
+      "raw_bbox_center_m": [
+        0.0,
+        0.0012657999999999992,
+        0.07807365
+      ],
+      "raw_to_variant_translation_m": [
+        -0.0,
+        -0.0012657999999999992,
+        -0.07807365
+      ],
+      "variant_to_raw_translation_m": [
+        0.0,
+        0.0012657999999999992,
+        0.07807365
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.026147305770610963,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "plumbers_block",
+      "part_name": "plumbers_block_3",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/3.obj",
+      "assembled_child_translate_m": [
+        0.0,
+        0.0012657999999999992,
+        0.025573649999999996
+      ]
+    },
+    {
+      "usd_path": "/tmp/fabrica_plumbers_sdf001_assets/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+      "default_prim": "/fabrica_plumbers_block_4",
+      "variant": "aligned",
+      "vertex_count": 313,
+      "triangle_count": 622,
+      "bbox_min_m": [
+        -0.014416399374604226,
+        -0.012500600331294538,
+        -0.034999999850988395
+      ],
+      "bbox_max_m": [
+        0.01441639944911003,
+        0.012500599584710597,
+        0.03499999672174453
+      ],
+      "bbox_size_m": [
+        0.028832798823714256,
+        0.025001199916005135,
+        0.06999999657273293
+      ],
+      "bbox_center_m": [
+        3.725290215195187e-11,
+        -3.732919702514881e-10,
+        -1.564621932015342e-09
+      ],
+      "raw_bbox_min_m": [
+        0.0255836,
+        -0.011234800000000001,
+        0.035
+      ],
+      "raw_bbox_max_m": [
+        0.0544164,
+        0.013766400000000002,
+        0.105
+      ],
+      "raw_bbox_size_m": [
+        0.028832799999999995,
+        0.0250012,
+        0.06999999999999999
+      ],
+      "raw_bbox_center_m": [
+        0.04,
+        0.0012658,
+        0.07
+      ],
+      "raw_to_variant_translation_m": [
+        -0.04,
+        -0.0012658,
+        -0.07
+      ],
+      "variant_to_raw_translation_m": [
+        0.04,
+        0.0012658,
+        0.07
+      ],
+      "density_kg_per_m3": 1250.0,
+      "estimated_mass_kg": 0.01261495431412838,
+      "friction": 0.5,
+      "collision_approximation": "sdf",
+      "sdf_margin_m": 0.001,
+      "assembly": "plumbers_block",
+      "part_name": "plumbers_block_4",
+      "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/4.obj",
+      "assembled_child_translate_m": [
+        0.04,
+        0.0012658,
+        0.01750000000000001
+      ]
+    }
+  ],
+  "sdf_margin_m": 0.001
+}

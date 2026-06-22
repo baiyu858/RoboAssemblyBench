@@ -1,0 +1,442 @@
+task:
+  mode:
+    export_scene: false
+    export_states: false
+  sim:
+    dt: 0.016667
+    substeps: 2
+    up_axis: z
+    use_gpu_pipeline: ${eq:${...pipeline},"gpu"}
+    gravity:
+    - 0.0
+    - 0.0
+    - -9.81
+    add_damping: false
+    physx:
+      solver_type: ${....solver_type}
+      num_threads: ${....num_threads}
+      num_subscenes: ${....num_subscenes}
+      use_gpu: ${contains:"cuda",${....sim_device}}
+      num_position_iterations: 16
+      num_velocity_iterations: 0
+      contact_offset: 0.005
+      rest_offset: 0.0
+      bounce_threshold_velocity: 0.2
+      max_depenetration_velocity: 5.0
+      friction_offset_threshold: 0.01
+      friction_correlation_distance: 0.00625
+      max_gpu_contact_pairs: 1048576
+      default_buffer_size_multiplier: 8.0
+      contact_collection: 1
+  env:
+    env_spacing: 0.5
+    assembly_center:
+    - 0
+    - -0.15
+    - 0
+    franka_pos:
+    - 0.454
+    - 0.1975
+    - -0.00495
+    franka_euler:
+    - 0
+    - 0
+    - -1.559615883383144
+    franka_rest_dof_pos:
+    - 0
+    - -0.7853981633974483
+    - 0
+    - -2.356194490192345
+    - 0
+    - 1.5707963267948966
+    - 0.7853981633974483
+    table_height: 0.4
+    franka_friction: 1
+    table_friction: 0.3
+    numEnvs: 1024
+    numObservations: 3
+    numStates: 6
+    numActions: 3
+    controlFrequencyInv: 2
+    assemblies:
+    - plumbers_block
+    part_plug: null
+    part_socket: null
+    data_dir: tasks/fabrica/data/
+    palm_to_finger_dist: 0.1034
+    if_eval: false
+    path_transform: true
+    residual_action: true
+    openloop: false
+  name: FabricaFixPlugTaskAssemble
+  physics_engine: ${..physics_engine}
+  randomize:
+    fingertip_centered_pos_noise:
+    - 0.0
+    - 0.0
+    - 0.0
+    fingertip_centered_rot_noise:
+    - 0.0
+    - 0.0
+    - 0.0
+    socket_pos_noise:
+    - 0.003
+    - 0.003
+    - 0.003
+    socket_rot_noise:
+    - 0.0
+    - 0.0
+    - 0.0
+  rl:
+    clamp_rot: true
+    clamp_rot_thresh: 1.0e-06
+    pos_action_scale:
+    - 0.005
+    - 0.005
+    - 0.005
+    force_action_scale:
+    - 1.0
+    - 1.0
+    - 1.0
+    torque_action_scale:
+    - 1.0
+    - 1.0
+    - 1.0
+    max_episode_length: 128
+    num_keypoints: 4
+    keypoint_scale: 0.05
+    keypoint_reward_scale: 1000.0
+    close_error_thresh: 0.005
+    deviation_thresh: 0.008
+  ctrl:
+    ctrl_type: task_space_nullspace
+    all:
+      jacobian_type: geometric
+      gripper_prop_gains:
+      - 250
+      - 250
+      gripper_deriv_gains:
+      - 2
+      - 2
+    gym_default:
+      ik_method: dls
+      joint_prop_gains:
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      joint_deriv_gains:
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      gripper_prop_gains:
+      - 500
+      - 500
+      gripper_deriv_gains:
+      - 20
+      - 20
+    joint_space_ik:
+      ik_method: dls
+      joint_prop_gains:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      joint_deriv_gains:
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+    joint_space_id:
+      ik_method: dls
+      joint_prop_gains:
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      joint_deriv_gains:
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+    task_space_impedance:
+      motion_ctrl_axes:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      task_prop_gains:
+      - 1000
+      - 1000
+      - 1000
+      - 50
+      - 50
+      - 50
+      task_deriv_gains:
+      - 63.2
+      - 63.2
+      - 63.2
+      - 1.41
+      - 1.41
+      - 1.41
+    task_space_nullspace:
+      motion_ctrl_axes:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      task_prop_gains:
+      - 1000
+      - 1000
+      - 1000
+      - 50
+      - 50
+      - 50
+      task_deriv_gains:
+      - 63.2
+      - 63.2
+      - 63.2
+      - 1.41
+      - 1.41
+      - 1.41
+      default_dof_pos_tensor:
+      - 0.0
+      - 0.0
+      - 0.0
+      - -1.87
+      - 0.0
+      - 1.8675
+      - 0.785398
+      kp_null: 1.0
+      kd_null: 2.0
+    operational_space_motion:
+      motion_ctrl_axes:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      task_prop_gains:
+      - 60
+      - 60
+      - 60
+      - 5
+      - 5
+      - 5
+      task_deriv_gains:
+      - 15.5
+      - 15.5
+      - 15.5
+      - 4.5
+      - 4.5
+      - 4.5
+    open_loop_force:
+      force_ctrl_axes:
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    closed_loop_force:
+      force_ctrl_axes:
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+      wrench_prop_gains:
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+    hybrid_force_motion:
+      motion_ctrl_axes:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      task_prop_gains:
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      - 40
+      task_deriv_gains:
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      - 8
+      force_ctrl_axes:
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+      wrench_prop_gains:
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+      - 0.1
+train:
+  params:
+    seed: ${...seed}
+    algo:
+      name: a2c_continuous
+    model:
+      name: continuous_a2c_logstd
+    network:
+      name: actor_critic
+      separate: false
+      space:
+        continuous:
+          mu_activation: None
+          sigma_activation: None
+          mu_init:
+            name: default
+          sigma_init:
+            name: const_initializer
+            val: 0
+          fixed_sigma: true
+      mlp:
+        units:
+        - 256
+        - 128
+        - 64
+        activation: elu
+        d2rl: false
+        initializer:
+          name: default
+        regularizer:
+          name: None
+    load_checkpoint: ${if:${...checkpoint},True,False}
+    load_path: ${...checkpoint}
+    config:
+      name: ${resolve_default:FabricaFixPlugTaskAssemble,${....experiment}}
+      full_experiment_name: ${.name}
+      env_name: rlgpu
+      multi_gpu: ${....multi_gpu}
+      ppo: true
+      mixed_precision: true
+      normalize_input: true
+      normalize_value: true
+      value_bootstrap: true
+      num_actors: ${....task.env.numEnvs}
+      reward_shaper:
+        scale_value: 1.0
+      normalize_advantage: true
+      gamma: 0.99
+      tau: 0.95
+      learning_rate: 0.0001
+      lr_schedule: fixed
+      schedule_type: standard
+      kl_threshold: 0.016
+      score_to_win: 20000
+      max_epochs: ${resolve_default:500,${....max_iterations}}
+      save_best_after: 50
+      save_frequency: 100
+      print_stats: true
+      grad_norm: 1.0
+      entropy_coef: 0.003
+      truncate_grads: false
+      e_clip: 0.2
+      horizon_length: 32
+      minibatch_size: 512
+      mini_epochs: 8
+      critic_coef: 2
+      clip_value: true
+      seq_length: 4
+      bounds_loss_coef: 0.0001
+      central_value_config:
+        minibatch_size: 256
+        mini_epochs: 4
+        learning_rate: 0.0003
+        lr_schedule: linear
+        kl_threshold: 0.016
+        clip_value: true
+        normalize_input: true
+        truncate_grads: true
+        network:
+          name: actor_critic
+          central_value: true
+          mlp:
+            units:
+            - 256
+            - 128
+            - 64
+            activation: elu
+            d2rl: false
+            initializer:
+              name: default
+            regularizer:
+              name: None
+      player:
+        deterministic: false
+        games_num: 1024
+pbt:
+  enabled: false
+task_name: ${task.name}
+experiment: sr_gen_plumbers_block
+num_envs: ''
+seed: 42
+torch_deterministic: false
+max_iterations: 1500
+physics_engine: physx
+pipeline: gpu
+sim_device: cuda:0
+rl_device: cuda:0
+graphics_device_id: 0
+num_threads: 4
+solver_type: 1
+num_subscenes: 4
+test: false
+checkpoint: ''
+sigma: ''
+multi_gpu: false
+wandb_activate: false
+wandb_group: ''
+wandb_name: ${train.params.config.name}
+wandb_entity: ''
+wandb_project: isaacgymenvs
+wandb_tags: []
+wandb_logcode_dir: ''
+capture_video: false
+capture_video_freq: 1464
+capture_video_len: 100
+force_render: true
+headless: true

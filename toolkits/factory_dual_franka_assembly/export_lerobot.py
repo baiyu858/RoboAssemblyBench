@@ -652,7 +652,7 @@ def _collect_png_paths(frames_dir: Path) -> list[Path]:
     return sorted(path for path in frames_dir.rglob('*.png') if path.is_file())
 
 
-def _encode_mp4_from_pngs(frames_dir: Path, output_path: Path, fps: int) -> dict:
+def _encode_mp4_from_pngs(frames_dir: Path, output_path: Path, fps: float) -> dict:
     png_paths = _collect_png_paths(frames_dir)
     if not png_paths:
         raise RuntimeError(f'No PNG frames were written to {frames_dir}')
@@ -661,11 +661,102 @@ def _encode_mp4_from_pngs(frames_dir: Path, output_path: Path, fps: int) -> dict
     if first_frame is None:
         raise RuntimeError(f'Failed to read the first PNG frame at {png_paths[0]}')
     height, width = first_frame.shape[:2]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _read_frame(path: Path):
+        frame_bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+        if frame_bgr is None:
+            raise RuntimeError(f'Failed to read frame {path}')
+        if frame_bgr.shape[:2] != (height, width):
+            raise RuntimeError(
+                f'Frame {path} has shape {frame_bgr.shape[:2]}, expected {(height, width)}'
+            )
+        return frame_bgr
+
+    def _summary(image_stats: RunningImageStats, *, encoder: str, extra: dict | None = None) -> dict:
+        payload = {
+            'png_count': len(png_paths),
+            'image_stats': image_stats.to_dict(),
+            'width': width,
+            'height': height,
+            'fps': float(fps),
+            'encoder': encoder,
+        }
+        if extra:
+            payload.update(extra)
+        return payload
+
+    ffmpeg_path = shutil.which('ffmpeg')
+    ffmpeg_error = None
+    if ffmpeg_path:
+        image_stats = RunningImageStats()
+        command = [
+            ffmpeg_path,
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-y',
+            '-f',
+            'rawvideo',
+            '-pix_fmt',
+            'bgr24',
+            '-s',
+            f'{width}x{height}',
+            '-r',
+            str(float(fps)),
+            '-i',
+            '-',
+            '-an',
+            '-c:v',
+            'libx264',
+            '-preset',
+            'medium',
+            '-crf',
+            '18',
+            '-pix_fmt',
+            'yuv420p',
+            '-movflags',
+            '+faststart',
+            str(output_path),
+        ]
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            if process.stdin is None:
+                raise RuntimeError('Failed to open ffmpeg stdin pipe')
+            for png_path in png_paths:
+                frame_bgr = _read_frame(png_path)
+                image_stats.update(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+                process.stdin.write(frame_bgr.tobytes())
+            process.stdin.close()
+            return_code = process.wait()
+            stderr = process.stderr.read().decode('utf-8', errors='replace') if process.stderr else ''
+            if return_code != 0:
+                raise RuntimeError(stderr.strip() or f'ffmpeg exited with code {return_code}')
+            return _summary(image_stats, encoder='ffmpeg-libx264')
+        except Exception as exc:
+            ffmpeg_error = str(exc)
+            try:
+                process.kill()
+            except Exception:
+                pass
+            try:
+                process.wait(timeout=1)
+            except Exception:
+                pass
+            try:
+                output_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     writer = cv2.VideoWriter(
         str(output_path),
         cv2.VideoWriter_fourcc(*'mp4v'),
-        fps,
+        float(fps),
         (width, height),
     )
     if not writer.isOpened():
@@ -674,22 +765,15 @@ def _encode_mp4_from_pngs(frames_dir: Path, output_path: Path, fps: int) -> dict
     image_stats = RunningImageStats()
     try:
         for png_path in png_paths:
-            frame_bgr = cv2.imread(str(png_path), cv2.IMREAD_COLOR)
-            if frame_bgr is None:
-                raise RuntimeError(f'Failed to read frame {png_path}')
+            frame_bgr = _read_frame(png_path)
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             image_stats.update(frame_rgb)
             writer.write(frame_bgr)
     finally:
         writer.release()
 
-    return {
-        'png_count': len(png_paths),
-        'image_stats': image_stats.to_dict(),
-        'width': width,
-        'height': height,
-        'fps': fps,
-    }
+    extra = {'encoder_fallback_reason': ffmpeg_error[:512]} if ffmpeg_error else None
+    return _summary(image_stats, encoder='opencv-mp4v', extra=extra)
 
 
 def _isaac_render_summary_path(output_path: Path) -> Path:

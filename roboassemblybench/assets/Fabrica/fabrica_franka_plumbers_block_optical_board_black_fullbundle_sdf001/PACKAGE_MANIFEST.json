@@ -1,0 +1,2601 @@
+{
+  "package_name": "fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001",
+  "robot": "franka",
+  "assembly": "plumbers_block",
+  "full_bundle": true,
+  "generated_utc": "2026-06-08T07:04:03.719636+00:00",
+  "sdf_margin_m": 0.001,
+  "part_count": 5,
+  "assembled_reference_composed_from_parts": true,
+  "black_optical_board": true,
+  "entrypoints": {
+    "scene_usda": "scene/scene.usda",
+    "scene_spec_json": "scene/scene_spec.json",
+    "isaaclab_cfg": "isaaclab_cfg/fabrica_dual_franka_scene_cfg.py"
+  },
+  "checksums": {
+    "scene/scene.usda": "0fba40ef73a8ae326f4e1e12f005aa9627e1ded8b3ccc86ff90993209149ac2a",
+    "scene/scene_spec.json": "fc786cc4494ecb2b9235c707f898371375e30584d973d570a8100d321ef16b05",
+    "isaaclab_cfg/fabrica_dual_franka_scene_cfg.py": "34b776b4f761c5ad7d4531b7e8f453e3a9591c0ea4cc9056a76f69574df7062f",
+    "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/manifest.json": "60d48507e5f017eb0c409b78ad7327626eef51bcab59920d4f470b41b0857e0c"
+  },
+  "file_count": 515,
+  "files": [
+    {
+      "path": "README.md",
+      "size_bytes": 3443,
+      "sha256": "5cedcaf1e6423a663fd4266e585bb7cd608c0d874a1443b4d5f11cf4ea554fce"
+    },
+    {
+      "path": "assets/fabrica_fixture/plumbers_block/fixture_pickup_tray.usda",
+      "size_bytes": 99117,
+      "sha256": "f399da5f17f00f5ddc8481e91cd25ecda138f1a43c0fb8eafb5a92ed9cf2d921"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/assembled/fabrica_plumbers_block_assembled.usda",
+      "size_bytes": 1904,
+      "sha256": "eecc5b6650698697c5109cf8b118ab8642a6871902bee9d444f8b33e16922c9c"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/manifest.json",
+      "size_bytes": 9703,
+      "sha256": "60d48507e5f017eb0c409b78ad7327626eef51bcab59920d4f470b41b0857e0c"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+      "size_bytes": 11291,
+      "sha256": "47a72158745ff24b7f711230317d5effd6b99823a00283039479e84f2d93ad3b"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+      "size_bytes": 7282,
+      "sha256": "243fdaf22e3192623de57f7e3ff7692a6ec58e06b364601f2bea9cb5bee76421"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+      "size_bytes": 28977,
+      "sha256": "652d00aaeaad263a51dd9ca7e1197bb3a555c04377a9af8891bf458396cca8b2"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+      "size_bytes": 16362,
+      "sha256": "5755517fd69d9b872e50b74630fe95a3a0ceaffa6b6f986f3fb3efefd3029617"
+    },
+    {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+      "size_bytes": 7274,
+      "sha256": "bfd9d3709d7f521047bf9c2927f1db3a0d108d97f67fd1704a100977b7a6cc50"
+    },
+    {
+      "path": "assets/fabrica_support/optical_board.obj",
+      "size_bytes": 4310975,
+      "sha256": "88accb905b0da18905a2f4db6bba3c0dfb4700553a3a7b7d73fc95e7f88b50ea"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_decal_albedo.png",
+      "size_bytes": 1092832,
+      "sha256": "b5128f13063140230dbd1588e03d9d17808883bbeb5b5cf2d3a272acd54c3db0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_decal_opacity.png",
+      "size_bytes": 345574,
+      "sha256": "156e05a6c61179931aa71dd4c6609eac1ceacb01454cd1aac2964fb9857fb6ac"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_decal_orm.png",
+      "size_bytes": 653905,
+      "sha256": "a1165a219f93e48cfda9efade8022f25631aa8202fabb97aba899d87ecc025b5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_tile01_albedo.png",
+      "size_bytes": 7528129,
+      "sha256": "5db82f3c8f9700b79bb4d2f801c33718c6ea9f406699948ba7c971a676adc5ea"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_tile01_normal.png",
+      "size_bytes": 8397701,
+      "sha256": "be1966633f7aa8f8156f47f146927a17f35568c3f4a0e5d39260fb4f268c53ac"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_tile01_orm.png",
+      "size_bytes": 4211848,
+      "sha256": "2ad7183e78cb49bcfe1a9591a0c23b423c9fd1a6eb2ea77e07b4cf8386058222"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_tile02_albedo.png",
+      "size_bytes": 5011737,
+      "sha256": "f28e62db726c65c9d3472bc2fd1bc6e5328ea98fc94c9359c586c7c99963a58d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_tile02_normal.png",
+      "size_bytes": 3691365,
+      "sha256": "dbe2565bf75a57c0d8350dcb6380bc2d76a83b37240c42c77c61fd0b167895ec"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_tile02_orm.png",
+      "size_bytes": 3834772,
+      "sha256": "049a8cd3cd5ad347b213ac7dc9c21c8ef63f989754539e2889ebba9df5083242"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_trim_Albedo.png",
+      "size_bytes": 2459866,
+      "sha256": "4a24c65f53b4a7420ac8b3cf570e4dd77df0df81c37a730a65c93305b05289b3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_trim_normal.png",
+      "size_bytes": 1290348,
+      "sha256": "1061dc411be515d6f2a95a02b4ebf9fcf897c7d5dbe4692a96889d0cd390713f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_trim_opacity.png",
+      "size_bytes": 155873,
+      "sha256": "2f9726a7f956f4c3631e5f794cd04a6328058b415b322b077fecf5e96bf4bfc4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/materials/textures/t_corrugatedboxes_b01_trim_orm.png",
+      "size_bytes": 1817980,
+      "sha256": "37aedb3d2bc48129f27d282c604ff2e8ccb152f1ac091067d6cb70c3aedc5005"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/packing_table.usd",
+      "size_bytes": 13986806,
+      "sha256": "4a6876bb910a9ac001a3abbd17490733dbba03370c84da119f6bb542883f77cd"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/256x256/.SM_Crate_A07_Yellow_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "472e590764483bf9341f25f82dae555f1ba2b8dc2e8c3fbd4414c37c37e95879"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/256x256/.SM_Crate_A07_Yellow_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "472e590764483bf9341f25f82dae555f1ba2b8dc2e8c3fbd4414c37c37e95879"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/256x256/SM_Crate_A07_Yellow_01.usd.png",
+      "size_bytes": 84522,
+      "sha256": "17f2ed5b791a1e0b83d01846e45b144105d5d055216ade8fea659bb4a6e96157"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/256x256/SM_Crate_A07_Yellow_01_physics.usd.png",
+      "size_bytes": 83871,
+      "sha256": "54eb7c143679cdd31748731c5ebeca228695bf6a8e93f5155152506e619c5078"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/256x256/SM_Crate_A07_Yellow_01_simready.usd.png",
+      "size_bytes": 2857,
+      "sha256": "95d77d3156dedd6eb54fa06f8114514d2feacad04581604d4d0288536210dccf"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/SM_Crate_A07_Yellow_01.thumb.usd",
+      "size_bytes": 4941,
+      "sha256": "bee01721be5af500b699bf23953928f9cf810379e7b9fce69307557b8e9ae2e6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/.thumbs/SM_Crate_A07_Yellow_01_physics.thumb.usd",
+      "size_bytes": 4945,
+      "sha256": "c74f8e515534d49becaca532714fff1fc35a4baef4a68871633ec179848b8f8e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/SM_Crate_A07_Yellow_01.usd",
+      "size_bytes": 2444144,
+      "sha256": "664510890d80a766368f7423e27a1daf83bb5bc0cd4a0446b71dd50f57ce6a71"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/SM_Crate_A07_Yellow_01_physics.usd",
+      "size_bytes": 1075,
+      "sha256": "d26075afdb604fd82cd96791f277e1ef5f7b46bbe0e90be71ed1cbf82b5b7a1c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/SubUSDs/.thumbs/256x256/.SM_Crate_A07_01_1.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0b2ee259e6d4bfb1521de82ba7c55bfd14564b8f8c99e14af1c775256cdd27ab"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/SubUSDs/.thumbs/256x256/SM_Crate_A07_01_1.usd.png",
+      "size_bytes": 77949,
+      "sha256": "4c3f47177868a9c65df00bd72ca392dc5724ffd3b1c558400fa511c999d1fd9c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/SubUSDs/.thumbs/SM_Crate_A07_01_1.thumb.usd",
+      "size_bytes": 4884,
+      "sha256": "913f490d6d89bcaacf06975b299ee2d28c4eae89a5dc8df81d1b7052704e9de1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/SubUSDs/SM_Crate_A07_01_1.usd",
+      "size_bytes": 1991989,
+      "sha256": "07bf61fbe8d6a13d789f9e9159932ed5ec880ffdab88f2776baa070fe4303a20"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/Plastic_Yellow_A.mdl",
+      "size_bytes": 1709,
+      "sha256": "161078d8ef231da19c0ca46b2cff3b8c4c2668f0d4362a8e752cd88771c6128d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/.thumbs/138x108/T_Plastic_Yellow_A_Albedo.png.auto.png",
+      "size_bytes": 7164,
+      "sha256": "517f3b860c7b096ddde46dd61f150a0031812b54c446de0e4f583a192767c858"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/.thumbs/138x108/T_Plastic_Yellow_A_Normal.png.auto.png",
+      "size_bytes": 1856,
+      "sha256": "fe11d43c6f31ea7559ffa5abb8f83b8a58a71705233a72f08a5604fca2c3b65e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/.thumbs/138x108/T_Plastic_Yellow_A_ORM.png.auto.png",
+      "size_bytes": 7549,
+      "sha256": "1eab5a9d388e3bb097a6614ae2abeef044744d0a8c4bf897f33ad4cb96d6c8a7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/.thumbs/256x256/T_Plastic_Yellow_A_Albedo.png.auto.png",
+      "size_bytes": 39040,
+      "sha256": "e5a5f0759a99e4a2b01f89c6fe0583ef1a13d2e52a291882814fda2b13b408e7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/.thumbs/256x256/T_Plastic_Yellow_A_Normal.png.auto.png",
+      "size_bytes": 20097,
+      "sha256": "322203d10360062845768266309a82934d68570d910b5d97c374d49274d9863a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/.thumbs/256x256/T_Plastic_Yellow_A_ORM.png.auto.png",
+      "size_bytes": 42106,
+      "sha256": "186321f2e534977e2abe9ef5d459b54ff11ec7a410d2acf10648e364744cf1af"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/T_Plastic_Yellow_A_Albedo.png",
+      "size_bytes": 3152673,
+      "sha256": "3fe56ba7f880da180d6af3c52697bef23a388201fc25913e141afa8b56d0532b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/T_Plastic_Yellow_A_Normal.png",
+      "size_bytes": 4893090,
+      "sha256": "1c60d70a5ab374810b7af180f7fb8c9533431eaba0e277feb7eecdc44f3d61ee"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A07_Yellow_01/materials/textures/Plastic_Yellow_A/T_Plastic_Yellow_A_ORM.png",
+      "size_bytes": 3352510,
+      "sha256": "e5dd7bf3457879acba77c61720a639c074c68002017dc496eb7954e3dcb4168b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/256x256/.SM_Crate_A08_Blue_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "2791a0668485df2e3643463f4850993d65cabde04946db558cdd7aac9db912d1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/256x256/.SM_Crate_A08_Blue_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "013d0e67a55cd86c3abb5dad6dcaa48c6423624352cf753e6af0164a64dd5c26"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/256x256/SM_Crate_A08_Blue_01.usd.png",
+      "size_bytes": 78611,
+      "sha256": "25a567d3afa987161a6e73a2fa4bb6053060388bb709ea0cef31a6800bbbf29c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/256x256/SM_Crate_A08_Blue_01_physics.usd.png",
+      "size_bytes": 77978,
+      "sha256": "1c2f94043003a33ffc47ac3f4173f8fb68e4fdf508d4fa0baee7e2d7dc560dce"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/SM_Crate_A08_Blue_01.thumb.usd",
+      "size_bytes": 4939,
+      "sha256": "fb7a3dff532ab3ffaf3a024b309c9962ba1e36f0f57465773216db5cf3e3cf80"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/SM_Crate_A08_Blue_01_physics.thumb.usd",
+      "size_bytes": 4943,
+      "sha256": "82ce4082cd342c632c2823f0e9795e2271f41d56c4f2deb5718320d72b9f40bc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/SM_Crate_A08_Blue_01.usd",
+      "size_bytes": 2390335,
+      "sha256": "8fe94563c725f8eee62d27c5886fd407f368f39fdc1e8489ba3b0f56fce0c9a3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/SM_Crate_A08_Blue_01_physics.usd",
+      "size_bytes": 1073,
+      "sha256": "4c4171125995765ebf6a6c00e73e40556a99e420c12ab930059d3203e06fab04"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/Plastic_Blue_A.mdl",
+      "size_bytes": 1695,
+      "sha256": "c2f19215622271a40ea2c32e44cea3c6c3a0c3e83e12d803e9a712918b4b7216"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/.thumbs/138x108/T_Plastic_Blue_A_Albedo.png.auto.png",
+      "size_bytes": 7841,
+      "sha256": "ee021059f1aae36eb30c446fc0736c9854a1f95e5520e21191276b97e28970b3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/.thumbs/138x108/T_Plastic_Blue_A_Normal.png.auto.png",
+      "size_bytes": 1224,
+      "sha256": "1a7ff3a141f30bb67c44db0bbd6afc2aabacdf03d2756f448821ab90d6227219"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/.thumbs/138x108/T_Plastic_Blue_A_ORM.png.auto.png",
+      "size_bytes": 7335,
+      "sha256": "5ff1da47bbe39a3f327542f910ec2740d29658c8b4190ad976968e0df28ec7da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/.thumbs/256x256/T_Plastic_Blue_A_Albedo.png.auto.png",
+      "size_bytes": 45101,
+      "sha256": "8a933ffb4568e0e8e8caaadf55727eeb9109a889812a4cfeeb7c788f7e8c290c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/.thumbs/256x256/T_Plastic_Blue_A_Normal.png.auto.png",
+      "size_bytes": 12210,
+      "sha256": "855dd0ff2c256aec61e8ba823d9dfeda5ebe3be488bc074aa1033d26b79289a7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/.thumbs/256x256/T_Plastic_Blue_A_ORM.png.auto.png",
+      "size_bytes": 39905,
+      "sha256": "98d99691c128ad36613e52556cdd848e480396b47f1b13eefdb3f6c56c0ce176"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/T_Plastic_Blue_A_Albedo.png",
+      "size_bytes": 822814,
+      "sha256": "9a414b0d8551193f129ee80ea61c736a990c130fc19ac256d31dde1749d04e16"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/T_Plastic_Blue_A_Normal.png",
+      "size_bytes": 909580,
+      "sha256": "b276207f782c029f34dfd6034a9c718467e35e5aa6c8ba2dbcba1de25f045559"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/materials/textures/Plastic_Blue_A/T_Plastic_Blue_A_ORM.png",
+      "size_bytes": 743855,
+      "sha256": "dff7a9ec311c68b779576bbbf7ab1d121fcd784d49d3f1f730a7fe2ac647fbc9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/256x256/.SM_HeavyDutyPackingTable_C02_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "dd4c51f0bcfa085f854233d42cd9db3b0010be2c3678b9c45a173821393dfc36"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/256x256/.SM_HeavyDutyPackingTable_C02_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "dd4c51f0bcfa085f854233d42cd9db3b0010be2c3678b9c45a173821393dfc36"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/256x256/SM_HeavyDutyPackingTable_C02_01.usd.png",
+      "size_bytes": 42697,
+      "sha256": "01a0127ba50d36869fde76cb0690050ab1ceb193350bed657d39cacd9faaf03f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/256x256/SM_HeavyDutyPackingTable_C02_01_physics.usd.png",
+      "size_bytes": 42921,
+      "sha256": "36966f554631a32a1c0bd0cea761ac79ac3f791d3f6c7e5321188d18e2fa9854"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/SM_HeavyDutyPackingTable_C02_01.thumb.usd",
+      "size_bytes": 5125,
+      "sha256": "2e73e307972dd23374aac171acf463c197905af51e12c0f0315a0095d7f1afa5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/SM_HeavyDutyPackingTable_C02_01_physics.thumb.usd",
+      "size_bytes": 5129,
+      "sha256": "a04e7a11872a2bf5f4a45cbca3afeb3bd04310326083034647e18d0b9d3c49a8"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/SM_HeavyDutyPackingTable_C02_01.usd",
+      "size_bytes": 8531950,
+      "sha256": "a0f179fa080175e9e6eaa418f74945ad45b2c969101f112d4a0bd64bead78c4f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/SM_HeavyDutyPackingTable_C02_01_physics.usd",
+      "size_bytes": 3730,
+      "sha256": "663b814389b698101e7c134b4a513754b2961b6dbb38068bf6b7341b35056a5d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/MetalPainted_White_Glossy_A.mdl",
+      "size_bytes": 681,
+      "sha256": "f13854f109fc75ab840d14cf7b98c92bccbb9b39ac0d1b449e5d0f489c4c1564"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/Metal_Glossy_A.mdl",
+      "size_bytes": 620,
+      "sha256": "c3d04b3d341e3c1b8cfb6dce47305d49378f5060d8dd9325842d62ca5b705991"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/Wood_Laminate_Gray_A.mdl",
+      "size_bytes": 1734,
+      "sha256": "bb221ae2c9f46e60e1340d1fce36e08fd23d780bdb567d651eaa5f2e2f67b8ad"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/Wood_Pressed_A.mdl",
+      "size_bytes": 651,
+      "sha256": "40775359c16526a9bef766fbe5ae9841f17e9a5f60275093a4f80e7ba5ebdbb5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/.thumbs/138x108/T_MetalPainted_White_Glossy_A_Albedo.png.auto.png",
+      "size_bytes": 4652,
+      "sha256": "1310a75742f00dd7eaee80a39665b5684d09efdb551d87da201c9e17c41af097"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/.thumbs/138x108/T_MetalPainted_White_Glossy_A_Normal.png.auto.png",
+      "size_bytes": 902,
+      "sha256": "1f2af602f75ffe8ce3e81e0c15c888b7be014961ac761721b6b5a6649bc63899"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/.thumbs/138x108/T_MetalPainted_White_Glossy_A_ORM.png.auto.png",
+      "size_bytes": 3603,
+      "sha256": "6025630d6f65a31eef3fbf93fbf6a6ddeac693549edd82b31b967f096adb7a58"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/.thumbs/256x256/T_MetalPainted_White_Glossy_A_Albedo.png.auto.png",
+      "size_bytes": 24429,
+      "sha256": "f2e207b94acdf809f93dafbd0d93ed1e98d40f669a5705efd66e99b022546ec8"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/.thumbs/256x256/T_MetalPainted_White_Glossy_A_Normal.png.auto.png",
+      "size_bytes": 18528,
+      "sha256": "1c0195bdd2a1a3073105848c49853fdb2b566da5f8a30a705484d1550b596374"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/.thumbs/256x256/T_MetalPainted_White_Glossy_A_ORM.png.auto.png",
+      "size_bytes": 20597,
+      "sha256": "6db4e3cde383ee2678a8d9da37481fea6385f064f633455083250c09b97822e0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/T_MetalPainted_White_Glossy_A_Albedo.png",
+      "size_bytes": 1318976,
+      "sha256": "c9651a8eb7a7db92d51dbf319e6a54096869bf7b57d541137272b4be73325f20"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/T_MetalPainted_White_Glossy_A_Normal.png",
+      "size_bytes": 2325135,
+      "sha256": "774d302d5deb1b7233bb01d9480d889bb41c3c75c6a8274da3db22c387c9a352"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/MetalPainted_White_Glossy_A/T_MetalPainted_White_Glossy_A_ORM.png",
+      "size_bytes": 1821970,
+      "sha256": "fa86de21fe705fa4a826e4785d4001c6e90d5418bdefbfa24e7eaca14e5cc5bf"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/138x108/T_Metal_Glossy_A_Albedo.png.auto.png",
+      "size_bytes": 4977,
+      "sha256": "929d25c6410231050db95d1d2409e140d2e790c9110a7a80378276a3f2d873e5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/138x108/T_Metal_Glossy_A_Albedo_1.png.auto.png",
+      "size_bytes": 4957,
+      "sha256": "e40162e3006b29bfb2cc174f00d3a688bc2bb975f5a8cc34d66452d7908b895d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/138x108/T_Metal_Glossy_A_Normal.png.auto.png",
+      "size_bytes": 2124,
+      "sha256": "d4e8c8dfb019f7b22fe8bfbd8ff506b45cd40fc33ae2456f89e7ed08ee7ce647"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/138x108/T_Metal_Glossy_A_Normal_1.png.auto.png",
+      "size_bytes": 1216,
+      "sha256": "db90d34f9c91e5a64c6856f3aadc4a1e5f2cd24bdb030d46f71b4a9f4f469bce"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/138x108/T_Metal_Glossy_A_ORM.png.auto.png",
+      "size_bytes": 4277,
+      "sha256": "9dbb24241f0148994162b399ec5a3ca3353ba4bf24d3bafbdca8527ecc0c694c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/138x108/T_Metal_Glossy_A_ORM_1.png.auto.png",
+      "size_bytes": 4286,
+      "sha256": "ca13c513f83dc9a2a1dc31917cafc38e5310c27b035908386fbe0e69b13f7e46"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/256x256/T_Metal_Glossy_A_Albedo.png.auto.png",
+      "size_bytes": 25810,
+      "sha256": "d269f1ed67cacc85fb6370534a665837788c2955dd7125b721cf026c17bbc8ce"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/256x256/T_Metal_Glossy_A_Albedo_1.png.auto.png",
+      "size_bytes": 25804,
+      "sha256": "8c7de350964f9ffe3647ca3a072c31e8aec4ded1c35ef8358a341f48f44a323f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/256x256/T_Metal_Glossy_A_Normal.png.auto.png",
+      "size_bytes": 5470,
+      "sha256": "5ed061c7b7b4ff45713a3cc3dbda56ce2f66cb907360ad1a5df89d20880f6a93"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/256x256/T_Metal_Glossy_A_Normal_1.png.auto.png",
+      "size_bytes": 5565,
+      "sha256": "0bc72fe1cabc12dce698291eea875e0835ec36f366309440d5646fdcf667ffdc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/256x256/T_Metal_Glossy_A_ORM.png.auto.png",
+      "size_bytes": 21913,
+      "sha256": "b48cd89c997abfb019367a62618bc87bf5ca9c649d2e8fc825e308cbef284b4e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/.thumbs/256x256/T_Metal_Glossy_A_ORM_1.png.auto.png",
+      "size_bytes": 22183,
+      "sha256": "664b617d79eb857b2ea0adb61f78281f7c9a20921998b8aed44d2ae733942136"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/T_Metal_Glossy_A_Albedo.png",
+      "size_bytes": 3314214,
+      "sha256": "1f2c43526c30270e07b6e0ea5ccba7be5b588db5a19e70cc909ed69f17dabd4e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/T_Metal_Glossy_A_Albedo_1.png",
+      "size_bytes": 634053,
+      "sha256": "4e233488d3d42d94fc8889dde78ca8e546cd5fed08d51f5373384964c9b3a6e5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/T_Metal_Glossy_A_Normal.png",
+      "size_bytes": 159602,
+      "sha256": "e3d8bdd35ff2bc77775b162b98d1723e0008b02cfbaf1a058d3160e90dc3fac6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/T_Metal_Glossy_A_Normal_1.png",
+      "size_bytes": 56586,
+      "sha256": "e8254a2ca1b07a70fd151f752acb75b763bbcafb38681ddbb8a000f3452d2da3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/T_Metal_Glossy_A_ORM.png",
+      "size_bytes": 2707096,
+      "sha256": "a6474d52f77d44479366ad3da9d8b595bb3c90c2c1dd597226a477ccb1a3f4a6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Metal_Glossy_A/T_Metal_Glossy_A_ORM_1.png",
+      "size_bytes": 531802,
+      "sha256": "48f7f6d85358d271f393382ee013635e970bf1ff4d5d66d91537a2f423f1361c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/.thumbs/138x108/T_Wood_Laminate_Gray_A_Albedo.png.auto.png",
+      "size_bytes": 215,
+      "sha256": "85d1c54884b64137d0d7b9d00786820b883fbb2e9165fbc40bd0804c2fc92bf6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/.thumbs/138x108/T_Wood_Laminate_Gray_A_Normal.png.auto.png",
+      "size_bytes": 7807,
+      "sha256": "4c9524715dc3de67e6fc5f3a1943d5214f2e77a4a3648273f57379eba6215c34"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/.thumbs/138x108/T_Wood_Laminate_Gray_A_ORM.png.auto.png",
+      "size_bytes": 15756,
+      "sha256": "cd67d238edc0fbb42c46de0d1095b7f1c5d1ceb5db978c9ebebb4da52faae3e5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/.thumbs/256x256/T_Wood_Laminate_Gray_A_Albedo.png.auto.png",
+      "size_bytes": 566,
+      "sha256": "202c51a46e208b60cc828194ffb64979a4f6a11d5658ae6a832194afcfb8e4f8"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/.thumbs/256x256/T_Wood_Laminate_Gray_A_Normal.png.auto.png",
+      "size_bytes": 73661,
+      "sha256": "1ece907b0b112ad675fc3931957f74e3ada285c1a2fd46df02dfac708e44b78d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/.thumbs/256x256/T_Wood_Laminate_Gray_A_ORM.png.auto.png",
+      "size_bytes": 110846,
+      "sha256": "95066ea92aa45ec0153d8236f859b170030dec504f8f1958ca80a6c564323a98"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/T_Wood_Laminate_Gray_A_Albedo.png",
+      "size_bytes": 16914,
+      "sha256": "c0566c4fc38f4004c8db6d20009d3af675891bd30b574ec24ceb5325597bfbab"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/T_Wood_Laminate_Gray_A_Normal.png",
+      "size_bytes": 4655646,
+      "sha256": "81ebfea8c17d8942fed2cebd5e13ade2f12729e99c9525320537fc447ca0c848"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Laminate_Gray_A/T_Wood_Laminate_Gray_A_ORM.png",
+      "size_bytes": 5055979,
+      "sha256": "915b2f6f4690dad4f6ea14d98751bbde91fd14329200a3d2528174b65ef5084b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/.thumbs/138x108/T_Wood_Pressed_A1_Albedo.png.auto.png",
+      "size_bytes": 24919,
+      "sha256": "e510c1b1e45e377c66dc0ccf94f9309fa7e3966b3fb156264af4a4537dc45009"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/.thumbs/138x108/T_Wood_Pressed_A1_Normal.png.auto.png",
+      "size_bytes": 24136,
+      "sha256": "8b2e83a473301e320572b54922af9c3b01e9028751c4a5cbfa8e0d92f6a43375"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/.thumbs/138x108/T_Wood_Pressed_A1_ORM.png.auto.png",
+      "size_bytes": 12230,
+      "sha256": "9b2f1d0393db8a5980b417c402558e580026b5267aa6823e3178f564e082f745"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/.thumbs/256x256/T_Wood_Pressed_A1_Albedo.png.auto.png",
+      "size_bytes": 148874,
+      "sha256": "b7d4df60dc30e37e06f47c48b6f1795f989e525f7aa24a910715645148c32f27"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/.thumbs/256x256/T_Wood_Pressed_A1_Normal.png.auto.png",
+      "size_bytes": 155267,
+      "sha256": "967a11bcab066e99db1ba7f43f75b132f567013bcbc34222135ebfef884d05b5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/.thumbs/256x256/T_Wood_Pressed_A1_ORM.png.auto.png",
+      "size_bytes": 70372,
+      "sha256": "dc12c937a9a75cf3e53b9048d96ea8275a9bd5af284f3ddef3ab8517d77f1664"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/T_Wood_Pressed_A1_Albedo.png",
+      "size_bytes": 8634237,
+      "sha256": "3065b2625f535a306422de5dbbdc6168fbd29922a3ded13c2f0cfb98c2af7fd6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/T_Wood_Pressed_A1_Normal.png",
+      "size_bytes": 10829846,
+      "sha256": "4b900d0ea825d9158915ecb1a19fee41b7ed3c10f89251bbfbae2e7637e38b30"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/materials/textures/Wood_Pressed_A/T_Wood_Pressed_A1_ORM.png",
+      "size_bytes": 4248696,
+      "sha256": "060bc3de700178616538f325438bfda9164d6663eb4af3384fc52a8ff8d1765b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/.container_h20.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "29e79723ff5c81bd6c2c502fd7ff93e785414acc701cb6a3928496b394bae4e1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/.container_h20_base.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "7b3afff51870fc3341f3e17bf4c0a5c004c977bb1072e148e80358aac0b2bd6f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/.container_h20_inst.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "816419d31917a674c9401b5996e22f082bc24bce323bed0bfcf03122bc3a04d6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/.container_h20_inst_base.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0e10d6a6eb8168d0ac01c7fd27932aff8252a6066a822c1affa7eff5108a311d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/container_h20.usd.png",
+      "size_bytes": 69275,
+      "sha256": "8b94ab1ac499d68e658852d9c449518bfc343bddf86e663c5da33c4328bfd5a2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/container_h20_base.usd.png",
+      "size_bytes": 70717,
+      "sha256": "31c312254edce6ba7d3695226b2dfea6c9713ea409c60617186d9c820569c2a2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/container_h20_inst.usd.png",
+      "size_bytes": 71580,
+      "sha256": "9ab8f6125ea827c507bf40d240adddb69e3d108dc785950d3a39442110739b4b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/256x256/container_h20_inst_base.usd.png",
+      "size_bytes": 72042,
+      "sha256": "13db05ab49738744559d362e35767db218967a57f3df8ffa20a2b048654f00c3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/container_h20.thumb.usd",
+      "size_bytes": 4749,
+      "sha256": "1c9b7c0cc0d5a758c14b17ba7802cb5b9ae4604780f21972574b0b5aef6bf416"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/container_h20_base.thumb.usd",
+      "size_bytes": 4367,
+      "sha256": "d40a957ff21e3891dbf4d234ba208d3089e00bcbc47fd4bd67801682199745b7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/container_h20_inst.thumb.usd",
+      "size_bytes": 4514,
+      "sha256": "85b68a04733bd5dd2fab8da34a773a37cc84139cff3aed880c0a7bd5f0948535"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/.thumbs/container_h20_inst_base.thumb.usd",
+      "size_bytes": 4519,
+      "sha256": "a7b0cbaca9077051db0063794df669b6b5c3c6afa074ef39d54a8922b06e0888"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/container_h20.json",
+      "size_bytes": 2789,
+      "sha256": "e60e8b1a3722ad62e2e2cc2fde46d25b712b42b6bfb93e551b1f7fc3c8a22865"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/container_h20.usd",
+      "size_bytes": 4088100,
+      "sha256": "c5519fcad31ec7729421c8f76e6c07f6d9172ae5e90631747495bdfeb147d934"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/container_h20_base.usd",
+      "size_bytes": 5875,
+      "sha256": "28f9d3e472a25761a9259ec02fe6b20072c8857d79267d71d7ef298934275ebd"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/container_h20_inst.usd",
+      "size_bytes": 1413,
+      "sha256": "ec6b0f1d673913a7433a86386ea01894db14305a9b1f963c63d7ed1e1b902f60"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/container_h20_inst_base.usd",
+      "size_bytes": 2719086,
+      "sha256": "6dc19267fc05939c797a480fbfe676d73d0a71bc26dd42d6700eb6b9a25ffa69"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/materials/Plastic_B.mdl",
+      "size_bytes": 1617,
+      "sha256": "d9dc6c90174c69a03de966447144cd13c8590656d68dd0fde7de7d4609510d41"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/138x108/T_Plastic_Gray_A_Albedo.png.auto.png",
+      "size_bytes": 6473,
+      "sha256": "18fa64b5fa87736e4c7d65c0b567cf635106c807d527971c474758e340528fd4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/138x108/T_Plastic_Gray_A_ORM.png.auto.png",
+      "size_bytes": 6343,
+      "sha256": "9f14532bcefa1d1eab5004dc6a18d8652850fd941f1906e4a44069a502130421"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/138x108/T_Plastic_Normal_1k.png.auto.png",
+      "size_bytes": 4743,
+      "sha256": "c3a56a34a4c56b46d2440c84bb43515238fc6e829e4872a971d8ee56179ac0cc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/138x108/T_Plastic_ORM_1k.png.auto.png",
+      "size_bytes": 6492,
+      "sha256": "bd6c59d27123707b2d737ef5c5dfa365681b304e0f70bdd466592b803d30f118"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/256x256/T_Plastic_Gray_A_Albedo.png.auto.png",
+      "size_bytes": 37225,
+      "sha256": "2db6a0eb253205fa1bf2d0e3c2a5870b23717cf6116670c1f1fa8d4a8ba8b097"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/256x256/T_Plastic_Gray_A_ORM.png.auto.png",
+      "size_bytes": 37170,
+      "sha256": "39e950e4f6f2e54336ad048f22489ff689c820310c918691110b76edfbe05f58"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/256x256/T_Plastic_Normal_1k.png.auto.png",
+      "size_bytes": 27976,
+      "sha256": "02291ca603d5c68d2c7a0fe9e5a7cc8e90f09e5e58d22281c6b06d8c2a4cd2ec"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/.thumbs/256x256/T_Plastic_ORM_1k.png.auto.png",
+      "size_bytes": 38630,
+      "sha256": "5f9c273b067ec49ea9b6748d09bc57b862dc29452be467bccd3822f5e67e509b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/T_Plastic_Gray_A_Albedo.png",
+      "size_bytes": 2741864,
+      "sha256": "45604d449bf31d0f956dfa990745da7bc54beb3bd017af0126f3abf5e7e065dd"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/T_Plastic_Gray_A_ORM.png",
+      "size_bytes": 3257454,
+      "sha256": "63e070b9c902612fe9af6d8d248f24decde3eceda288154217cc28c7c27e4b96"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/T_Plastic_Normal_1k.png",
+      "size_bytes": 4152274,
+      "sha256": "017086a4fb5d697900eaa4f52a4918ad7d559405dc733e8af3b090efc5875300"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/T_Plastic_ORM_1k.png",
+      "size_bytes": 901654,
+      "sha256": "c0c44b42d69832fa25d0749a55d36e7d5aa1ceba445d1e48ff026f220bd0f28d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b04_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "daef581d5287586d046160bfa6868855c0b9e4e4412dd78746a42097af00eb34"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b04_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "c1d90da07db4fd97c9c0c3558f9630b378b51bae8ea3d524604bdcd8ccc51e2b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b04_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "c1d90da07db4fd97c9c0c3558f9630b378b51bae8ea3d524604bdcd8ccc51e2b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b04_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b07_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b07_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b08_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b08_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b09_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b09_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b09_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b09_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b10_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b10_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b10_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "d54cdfc55b6e11da7f46481836be5e9f33b1d5904f7e58e248648deddc0c796d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b10_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "6e62fce5770537a00dfbde663b1d42a9c7072fed6daad3666b0f0b2736b6c79d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b12_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "6e62fce5770537a00dfbde663b1d42a9c7072fed6daad3666b0f0b2736b6c79d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b12_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "6e62fce5770537a00dfbde663b1d42a9c7072fed6daad3666b0f0b2736b6c79d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b13_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "6e62fce5770537a00dfbde663b1d42a9c7072fed6daad3666b0f0b2736b6c79d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b13_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b17_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b17_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b19_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b19_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b19_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b19_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "1407a009eba60a6e71d3b8f8bdf7e3b2e33c22578939a46e84b0acde2f4e3070"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b20_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "5085c639581cbe3aeca630cfd9c281aca72255c4fc2b81fba4aa8185bc7649de"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b20_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "5085c639581cbe3aeca630cfd9c281aca72255c4fc2b81fba4aa8185bc7649de"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b20_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "5085c639581cbe3aeca630cfd9c281aca72255c4fc2b81fba4aa8185bc7649de"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b20_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "5085c639581cbe3aeca630cfd9c281aca72255c4fc2b81fba4aa8185bc7649de"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b21_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "cbe96be28f5220d663fec67180dbbc0e0942a37668d40ec7ecc594b54788d866"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b21_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "cbe96be28f5220d663fec67180dbbc0e0942a37668d40ec7ecc594b54788d866"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b21_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "cbe96be28f5220d663fec67180dbbc0e0942a37668d40ec7ecc594b54788d866"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b21_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "cbe96be28f5220d663fec67180dbbc0e0942a37668d40ec7ecc594b54788d866"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b22_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "cbe96be28f5220d663fec67180dbbc0e0942a37668d40ec7ecc594b54788d866"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b22_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0484b037fa2618ab802afda4fdc97df0d9a3ed4b3a6c619567e817fa5a0a29c3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b22_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0484b037fa2618ab802afda4fdc97df0d9a3ed4b3a6c619567e817fa5a0a29c3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b22_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0484b037fa2618ab802afda4fdc97df0d9a3ed4b3a6c619567e817fa5a0a29c3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b25_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0484b037fa2618ab802afda4fdc97df0d9a3ed4b3a6c619567e817fa5a0a29c3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b25_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "0484b037fa2618ab802afda4fdc97df0d9a3ed4b3a6c619567e817fa5a0a29c3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b26_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "ac8c449fd976c3b453b431e0e6fef805b3b7f22f56e1088a302a03eedacfc3da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b26_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "ac8c449fd976c3b453b431e0e6fef805b3b7f22f56e1088a302a03eedacfc3da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b26_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "ac8c449fd976c3b453b431e0e6fef805b3b7f22f56e1088a302a03eedacfc3da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b26_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "ac8c449fd976c3b453b431e0e6fef805b3b7f22f56e1088a302a03eedacfc3da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b28_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "ac8c449fd976c3b453b431e0e6fef805b3b7f22f56e1088a302a03eedacfc3da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b28_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "13497faf7d1c8f44c99262249d1297c2db09e8dea41b79f670b199e0774962ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b28_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "13497faf7d1c8f44c99262249d1297c2db09e8dea41b79f670b199e0774962ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b28_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "13497faf7d1c8f44c99262249d1297c2db09e8dea41b79f670b199e0774962ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b33_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "13497faf7d1c8f44c99262249d1297c2db09e8dea41b79f670b199e0774962ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b33_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "13497faf7d1c8f44c99262249d1297c2db09e8dea41b79f670b199e0774962ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b33_white_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "4566503be7e7dc0d3f79b0a20f07037bd325b996cb572c466f89c0058d89b91b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b33_white_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "4566503be7e7dc0d3f79b0a20f07037bd325b996cb572c466f89c0058d89b91b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b35_brown_01.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "4566503be7e7dc0d3f79b0a20f07037bd325b996cb572c466f89c0058d89b91b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/.sm_whitecorrugatedbox_b35_brown_01_physics.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "4566503be7e7dc0d3f79b0a20f07037bd325b996cb572c466f89c0058d89b91b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b04_brown_01.usd.png",
+      "size_bytes": 61721,
+      "sha256": "fd406650553a27e4ad967495a0bfc1c76784f92ed1868d1541bf9bd0e1d1b7c6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b04_brown_01_physics.usd.png",
+      "size_bytes": 62380,
+      "sha256": "d2c853c9712facfc43de8005da7c245e00ebc298836e574ac2d08587c3506f2f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b04_white_01.usd.png",
+      "size_bytes": 47933,
+      "sha256": "0caa37b0a0f0d4eee7df7a9068a9fc761d9a2dba06b86a12f195e17c8abf9286"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b04_white_01_physics.usd.png",
+      "size_bytes": 48538,
+      "sha256": "fa7fd1be355bf909a9386a81d58487706c07d95431a8f471e8279ec60924c23b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b07_brown_01.usd.png",
+      "size_bytes": 60421,
+      "sha256": "c8c62b3da35536f06ab0d12473dcd6cb3eebe4ccd740755450a1ab2098fd167e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b07_brown_01_physics.usd.png",
+      "size_bytes": 60403,
+      "sha256": "66f063c877d156683d744930e40027333c9b05a4602b84765092996d2752c95a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b08_brown_01.usd.png",
+      "size_bytes": 59679,
+      "sha256": "c2e7a1758a823796ee54f85fd94db7bb797847ae34883ae7f8ebce62f84f33f1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b08_brown_01_physics.usd.png",
+      "size_bytes": 59928,
+      "sha256": "6508f0cd08430a416784e5d97411d5b6008b33945d8f5d3c25233d34ac4b971c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b09_brown_01.usd.png",
+      "size_bytes": 59228,
+      "sha256": "082374081782ef22a16c0447829c72bc808f0c1f6125fc58e12fbc1a21b7aa41"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b09_brown_01_physics.usd.png",
+      "size_bytes": 58148,
+      "sha256": "86072b8d8d478b46ae8062bb81bc36fec64d98aa3bafa4bb35eadecdf92c9887"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b09_white_01.usd.png",
+      "size_bytes": 47234,
+      "sha256": "1c5959cd4b4bedb344b0f2e2dd5d0ae959b31ac450057d91aa1a214cc7cbaa7c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b09_white_01_physics.usd.png",
+      "size_bytes": 47635,
+      "sha256": "91ec163e69ab8a56ed69611aa9e424eb3953bdc571113eb0acd30acf87355db3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b10_brown_01.usd.png",
+      "size_bytes": 57029,
+      "sha256": "973c2544838151db8fca1f87138c0dc0b89853ca219f25c62d6306378d29394e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b10_brown_01_physics.usd.png",
+      "size_bytes": 55631,
+      "sha256": "94a3e6d0ca65d2b27e622292d7c21d9b7f7fc8d63c9c424d8b199fdd7e66b016"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b10_white_01.usd.png",
+      "size_bytes": 45405,
+      "sha256": "5a304ce21596a09eef6edf0d77b8d945cd1f61e822d1954bac7255c79ebc18ce"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b10_white_01_physics.usd.png",
+      "size_bytes": 45584,
+      "sha256": "2723f0bd92147d903218f9288ee0121159d6ec288bd0340c94d7dc3c97e719db"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b12_brown_01.usd.png",
+      "size_bytes": 54436,
+      "sha256": "98c230ecdb6675eebe335a9d533950e49ae4637d05d985e46d1fc8bc0db211d4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b12_brown_01_physics.usd.png",
+      "size_bytes": 54649,
+      "sha256": "ab583bc3d16987f366d4d6ccfd4deebf1b3adbb83e2c34a5ee4c02f879f45c10"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b13_brown_01.usd.png",
+      "size_bytes": 53606,
+      "sha256": "f01868dd9439c4a8b7b65629a8b4aac1014b5fd1f681fe75f222633f6e3d2a27"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b13_brown_01_physics.usd.png",
+      "size_bytes": 53620,
+      "sha256": "4d16deac5d207e0931defbb08d8afefdf27ab736082d0ca383b300537d99e1e7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b17_brown_01.usd.png",
+      "size_bytes": 49462,
+      "sha256": "72806668ab5d96347e1acda099916aeafd89196e5564f9ce6bc67bde02e95b8c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b17_brown_01_physics.usd.png",
+      "size_bytes": 49790,
+      "sha256": "6b9559a17d9051479f19eeebb3e08d43f64d641774703e68537ec0b4693ec42a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b19_brown_01.usd.png",
+      "size_bytes": 55101,
+      "sha256": "5631415506d40d61b9d7413da0765969f738e3c64ff7d69ad493189867b411b7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b19_brown_01_physics.usd.png",
+      "size_bytes": 55249,
+      "sha256": "a0edd1d0e2c7dbcb63fb4b9ef5a7a68b65154b0639a5dd8c0efa3d57462d3335"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b19_white_01.usd.png",
+      "size_bytes": 45050,
+      "sha256": "145b2729cb6cc53f8f08693ba010de557894f3853e151a2b505bf6ca31f70634"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b19_white_01_physics.usd.png",
+      "size_bytes": 45327,
+      "sha256": "f33701f3ec6d9bc42a16018ec55e8838ab8b5bf2b542c271375c949a18367638"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b20_brown_01.usd.png",
+      "size_bytes": 54066,
+      "sha256": "8609d250ee44cee2f70b608964af162eeb257e9ee0b43cec8670e85ced3c5c0b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b20_brown_01_physics.usd.png",
+      "size_bytes": 54206,
+      "sha256": "e08af6c747f1cec8db2723548e9cfb921432af892d48def4e4633baaea52711f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b20_white_01.usd.png",
+      "size_bytes": 45617,
+      "sha256": "d47bcfa665b015d7d23dd972b7630b3aeeaf38e2a95ac412caa870314e376430"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b20_white_01_physics.usd.png",
+      "size_bytes": 45403,
+      "sha256": "29d59df20fe179dba90091f14828a297ff719a1559757c1f1bd77316278102fa"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b21_brown_01.usd.png",
+      "size_bytes": 56477,
+      "sha256": "da9cd0e84d030cac9f75c26a837a1676659a5a50eea65e08fc300e82caee7149"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b21_brown_01_physics.usd.png",
+      "size_bytes": 55744,
+      "sha256": "cb5a757c3292b750eb8f070e0daf444240a3a555e657d7a1b54a919fd264f6b6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b21_white_01.usd.png",
+      "size_bytes": 43721,
+      "sha256": "8d0d43b90cdd905235ac2cbad10b72b727d65633da09505adb5d9d7407819787"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b21_white_01_physics.usd.png",
+      "size_bytes": 43855,
+      "sha256": "b5bc45b0f4e71b48dd5cd0edb55523ab34939a8d4540ef8dde87261234bccc4f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b22_brown_01.usd.png",
+      "size_bytes": 52249,
+      "sha256": "44881700f0f016ba03cd99df387c08096803b1f9761edcb937bf3d0dfdd665c2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b22_brown_01_physics.usd.png",
+      "size_bytes": 52946,
+      "sha256": "e8c873456b6435038e486fb82d02c4e93576a6fec959a1a2d20a6265f4bed50e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b22_white_01.usd.png",
+      "size_bytes": 43730,
+      "sha256": "04e050d41f631b16c88de3f2511a21acc584739a8cf6a386778dd7a25ae392e4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b22_white_01_physics.usd.png",
+      "size_bytes": 43863,
+      "sha256": "d9925fa460d8cd364c6a800b7e482ce00e5d2ac10a3c6398375ca5eb3c9cd622"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b25_white_01.usd.png",
+      "size_bytes": 43845,
+      "sha256": "0b356a77a43abef9e8600c2871242442c9cbbba45892be817809e886aadf223e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b25_white_01_physics.usd.png",
+      "size_bytes": 43804,
+      "sha256": "0c4192114dd28cae20c2c5bc0a913d38f3c01697bd1bc4fd8c23971eb9eb2f4e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b26_brown_01.usd.png",
+      "size_bytes": 54669,
+      "sha256": "da800a1ffda5ca3ae5823f2da3dee8def4f99487bd37ea9c4e8faf90979cfe24"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b26_brown_01_physics.usd.png",
+      "size_bytes": 54792,
+      "sha256": "1e96730b2ce2b6a030ac2634eedd379fbef2e9b5dc59700e83824059088f65ec"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b26_white_01.usd.png",
+      "size_bytes": 45565,
+      "sha256": "f4b0e04f1958702c19c2551b0342eee4432d7b80a2cecd8be728788c464b6951"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b26_white_01_physics.usd.png",
+      "size_bytes": 45685,
+      "sha256": "c274c3414351d4cf5e7fbbac2066c362c51cb31b2af3995cb401821d4dd66a79"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b28_brown_01.usd.png",
+      "size_bytes": 58522,
+      "sha256": "56c5d03d0377a705b3c9f9b8ba38624b25eb2ba48664d753c89d0290ea3658b8"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b28_brown_01_physics.usd.png",
+      "size_bytes": 58396,
+      "sha256": "7257dfcae7e7a7bcca35094a8da8b17297c03738e0cd07f6060870aedba11a0f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b28_white_01.usd.png",
+      "size_bytes": 45742,
+      "sha256": "31b08a6330aecc2f36b83c9dfc1ed3b4cc0cd9509e1722a8a8e79a59a6a142ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b28_white_01_physics.usd.png",
+      "size_bytes": 45578,
+      "sha256": "05040ed32271bd57f99b4b184e4b4ca1b64ae4d13494487c910d10b039950778"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b33_brown_01.usd.png",
+      "size_bytes": 57369,
+      "sha256": "0a5ced17309ae2234fadc71d979b60ec99bb5c51ad9f2c019b9505af9071a7f6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b33_brown_01_physics.usd.png",
+      "size_bytes": 57367,
+      "sha256": "06d2653626a483ec375e02a849661d366cd7582f03d1d3719e67c8071fd8097e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b33_white_01.usd.png",
+      "size_bytes": 46525,
+      "sha256": "72c9094b540e9c4fdafec4e3c2e13add9cbd892f76e290dd37c125bd98b909e0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b33_white_01_physics.usd.png",
+      "size_bytes": 47259,
+      "sha256": "3bbb2b79f3c1ef6fe153008e1b7ec7ed4068879cb53c1c2b0451290c8d7e5733"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b35_brown_01.usd.png",
+      "size_bytes": 55975,
+      "sha256": "14b1e0a353b9e9fe307190875e2fe9cffebafe27ff9a29ad1c4c77f622805288"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/256x256/sm_whitecorrugatedbox_b35_brown_01_physics.usd.png",
+      "size_bytes": 56511,
+      "sha256": "5a1fc42043af0e541d4b3c0362f906b012d30e34a4cb727578dc0f8f4aabcaa7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b04_brown_01.thumb.usd",
+      "size_bytes": 5144,
+      "sha256": "5b5b097bcca8f281a21fc62ffa09e4c82aa1380367df11aff938a239b98fa2f7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b04_brown_01_physics.thumb.usd",
+      "size_bytes": 5147,
+      "sha256": "4ff2f5f1147f9287dcfb261d10d6322b4b281f65d31308df51e467ea58d0b88d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b04_white_01.thumb.usd",
+      "size_bytes": 5140,
+      "sha256": "d82cb5230baf2b5c63546d5681e3151fd7929406a997ad73a4212f3e5e65d620"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b04_white_01_physics.thumb.usd",
+      "size_bytes": 5144,
+      "sha256": "aa09dbaac2b6b418a85a237559b7081382d54c9445c5388991fd9286633ade47"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b07_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "82b4379eb38289c5d67ce15978a8a99b9c92a2b03e9f1f52d4f2425f4adb98ec"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b07_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "b20db37116d64ba0208c5b3ccb68a4f4e04527bf2c0db382aa5d7b23403173b8"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b08_brown_01.thumb.usd",
+      "size_bytes": 5142,
+      "sha256": "ad9e30985e5d1421a8276da16fb4c0b386fdd4ecab71a1fd1334bd706daa9261"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b08_brown_01_physics.thumb.usd",
+      "size_bytes": 5145,
+      "sha256": "0ed87db916e06fef0233687137db4b22d77612d9919e271dc8dd64ea693cec34"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b09_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "74ddf0c558f81547c39f5a5f714c572dccbca8a131cef25b7713e1294a09ee46"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b09_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "0c461569d292708a647af28def57aa5cbe35aa29d4a1452968c4b096b111e185"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b09_white_01.thumb.usd",
+      "size_bytes": 5139,
+      "sha256": "e108528046f8fefbd9f17e89eaf8314aee4fe6f5fa979a245458e9a490a1aa5e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b09_white_01_physics.thumb.usd",
+      "size_bytes": 5143,
+      "sha256": "8bf525cd30216ce74902da880f13111b7919bdf1f524d35ee166451d0e6f5f8e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b10_brown_01.thumb.usd",
+      "size_bytes": 5144,
+      "sha256": "d5ad32ac5ce01b2da58d4ab467422dc3702a3631aa06307bcd11c2647c4dc9b2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b10_brown_01_physics.thumb.usd",
+      "size_bytes": 5147,
+      "sha256": "72023010d7adb240af458a7245a154d37912b159014221b540ca27db358e5d96"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b10_white_01.thumb.usd",
+      "size_bytes": 5140,
+      "sha256": "ee0e1c5ea417ccc8a1a770cdcd7233912e9ce8ab8b6fff92839ca1021064bf01"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b10_white_01_physics.thumb.usd",
+      "size_bytes": 5144,
+      "sha256": "1a575e3420ecc5c06b069173489a41ee99c4349de89b3138759d7a622470e7ac"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b12_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "b2995b87f83a8506730c22a8345942171188b1319c950287966d6c7b979a5f71"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b12_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "2bb159d0c94779c2e18dff0f74d3b2acd924fdb5d854e48385d84fb9911af3b1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b13_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "6ed2048d5621a4e342314298fb4b2edfb21f74d1472390522268831880777c4e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b13_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "8a9a42d4ebf6fa901593ad271d3057b8ba54f0ee053140d47492b71cb62c0894"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b17_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "ff9403b941572d37d7d33727ff7acbfb63a55dfb12b833a92123174174b47a9e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b17_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "a851854f9a85f5e6f55e7c16d86ba66f8bb1b8dc569857bc165cbf944386ad48"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b19_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "d5df60e4a73d1021f9df7bb2a1beda07de4798b137b3043b749586364659a484"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b19_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "7ff0fd25372f6694dc823e47e02895fca4b075ebea6402b0b52d4dc1f486d4e3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b19_white_01.thumb.usd",
+      "size_bytes": 5081,
+      "sha256": "412e529eeb4c6a8cef6dde8dcbf800b75a94be65deafb42ea865ab03743a6491"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b19_white_01_physics.thumb.usd",
+      "size_bytes": 5085,
+      "sha256": "6108cb741043eab5ba741bc7846b51715c6b8e0e12f5f5e6113d407a524d3226"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b20_brown_01.thumb.usd",
+      "size_bytes": 5142,
+      "sha256": "f9b6bb124f754a171c13875dc25032df5f875820f43db78b9376c75b70a8328b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b20_brown_01_physics.thumb.usd",
+      "size_bytes": 5145,
+      "sha256": "d649f1ce6e30b6498c0aa262bccffb5cf763f209216bf949d35521caea10e5ef"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b20_white_01.thumb.usd",
+      "size_bytes": 5139,
+      "sha256": "802e143fce5493d6748aab96673c1962f54f1f16bd625eff150e3dd38e0a9f0a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b20_white_01_physics.thumb.usd",
+      "size_bytes": 5143,
+      "sha256": "b902d4ba75920988106cf68b4969b6a01db7248bbb086e6e52428e273e257bb1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b21_brown_01.thumb.usd",
+      "size_bytes": 5144,
+      "sha256": "d0d513e742e95c9b2377815af0a8c0d6818fa0860ff17b1f48be6503df913f6f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b21_brown_01_physics.thumb.usd",
+      "size_bytes": 5147,
+      "sha256": "393e1aa45d3737d76b38e89c1374c15e8563cb6b0243e10287cd8897e157ab1f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b21_white_01.thumb.usd",
+      "size_bytes": 5140,
+      "sha256": "871c7df092c26df0231366f568cbef73a0a6384d27302d616234d1a896fdce64"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b21_white_01_physics.thumb.usd",
+      "size_bytes": 5144,
+      "sha256": "4034da22a1218a8c5750a9d9d0fa95d05a3391eb755b7818b5e63a3910c55dc2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b22_brown_01.thumb.usd",
+      "size_bytes": 5142,
+      "sha256": "c3eb08a44a60c631d24c6b7509cf4fbf628e1b6400cd622922dc785e4dd7b8b4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b22_brown_01_physics.thumb.usd",
+      "size_bytes": 5145,
+      "sha256": "24c51c2280a7bf00bf5ebe0cf3b76dda9b10ffef55f14c27eb4a927eacab6357"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b22_white_01.thumb.usd",
+      "size_bytes": 5139,
+      "sha256": "d9603d04e4113ac6fb1f08377e1e47e9f10da3b99a63cfe9e14b551f533e02f2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b22_white_01_physics.thumb.usd",
+      "size_bytes": 5143,
+      "sha256": "fe7cd417c5b5fc21f5f36c23d3e96d46f3a39a2b71a0fd428fcef0d46316ba1a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b25_white_01.thumb.usd",
+      "size_bytes": 5139,
+      "sha256": "0f03c8f7ce292b486ac956028f7dc1c5129f34ccf77efe8bb92542dcdd874fde"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b25_white_01_physics.thumb.usd",
+      "size_bytes": 5143,
+      "sha256": "b309fe46949358015f8c82f9606f439e633e728d78eb6340401e7f0dd0efb245"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b26_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "b92e509ebc7878fe23fb09c47226950bd03db62b7dfa99733d7e8c91518c0e1b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b26_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "a0e94f8d0a13c37013e16a12e3f8abd342aa71b6ffd8af4fe4f977cb53d66ed4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b26_white_01.thumb.usd",
+      "size_bytes": 5081,
+      "sha256": "e6f79761d1728753d8533f32a07bc85ab4caa518711ef98b7234ef42589ee41f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b26_white_01_physics.thumb.usd",
+      "size_bytes": 5085,
+      "sha256": "28403abf88bdd99ded85b33913a6c8d7bdce58717031de4814bc08b243e0f23d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b28_brown_01.thumb.usd",
+      "size_bytes": 5142,
+      "sha256": "a0184617f050bb5b137056646735d655650fd257c75c50b1410a40fc861d7644"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b28_brown_01_physics.thumb.usd",
+      "size_bytes": 5145,
+      "sha256": "a83ae6afe383a18e5a6c73827ef1c47cca7aa42fd267968c771c9f00d29cf269"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b28_white_01.thumb.usd",
+      "size_bytes": 5139,
+      "sha256": "10c62ff5d2f6270800d9c03141b4550a889094398c0a564a89b3e09e14a773ed"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b28_white_01_physics.thumb.usd",
+      "size_bytes": 5143,
+      "sha256": "36784f47d9fda90aa7184bc53f24da0e1cd288c5b63d83f14c85e51a8cec4de0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b33_brown_01.thumb.usd",
+      "size_bytes": 5142,
+      "sha256": "4c54d156471f1542f64926ab2294c10c66a738988be5ff291f716caa1bf28aa3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b33_brown_01_physics.thumb.usd",
+      "size_bytes": 5145,
+      "sha256": "e5d620cdeb7af2e9ac205b320e091697144ce08a3adbf166910102a624ab81da"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b33_white_01.thumb.usd",
+      "size_bytes": 5139,
+      "sha256": "7ed32355ef7cc7395282d540ac0840ecb8470617f98f8c48024516a7c58fdb70"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b33_white_01_physics.thumb.usd",
+      "size_bytes": 5143,
+      "sha256": "21086412031c5460435bfe9ca9271e97ee8c80fc8d4bf41eaae5cd0b68653603"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b35_brown_01.thumb.usd",
+      "size_bytes": 5084,
+      "sha256": "c8b85d0bae4b170a6fc1015364e3173dee271ac9c89484006ccc83aa3bd93007"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/.thumbs/sm_whitecorrugatedbox_b35_brown_01_physics.thumb.usd",
+      "size_bytes": 5087,
+      "sha256": "979a1035797de7de17f21b7a59547d62f27742ca75da82e4b29b3ead807e673f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_decal_albedo.png.auto.png",
+      "size_bytes": 11599,
+      "sha256": "86f0d097839debdb707b407c3c3b12c968aa76cf6bbd1bbc21e87b0389594741"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_decal_opacity.png.auto.png",
+      "size_bytes": 19747,
+      "sha256": "0c0f8112fcf15674cbce78d7afb80f1a4632cd234ea4e73a5aa0359ebc33d1df"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_decal_orm.png.auto.png",
+      "size_bytes": 9734,
+      "sha256": "444ad0334efe2e937b02cb004778e2a393a0386f7922d195869e86c02c949839"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_tile01_albedo.png.auto.png",
+      "size_bytes": 11999,
+      "sha256": "5af074b5d480218a8d0619fb8601fe6df3424bb71e3d7411fdf901c3ccc5cf26"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_tile01_normal.png.auto.png",
+      "size_bytes": 9005,
+      "sha256": "3157c22c81b5f11ddfca1dc697b09dfc31d5263818b6c567a034af6a8912971f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_tile01_orm.png.auto.png",
+      "size_bytes": 8337,
+      "sha256": "a3013dbb0a5a4d8990f2dc80dd96bab994e696d898dd2a5c1c65e59d9ae753f9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_tile02_albedo.png.auto.png",
+      "size_bytes": 8536,
+      "sha256": "f8ff0f320c5d1ffa48af07e69ff26ad48009d81bc911e41499a1c109c8d93bf6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_tile02_normal.png.auto.png",
+      "size_bytes": 6064,
+      "sha256": "41cad286379881c009935f8553b8ee117c7adf5386f7e30b2f902b6b85b4b938"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_tile02_orm.png.auto.png",
+      "size_bytes": 7303,
+      "sha256": "5d4133e59147be534ef59d605d7de3b84224800e231eadb84394502c7065759a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_trim_Albedo.png.auto.png",
+      "size_bytes": 12906,
+      "sha256": "d4b0228790e1abf9a152c874fe349a4744c1a2018d41c8050b044c0bfca7cdf5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_trim_normal.png.auto.png",
+      "size_bytes": 5203,
+      "sha256": "906e0b3be63ddbbdd2ef02d142e59c3f66619fb45385a769f125273955bdb301"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_trim_opacity.png.auto.png",
+      "size_bytes": 9497,
+      "sha256": "2ff4290efa8387f06ff393900246a3317226bbc07d859f633d83d58071db37b4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/138x108/t_corrugatedboxes_b01_trim_orm.png.auto.png",
+      "size_bytes": 8593,
+      "sha256": "f9fcae21a221112142ab5578f79d51d9513e3dc0d34a56786b6b1513d5d7c4d1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_decal_albedo.png.auto.png",
+      "size_bytes": 45285,
+      "sha256": "86b5187becb2c3f2f8c2073e490d59b11fa27f270929f3b0397752f98fc8113a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_decal_opacity.png.auto.png",
+      "size_bytes": 67741,
+      "sha256": "2726d70feb4cac2c93fa6b6444f7275ff377707da628c0f51d32a9fb81e5c00a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_decal_orm.png.auto.png",
+      "size_bytes": 37789,
+      "sha256": "0ca4440c82152e7ec7ae594ca09a1c728ee2ece2a50100b1a54704b7e89ea9d6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_tile01_albedo.png.auto.png",
+      "size_bytes": 76805,
+      "sha256": "aa32817f8f3b8aec13964fb00f1252a99eb62258fe6165463e876f428e2f4923"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_tile01_normal.png.auto.png",
+      "size_bytes": 63943,
+      "sha256": "22dab4e5888f919ac13270e87b65b0db70e214c2dd64cee4fab0f04023d7603e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_tile01_orm.png.auto.png",
+      "size_bytes": 48777,
+      "sha256": "e39bc75045466302b62e127794ceb85e01fbef416479a09ae635c93392748550"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_tile02_albedo.png.auto.png",
+      "size_bytes": 53630,
+      "sha256": "c09f21e42b6414d3dc4c04d77d6b7e6d2e3cf3d0b1d032c627601ce882314c0a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_tile02_normal.png.auto.png",
+      "size_bytes": 31561,
+      "sha256": "96e375f7bee49095509a5dae04b7d61a99a47ed73bdfb98768a07c88f9e39c18"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_tile02_orm.png.auto.png",
+      "size_bytes": 43118,
+      "sha256": "f82d66c9459341e2963450621b1474b39ad1b9ad39274644b67bf86fae74f9b7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_trim_Albedo.png.auto.png",
+      "size_bytes": 51419,
+      "sha256": "723b13369a85fb01e886e2b44f9e45acba56b87ab6966dbf48b7b3321062e35c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_trim_normal.png.auto.png",
+      "size_bytes": 25084,
+      "sha256": "3c8e28ed63d316d2f1acbb636b424467a1e0b09003b063392a8438ae3d4b79a5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_trim_opacity.png.auto.png",
+      "size_bytes": 26527,
+      "sha256": "1650c57b5011b851300b73562f6c649662432ed8ddf28b11686d719b2d32d585"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/.thumbs/256x256/t_corrugatedboxes_b01_trim_orm.png.auto.png",
+      "size_bytes": 35678,
+      "sha256": "e859132726a71e52e3cf344b5cb6ce30a286d09c8a8a924b9baf67db29d7f31f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_decal_albedo.png",
+      "size_bytes": 1092832,
+      "sha256": "b5128f13063140230dbd1588e03d9d17808883bbeb5b5cf2d3a272acd54c3db0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_decal_opacity.png",
+      "size_bytes": 345574,
+      "sha256": "156e05a6c61179931aa71dd4c6609eac1ceacb01454cd1aac2964fb9857fb6ac"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_decal_orm.png",
+      "size_bytes": 653905,
+      "sha256": "a1165a219f93e48cfda9efade8022f25631aa8202fabb97aba899d87ecc025b5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_tile01_albedo.png",
+      "size_bytes": 7528129,
+      "sha256": "5db82f3c8f9700b79bb4d2f801c33718c6ea9f406699948ba7c971a676adc5ea"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_tile01_normal.png",
+      "size_bytes": 8397701,
+      "sha256": "be1966633f7aa8f8156f47f146927a17f35568c3f4a0e5d39260fb4f268c53ac"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_tile01_orm.png",
+      "size_bytes": 4211848,
+      "sha256": "2ad7183e78cb49bcfe1a9591a0c23b423c9fd1a6eb2ea77e07b4cf8386058222"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_tile02_albedo.png",
+      "size_bytes": 5011737,
+      "sha256": "f28e62db726c65c9d3472bc2fd1bc6e5328ea98fc94c9359c586c7c99963a58d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_tile02_normal.png",
+      "size_bytes": 3691365,
+      "sha256": "dbe2565bf75a57c0d8350dcb6380bc2d76a83b37240c42c77c61fd0b167895ec"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_tile02_orm.png",
+      "size_bytes": 3834772,
+      "sha256": "049a8cd3cd5ad347b213ac7dc9c21c8ef63f989754539e2889ebba9df5083242"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_trim_Albedo.png",
+      "size_bytes": 2459866,
+      "sha256": "4a24c65f53b4a7420ac8b3cf570e4dd77df0df81c37a730a65c93305b05289b3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_trim_normal.png",
+      "size_bytes": 1290348,
+      "sha256": "1061dc411be515d6f2a95a02b4ebf9fcf897c7d5dbe4692a96889d0cd390713f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_trim_opacity.png",
+      "size_bytes": 155873,
+      "sha256": "2f9726a7f956f4c3631e5f794cd04a6328058b415b322b077fecf5e96bf4bfc4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/materials/textures/t_corrugatedboxes_b01_trim_orm.png",
+      "size_bytes": 1817980,
+      "sha256": "37aedb3d2bc48129f27d282c604ff2e8ccb152f1ac091067d6cb70c3aedc5005"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b04_brown_01.usd",
+      "size_bytes": 313169,
+      "sha256": "4e094c78007c16a052ca03e4057c7137df5265074bfa8d27b50e3cf830be2a43"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b04_brown_01_physics.usd",
+      "size_bytes": 1163,
+      "sha256": "dd5c6f1f4c2cdad81e630eab946d25746392638091783c596d863ddf7957af56"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b04_white_01.usd",
+      "size_bytes": 313166,
+      "sha256": "a7f20273bde3cfb367237b03774008e5d31fae4b97e31330f1a5829839c64af9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b04_white_01_physics.usd",
+      "size_bytes": 1161,
+      "sha256": "644a69aa89becc8011f03da46e657ead70a818339d18baf139c287cc04f32ad5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b07_brown_01.usd",
+      "size_bytes": 202591,
+      "sha256": "63d699f9918d75dbabc984733ddda0ccc05a970c37cd3f47a98b33bd4e1dbd73"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b07_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "b712fa97203327d13848ed6da3cbc4eb86e0ca1eb19e54e5459571de0b6596b4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b08_brown_01.usd",
+      "size_bytes": 315528,
+      "sha256": "9a0d29730bf9e840a38020eecd68a0bc60540de210a105f698aa0cab7b68e9dd"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b08_brown_01_physics.usd",
+      "size_bytes": 1159,
+      "sha256": "800506e0f102392ac2ee7fa3f966002c745c439217944e676194bfffdadc50ad"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b09_brown_01.usd",
+      "size_bytes": 192674,
+      "sha256": "2374ba878db74d500d12f4222963fb490f72cdf30415bec012c82dcdf4f3a1e3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b09_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "c02d3d9514b9785ce34bd2bdd7f0b0c8e4f5c156a4f3660ca5014a91ad61d118"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b09_white_01.usd",
+      "size_bytes": 313115,
+      "sha256": "e9653a1412f98964f6332c1c05ac7f4b53966d34540543413851b88384f440fc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b09_white_01_physics.usd",
+      "size_bytes": 1158,
+      "sha256": "197058a77fadf4ee275221144e3a93d0ff9692ae2fe33e7488dff7c92bf43afc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b10_brown_01.usd",
+      "size_bytes": 276605,
+      "sha256": "ace2e892fc189481cf018d24351116108a719fdd950ed7d64dc2986ac06b136c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b10_brown_01_physics.usd",
+      "size_bytes": 1163,
+      "sha256": "564b08a9a39fba6b1c23b34b06d56533a8b699ff65840148f5190fa9addcce01"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b10_white_01.usd",
+      "size_bytes": 276602,
+      "sha256": "453f7e20e7eb8039bc700763d800d1aeb652c6bd753b2cfce0c04603d46d8bff"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b10_white_01_physics.usd",
+      "size_bytes": 1161,
+      "sha256": "93e14e81b4615ae20b9c969020f71f2d8faf8d63f7b09391763e29f29782e3b6"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b12_brown_01.usd",
+      "size_bytes": 191438,
+      "sha256": "554a1834ff6ff597a6512a921781d6e141e223b186ddc8615d17bbde9ebbf4f3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b12_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "0e915b86f31d021ab1c2dfa75153c128517a4d8a2283b3316ea03a9d61122977"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b13_brown_01.usd",
+      "size_bytes": 185872,
+      "sha256": "210eae73bf2176ea83bde3a56a1eea330877fc08c0b6fe1d73be993cd793c306"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b13_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "3a1959a5e2e707407db93815bbb28dd1e833ea735cad5601e69f92404db1694c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b17_brown_01.usd",
+      "size_bytes": 193377,
+      "sha256": "68002dd31b390095151ff6b52f1daa4e11ac6c97f0d232e6ede1d6e8e00d8086"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b17_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "d0acda78e22befb805cb93bbe7a37508575a7f6758097ef2649a6dae57f90a53"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b19_brown_01.usd",
+      "size_bytes": 201772,
+      "sha256": "03a448a9f7c1ded3501c037f5782fe7cc4e24ca7327f2a9b1ba3822a9256d495"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b19_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "98b053b78bffb91f8838c3823a8722828bcc5fa3d72351ffc8d3b61c32bac38b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b19_white_01.usd",
+      "size_bytes": 201769,
+      "sha256": "a498216bfa92e90fcfec078bf97e75b3b81e17ca8a62a9577a7ed5be11ab987f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b19_white_01_physics.usd",
+      "size_bytes": 1156,
+      "sha256": "7822b020f23630d5672624a8c5b770eca73fb3be7e754eef9f403dbeaa9e7c71"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b20_brown_01.usd",
+      "size_bytes": 297298,
+      "sha256": "c574fe224841c2e0b56251e747ec3cabbea82b7dc4e53df924b16fc0862990fb"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b20_brown_01_physics.usd",
+      "size_bytes": 1159,
+      "sha256": "6c523319b97284c698931381627a1ff408830edf4ca987140277f9b019255bb1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b20_white_01.usd",
+      "size_bytes": 297295,
+      "sha256": "882419d71f2a20443fc2ec37d3992ec3bd4ecb86cdc57125c7cd2aaced6876b0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b20_white_01_physics.usd",
+      "size_bytes": 1158,
+      "sha256": "4fbb908fa8fcd0bf54429fdd992b504af4e7bccb29410db3f0678c7b485f27fb"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b21_brown_01.usd",
+      "size_bytes": 238254,
+      "sha256": "4b5d2cc5750c86715dbe5b4c8961d6491b887faa13463b57fcb1d7a38009d986"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b21_brown_01_physics.usd",
+      "size_bytes": 1163,
+      "sha256": "5a8a2731b52e0f2c835bfc70805dc2b5a01d76d6f4b81ee5a8a0def29c4d8339"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b21_white_01.usd",
+      "size_bytes": 238251,
+      "sha256": "b4e919da183e194b18d185d278fc1014b599b2a842d8e75b39f1fbc085b8f25d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b21_white_01_physics.usd",
+      "size_bytes": 1161,
+      "sha256": "2bfbe67b6c55f7c8879841ef77ddc551911bfed312074ce9e66b7d15301dcb13"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b22_brown_01.usd",
+      "size_bytes": 285320,
+      "sha256": "6d7082b5be78161b95c47ab5b2da6cbce29f48f3880bfdb2f6414ac5e8743ae4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b22_brown_01_physics.usd",
+      "size_bytes": 1159,
+      "sha256": "870a42667ff7592bf29941143766cacdb363b4ffc6a761d25bb730ff82ac4430"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b22_white_01.usd",
+      "size_bytes": 285317,
+      "sha256": "2ec292510669aad28ca73a3ec88e8ca7d1e9673e4712b106ebf45ba9cd4e4870"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b22_white_01_physics.usd",
+      "size_bytes": 1158,
+      "sha256": "b8b06902ebacefbfa2c65e74b089c87039cee380b2af71a4813eca9e4d30b9f3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b25_white_01.usd",
+      "size_bytes": 271736,
+      "sha256": "84a602c357db406912401dd93397001893b9164257a493a605d10f41513a45ff"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b25_white_01_physics.usd",
+      "size_bytes": 1158,
+      "sha256": "173544a80294aec69bf32d08a07dd0d55dd47d52f47db3cb5e527a931ac0ffcb"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b26_brown_01.usd",
+      "size_bytes": 204286,
+      "sha256": "c06a56d38a2baa01042d7d6a39f4dd20eb81e061309948f7672e24ac71f85731"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b26_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "ee27bd5e835bb0992c32ad851c9df413734cc19160123bf550e0dd1d7ac1424d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b26_white_01.usd",
+      "size_bytes": 204283,
+      "sha256": "76bcd741cd6412c33fc3d64367d678e01f92f0762fe9ce06f39baccc7a7ad0b1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b26_white_01_physics.usd",
+      "size_bytes": 1156,
+      "sha256": "5732f40c8555924f37d9c60951db9859816290e47453c3455b38927223ab432f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b28_brown_01.usd",
+      "size_bytes": 286166,
+      "sha256": "6b8f17f9f07bd8c65ab8c8658d9031ae2b22ce0f42c0aa76fc15178da4bf3b09"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b28_brown_01_physics.usd",
+      "size_bytes": 1159,
+      "sha256": "28be052ea1058fa418354bc9f000b88a28d134ca5a7af3469ad7731e64a0cd5a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b28_white_01.usd",
+      "size_bytes": 286163,
+      "sha256": "00bd9c32ecb81a6aba84772ebabad62c38f29ae1ab52531c759b87e982bfb451"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b28_white_01_physics.usd",
+      "size_bytes": 1158,
+      "sha256": "64206f488abad85c85f8aeb765a712254a14aa2bf5205b02242a798bea9c6ed4"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b33_brown_01.usd",
+      "size_bytes": 292535,
+      "sha256": "bf322c5d20642bab8ac60135512a6ca50fafbe0228396b1a138b2b25c8bf4718"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b33_brown_01_physics.usd",
+      "size_bytes": 1159,
+      "sha256": "2b9a1d401fda43a65ac2657a9ac704e3db5fd678abf4e5c541d1b85b3e4ec3f9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b33_white_01.usd",
+      "size_bytes": 292532,
+      "sha256": "07c74d7ece37904a14241dba5ece38ba8cc6f35712784e8d32be999c8d57d57f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b33_white_01_physics.usd",
+      "size_bytes": 1158,
+      "sha256": "27b38a03349c32fd954f247139a0dc5f2d1121a58960420154d4bcc0b2410717"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b35_brown_01.usd",
+      "size_bytes": 202219,
+      "sha256": "5c3dd2ce5c74a91669c1253fee60366fd04b65137b3eea0efb2b55830ddeea4a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Props/PackingTable/props/sm_whitecorrugatedbox_b/sm_whitecorrugatedbox_b35_brown_01_physics.usd",
+      "size_bytes": 1157,
+      "sha256": "ea77cb11bdd7b8c6baca1b7a52135be64e15e8aa84217dc59a802a203736de8c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_Albedo.png.auto.png",
+      "size_bytes": 13735,
+      "sha256": "44c71609bfbdf5618453b7efe61412b03e6a0527cf17d6365906e7eaf6e34d64"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_Albedo.png.png",
+      "size_bytes": 13735,
+      "sha256": "44c71609bfbdf5618453b7efe61412b03e6a0527cf17d6365906e7eaf6e34d64"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_Metallic.png.auto.png",
+      "size_bytes": 571,
+      "sha256": "c95a6674869a37df0dddd00d1fc71d680581765a3ee7d7cc8d28f4c6674a7d37"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_Metallic.png.png",
+      "size_bytes": 571,
+      "sha256": "c95a6674869a37df0dddd00d1fc71d680581765a3ee7d7cc8d28f4c6674a7d37"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_Opacity.png.auto.png",
+      "size_bytes": 1406,
+      "sha256": "8b6c86ec7a070dedc62f12350c7725d52173b334bafa1eaa1da00299981241b7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_Opacity.png.png",
+      "size_bytes": 1406,
+      "sha256": "8b6c86ec7a070dedc62f12350c7725d52173b334bafa1eaa1da00299981241b7"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_roughness.png.auto.png",
+      "size_bytes": 5603,
+      "sha256": "4b985ffbce39b3e1974c255a77e0ebd4c4b546051d102ce7610075dfd8e4201c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/Logo_Textures_roughness.png.png",
+      "size_bytes": 5603,
+      "sha256": "4b985ffbce39b3e1974c255a77e0ebd4c4b546051d102ce7610075dfd8e4201c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/normal.png.auto.png",
+      "size_bytes": 70,
+      "sha256": "9e380348161f495a7a45bdec0b14ee8baadea4c70f91613fd48dba496aa3356b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/138x108/normal.png.png",
+      "size_bytes": 70,
+      "sha256": "9e380348161f495a7a45bdec0b14ee8baadea4c70f91613fd48dba496aa3356b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_Albedo.png.auto.png",
+      "size_bytes": 58299,
+      "sha256": "a6fcf2adf4cb28a5d4a1b4a9d15c19e812ea908333de3a94cb8dce078e14eb3e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_Albedo.png.png",
+      "size_bytes": 58299,
+      "sha256": "a6fcf2adf4cb28a5d4a1b4a9d15c19e812ea908333de3a94cb8dce078e14eb3e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_Metallic.png.auto.png",
+      "size_bytes": 1153,
+      "sha256": "9585df7b43cfa4aa2bcf225e9a50f71baf40a5b473d5925acc2b4ae3e80c728c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_Metallic.png.png",
+      "size_bytes": 1153,
+      "sha256": "9585df7b43cfa4aa2bcf225e9a50f71baf40a5b473d5925acc2b4ae3e80c728c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_Opacity.png.auto.png",
+      "size_bytes": 3876,
+      "sha256": "2c56cb03b37e0d534fb4d0e2b20cd1561f64aaa233a906ae3082daaec42e0795"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_Opacity.png.png",
+      "size_bytes": 3876,
+      "sha256": "2c56cb03b37e0d534fb4d0e2b20cd1561f64aaa233a906ae3082daaec42e0795"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_roughness.png.auto.png",
+      "size_bytes": 25782,
+      "sha256": "aa4b35a5168fbcbb8ae76307150f92ccfdcd7c2c175eb2d7828beba081546c29"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/Logo_Textures_roughness.png.png",
+      "size_bytes": 25782,
+      "sha256": "aa4b35a5168fbcbb8ae76307150f92ccfdcd7c2c175eb2d7828beba081546c29"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/normal.png.auto.png",
+      "size_bytes": 70,
+      "sha256": "9e380348161f495a7a45bdec0b14ee8baadea4c70f91613fd48dba496aa3356b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/.thumbs/256x256/normal.png.png",
+      "size_bytes": 70,
+      "sha256": "9e380348161f495a7a45bdec0b14ee8baadea4c70f91613fd48dba496aa3356b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/Logo_Textures_Albedo.png",
+      "size_bytes": 8402019,
+      "sha256": "1435665d48ebaf5633c7b701cca4df1a904f0b75db577017fc2244b40e5c4441"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/Logo_Textures_Metallic.png",
+      "size_bytes": 314702,
+      "sha256": "a64a447c5305a9ef167a6960450ee9d80f6af91fefd88f7b010e35efbe9cc03e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/Logo_Textures_Opacity.png",
+      "size_bytes": 358545,
+      "sha256": "164df977bd09d55ed78a419626cd17ef931fa4c04df60975ea61850c70962945"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/Logo_Textures_roughness.png",
+      "size_bytes": 5577851,
+      "sha256": "2ab1caaa7a575f66b5582a610ce880650f69ac7e86db120e4cbb564e988b94dc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/Materials/Textures/normal.png",
+      "size_bytes": 70,
+      "sha256": "8cce4c8966b94c7401bd90147d60e1dadf6a50bb2458c55c3418ce10081b4eeb"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/cables_connected.usd",
+      "size_bytes": 1349457,
+      "sha256": "bd924a85e8cc10cfc08a3324cf0234b29753857bb349bfc1bcdff88e106ee384"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/logo_decals.usd",
+      "size_bytes": 15786,
+      "sha256": "4c5f7e81db961e87743c9c6a43d91e1354152d45102e7f68369145efe7c185c1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_hand.usd",
+      "size_bytes": 803493,
+      "sha256": "f09c6cb71f769fbfdf7d20428d405aa35f98ad5b5914907bf602714f2c092244"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_hand_realsense.usd",
+      "size_bytes": 3310,
+      "sha256": "fe406d1bda5886eac12748d42e687b2134c1763335d3dc55885e5ba3dbad7d28"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_leftfinger_flex.usd",
+      "size_bytes": 2146520,
+      "sha256": "f07cd6a2dc2fc6599c1e21f71dc90661e1a5b226a9d5639da09379d83271dc88"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link0.usd",
+      "size_bytes": 1131306,
+      "sha256": "cb340e51f4f92d75408520a4c33e29d0915d4fc3d3856c2a12dadbd81e11acc5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link1.usd",
+      "size_bytes": 733373,
+      "sha256": "0011dab0b26a8cba4feb3f937666e7f71a90fa099f3577941cace98bca4b9fcd"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link2.usd",
+      "size_bytes": 596141,
+      "sha256": "f1c0f580d19b566dc6e7df7b2b555406f12772d053ae997188eb23ada9f847a8"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link3.usd",
+      "size_bytes": 684829,
+      "sha256": "5ab994706b75ac52cfdeee9eb1968fafa4da7a33c3ddfb2f691f8637fe177d1d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link4.usd",
+      "size_bytes": 678392,
+      "sha256": "309fe7891bd81f76e5647b67abe09b0a7ee7b63a2750e8725284116caabe0fd1"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link5.usd",
+      "size_bytes": 607888,
+      "sha256": "d5b76729ce8f9301d6024272ce191a0c8b5b5e2f67df658c1dbf474e68535f11"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link6.usd",
+      "size_bytes": 969161,
+      "sha256": "79786360382ee2d10ebdf59a65076848b889caf52e7307440b26d2bf5cfa5c02"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_link7.usd",
+      "size_bytes": 880227,
+      "sha256": "8c361eac199ce60615804fbc026f31cc60f1018ba5a3f6837ea49fb467b07a09"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/panda_rightfinger_flex.usd",
+      "size_bytes": 2147531,
+      "sha256": "c92a297c21c82ade3b8390bc8a10a8449cd2ef6d526b40c65dee636da3eb7134"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/DetailedProps/realsense.usd",
+      "size_bytes": 1165961,
+      "sha256": "5c01fecf46c0c8c3b9b4bff34102eae1b3aa9418c75e364ba2f69ca577c5684d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Materials/.thumbs/256x256/.Materials.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "3be3c2a0473b77d00e6af31321cf375c38b1ec6906c4e1d66dbd5e6fb4ea877c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Materials/.thumbs/Materials.thumb.usd",
+      "size_bytes": 2976,
+      "sha256": "a6e9e86e464e3c63abe33af34d9ddf6470d6d6b032afdae3b12a3799c951e66e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Materials/Materials.usd",
+      "size_bytes": 4696,
+      "sha256": "163ad21137370dfa8f8fda6337fa5a84aab3b7dbcdd134c91792239272c33691"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_hand.usd",
+      "size_bytes": 687843,
+      "sha256": "5804fcf4755239d43583b6b480510d5aa32aab30a3aa44d2901a2322b307cdf9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_leftfinger.usd",
+      "size_bytes": 73924,
+      "sha256": "0532b478f680d9fa5071fbecaf4c7e3b88b13981403170d432e26eb2bce74f2b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link0.usd",
+      "size_bytes": 2154800,
+      "sha256": "b5d768dcb73fe2d3970604e12328d0086a404d147ac1a242106e0a1d3985ca18"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link1.usd",
+      "size_bytes": 502455,
+      "sha256": "2774a399b6d2e8d68af7761b0a4b0c5674544d5b03e7d4a256be0a9cd6165e56"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link2.usd",
+      "size_bytes": 502446,
+      "sha256": "53a45d9c505151bbc789e0649dd1d7f9f7b4a5791e43a5128427baf71ebb83ce"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link3.usd",
+      "size_bytes": 868319,
+      "sha256": "926e1eca5e0f315188e433053d528b626e6205466d5e87ea4f26589a0c25b2b0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link4.usd",
+      "size_bytes": 868321,
+      "sha256": "e58096b8bf42e980e169b5b231c384147efd67050dd6e2f4a8e4978b8183deb9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link5.usd",
+      "size_bytes": 779669,
+      "sha256": "19143c5e88afedb5186bebe378097018b3bb2ae29394601f34701604ca5cc46a"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link6.usd",
+      "size_bytes": 2273293,
+      "sha256": "c994cdb6f5b00e704e708ce929b48e57abaea7817b1e0065ef0cd11dbd854afc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_link7.usd",
+      "size_bytes": 1255317,
+      "sha256": "5815c3f1e55c8ef397b1b652f1dfcb03c56cc0d5ec1058caed4ccd52ac54e00d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/Props/panda_rightfinger.usd",
+      "size_bytes": 71217,
+      "sha256": "81113e40e70f11669ec4159f8ae4279ca0fc493b4183eb4d88667012ac46e407"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/configuration/franka_Gripper_Robotiq_2F_85.usd",
+      "size_bytes": 4169,
+      "sha256": "00b55dd38414c7ead3cdfd30372ebf2a7925279a21dc313666899f5601e05f7e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/configuration/franka_alt_fingers_robot_schema.usd",
+      "size_bytes": 2994,
+      "sha256": "10767fd3da6b445e9b9c3356f3bf37c8e3d90e79f8fda0a4a56857b42fafdce2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/configuration/franka_robot_schema.usd",
+      "size_bytes": 4353,
+      "sha256": "a5cd92ddcf43f91e26d90b51d900b895fa95f3a708c4241459d812b8e80a0758"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/franka-LICENSE.txt",
+      "size_bytes": 10316,
+      "sha256": "94b9224462ffdd31fb184897c2e6c69dfc9f03f667d8e2a458ed57b302df4684"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd",
+      "size_bytes": 29898,
+      "sha256": "aa480a0c26cfacedd223259bd82b0825a44f857a27769db8be1d34c3f82c6d0f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/Robotiq_2F_85_edit.usd",
+      "size_bytes": 7691,
+      "sha256": "3b69fbb560dba20a77d09dcf845bedfbc2b6b1cfda9de10f8e3b22fd6ca97d43"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/256x256/.Robotiq_2F_85_config.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "19821a8522e66d37821344361a043f31114dfaf7337246fa833a3c6e3d8fb656"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/256x256/.Robotiq_2F_85_config_physics_loop.usda.last_generated",
+      "size_bytes": 19,
+      "sha256": "19821a8522e66d37821344361a043f31114dfaf7337246fa833a3c6e3d8fb656"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/256x256/.Robotiq_2F_85_config_physics_mimic.usda.last_generated",
+      "size_bytes": 19,
+      "sha256": "4a371f577cd474700e91d7eff21d826b889cb96a304252761b89412dd99ee9f2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/256x256/.Robotiq_2F_85_robot.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "19821a8522e66d37821344361a043f31114dfaf7337246fa833a3c6e3d8fb656"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/256x256/Robotiq_2F_85_config_physics_mimic.usda.png",
+      "size_bytes": 41921,
+      "sha256": "56d695da2b9672c7f58ab4e109842d1eb6a39622bf7e0ed2ea6ef17b8ad4bdd0"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/Robotiq_2F_85_config.thumb.usd",
+      "size_bytes": 3072,
+      "sha256": "a0a7136718e735f0bd77bd5adf4506ec95984cb397d86426dd5fb0a44adcafe9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/Robotiq_2F_85_config_physics_loop.thumb.usda",
+      "size_bytes": 4045,
+      "sha256": "a731f920064df35b5be1f3a03b76f18de5973f5a133ccb3600df0753fe9248a2"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/Robotiq_2F_85_config_physics_mimic.thumb.usda",
+      "size_bytes": 6052,
+      "sha256": "3eec48c595115fd6b072d286264bce00db7fccf30400149a413fc21fc465970f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/.thumbs/Robotiq_2F_85_robot.thumb.usd",
+      "size_bytes": 3073,
+      "sha256": "c02b80c39b6292bdac460a2b25ec3e6ca9de89c3218defb7710cc6545b2ab9b3"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/Robotiq_2F_85_config.usd",
+      "size_bytes": 12466,
+      "sha256": "a8869979517ed899b58af01541c95634454303e5a1e4e6e830f36adf17364195"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/Robotiq_2F_85_config_physics_loop.usda",
+      "size_bytes": 5566,
+      "sha256": "610dee1cb12cd4e893b23b06e5eb3e86605f7fe9892d58071e7c0dc6014e33ea"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/Robotiq_2F_85_config_physics_mimic.usda",
+      "size_bytes": 5551,
+      "sha256": "4c9793815940d276bfe17fafabdb1c2f02a2de0d0423da64e95e421133e2727c"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/Robotiq_2F_85_robot.usd",
+      "size_bytes": 2956,
+      "sha256": "65babc691a1c8d12ca226f8c0538b776e4ecb28f66f0e9ab50a72ba3afae03ca"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/materials/materials.usd",
+      "size_bytes": 3275,
+      "sha256": "be51967b16cff7e79fd00d84c903d1319978419ea3c908396ff7e5d053c72acc"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_Finger1step_JFT.usd",
+      "size_bytes": 77992,
+      "sha256": "446419dcab650d66482157f7c009a058a269d3f112549b5f3774cbbaf52f4f33"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_basestep_JFX.usd",
+      "size_bytes": 3373227,
+      "sha256": "65ab3ec6f3d5b02fda2ab408d3a42e8857ca5cb157d8e3f2d00451d89369d531"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger2step_JFP.usd",
+      "size_bytes": 230153,
+      "sha256": "5c71d8ea3eef8f985092eb75f74124d299960531f0518047d33187e015cc50cb"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger3step_JFL.usd",
+      "size_bytes": 143687,
+      "sha256": "88e81d87b4802684c2b035d72a01ff181b8b8df64c01854891c2feec1ffc5a4d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger4step_JFH.usd",
+      "size_bytes": 135710,
+      "sha256": "65353dd1e6179373a26762fc005c6fb43f65142ccc8707f9a09bb2e0131805e5"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_fingertipsstep_JFD.usd",
+      "size_bytes": 43102,
+      "sha256": "8a291a7b7a8ba6a2e1762e7d4bb937828c99f929edd8f82fdbd1cb9f1b51da18"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/.Robotiq_2F_85_base.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "19821a8522e66d37821344361a043f31114dfaf7337246fa833a3c6e3d8fb656"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/.Robotiq_2F_85_base.usda.last_generated",
+      "size_bytes": 19,
+      "sha256": "3f50357d25b9d17362d7dc76825f27596b92bd375aa7a6e6fe42554cece6b105"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/.Robotiq_2F_85_controller.usd.last_generated",
+      "size_bytes": 19,
+      "sha256": "fba3c712df9e90158b4c1289dcf5483689ed558634188e90813e3775021e2042"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/.Robotiq_2F_85_phyisics_loop.usda.last_generated",
+      "size_bytes": 19,
+      "sha256": "19821a8522e66d37821344361a043f31114dfaf7337246fa833a3c6e3d8fb656"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/.Robotiq_2F_85_phyisics_mimic.usda.last_generated",
+      "size_bytes": 19,
+      "sha256": "19821a8522e66d37821344361a043f31114dfaf7337246fa833a3c6e3d8fb656"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/Robotiq_2F_85_base.usda.png",
+      "size_bytes": 42348,
+      "sha256": "8a37f51b6f00ba39ea90883475f0e345f803e567fdfa4d95194ff6253279efaf"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/256x256/Robotiq_2F_85_controller.usd.png",
+      "size_bytes": 5325,
+      "sha256": "694bbfc5eaa9644f3cf937a823645cae094f00f93018116630d0beae5860e35e"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/Robotiq_2F_85_base.thumb.usd",
+      "size_bytes": 3071,
+      "sha256": "26cd456c7d83c04aa56e93b5da5a82ab63f85f76c98927a940878087ef5adbb9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/Robotiq_2F_85_base.thumb.usda",
+      "size_bytes": 6032,
+      "sha256": "bc471499f9f0de9896a12915cedda2882dd7fde57410202ab4fc65897682a516"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/Robotiq_2F_85_controller.thumb.usd",
+      "size_bytes": 4919,
+      "sha256": "6abdaec44254eb5f1752b5f2474f266619f532e9c35c22b2ff5ae9bf0508500d"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/Robotiq_2F_85_phyisics_loop.thumb.usda",
+      "size_bytes": 4034,
+      "sha256": "a3cd4cc67ff697b5e68e50ef6fbb9c256630fd31970a1846a944b99e55050e2f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/.thumbs/Robotiq_2F_85_phyisics_mimic.thumb.usda",
+      "size_bytes": 4035,
+      "sha256": "d1087833dd95ecd999a9a964635460e44f269761b1df6a24d9d40efe97c13465"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/Robotiq_2F_85_base.usd",
+      "size_bytes": 10363,
+      "sha256": "2adf359174ef5c44219bc99d78cd7f29a27c66a3de34ae33c2d4d379ffb8ea2b"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/Robotiq_2F_85_base.usda",
+      "size_bytes": 17724,
+      "sha256": "187a24f95bc97e1fb3f26c7f39096a1b8e91591e3e3acc619b9559ffc8d10a5f"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/Robotiq_2F_85_controller.usd",
+      "size_bytes": 5863,
+      "sha256": "35a14e82c7180b759e2e77544c793b28da08a3ab5c2cc91b1641452fb2a84d69"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/Robotiq_2F_85_phyisics_loop.usda",
+      "size_bytes": 19966,
+      "sha256": "dfda251fceb523e98f224568cf1c2c595a45d79a359b004249844fd2ef01f2a9"
+    },
+    {
+      "path": "assets/isaac_official/Isaac/Robots/Robotiq/2F-85/payloads/Robotiq_2F_85_phyisics_mimic.usda",
+      "size_bytes": 21833,
+      "sha256": "1b9625826ff31675b15c5ac117e81c69ebe5e3364efd1b9fa6d40f9dcbaac386"
+    },
+    {
+      "path": "docs/PLUMBERS_BLOCK_ASSET_VALIDATION.md",
+      "size_bytes": 775,
+      "sha256": "f0bfcddce4daea4d51618a95d1edfa7a7d0b6d530532f75886fdb95713e88b7b"
+    },
+    {
+      "path": "isaaclab_cfg/__pycache__/fabrica_dual_franka_scene_cfg.cpython-311.pyc",
+      "size_bytes": 12109,
+      "sha256": "4fe3171e16c6ff590d1cd1978151b9fbd700da667c822aad2c79a50837480801"
+    },
+    {
+      "path": "isaaclab_cfg/fabrica_dual_franka_scene_cfg.py",
+      "size_bytes": 14529,
+      "sha256": "34b776b4f761c5ad7d4531b7e8f453e3a9591c0ea4cc9056a76f69574df7062f"
+    },
+    {
+      "path": "scene/clean_packing_table.usda",
+      "size_bytes": 268,
+      "sha256": "b187b4205aa32f790d313013b769b9d750152bb98c6a3986a32916168bf53ffa"
+    },
+    {
+      "path": "scene/scene.usda",
+      "size_bytes": 4473145,
+      "sha256": "0fba40ef73a8ae326f4e1e12f005aa9627e1ded8b3ccc86ff90993209149ac2a"
+    },
+    {
+      "path": "scene/scene_roundtrip_verify.usda",
+      "size_bytes": 4469811,
+      "sha256": "37e1a3593e25d7df8d6bf23c8eec050d5e9df6993e063f53a5cc8f16f1306855"
+    },
+    {
+      "path": "scene/scene_spec.json",
+      "size_bytes": 51506,
+      "sha256": "fc786cc4494ecb2b9235c707f898371375e30584d973d570a8100d321ef16b05"
+    },
+    {
+      "path": "scripts/json_to_usd.py",
+      "size_bytes": 6630,
+      "sha256": "642f40aebbc27ecd413de77f3c359a453ba0deb4ee34f819b8ce9c7b72fb7053"
+    },
+    {
+      "path": "scripts/open_in_isaacsim.py",
+      "size_bytes": 3912,
+      "sha256": "a86f8901d3aaaf08cb24624139b6f336d537d84eced59672f94fdd4846383d6b"
+    },
+    {
+      "path": "scripts/open_in_isaacsim.sh",
+      "size_bytes": 558,
+      "sha256": "75c0374eee8a7e045284cb5f740931e7d2a943304cc99a82a5fa9228548038ce"
+    },
+    {
+      "path": "scripts/patch_usd_asset_root.py",
+      "size_bytes": 1654,
+      "sha256": "9419e4f63935289b1f387f926d70af5aab3c296a88c6b68ec7e9d85bfed08ac2"
+    }
+  ],
+  "updated_utc": "2026-06-08T11:01:52.684096+00:00"
+}

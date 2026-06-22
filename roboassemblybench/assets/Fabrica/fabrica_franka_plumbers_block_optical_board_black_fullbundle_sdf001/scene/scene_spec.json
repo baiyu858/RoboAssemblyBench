@@ -1,0 +1,1946 @@
+{
+  "schema_version": "fabrica_isaaclab_scene_only/v0.3",
+  "scene_name": "fabrica_dual_franka_plumbers_block_black_optical_board",
+  "output": {
+    "scene_usda": "scene/scene.usda",
+    "scene_spec_json": "scene/scene_spec.json",
+    "isaaclab_cfg_py": "isaaclab_cfg/fabrica_dual_franka_scene_cfg.py",
+    "json_to_usd_py": "scripts/json_to_usd.py"
+  },
+  "assets": {
+    "table": {
+      "path": "scene/clean_packing_table.usda",
+      "source_path": "assets/isaac_official/Isaac/Props/PackingTable/packing_table.usd",
+      "library": "isaac_official",
+      "source_task": "IsaacLab pickplace_gr1t2_env_cfg.py",
+      "removed_prims": [
+        "/Root/container_h20"
+      ]
+    },
+    "robot": {
+      "path": "assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd",
+      "library": "isaac_official",
+      "robot_type": "franka_panda"
+    },
+    "fabrica_assembly_manifest": {
+      "path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/manifest.json",
+      "library": "fabrica_isaaclab",
+      "assembly": "plumbers_block",
+      "variant": "aligned"
+    },
+    "optical_board": {
+      "path": "assets/fabrica_support/optical_board.obj",
+      "source_path": "/data/hjj/src/Fabrica/assets/optical_board.obj",
+      "library": "fabrica",
+      "asset_type": "optical_breadboard_fixture_plate",
+      "description": "Fabrica optical board used as the black locating/support board on the shared workspace."
+    }
+  },
+  "fabrica_consistency": {
+    "source_root": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block",
+    "scale": 0.01,
+    "collision_approximation": "sdf",
+    "assembled_reference_is_composed_from_individual_parts": true,
+    "assembly_target_pose_source": "manifest.parts[].assembled_child_translate_m",
+    "fabrica_workcell_reference_m": {
+      "move_arm_xy": [
+        0.45,
+        0.25
+      ],
+      "hold_arm_xy": [
+        -0.45,
+        0.25
+      ],
+      "assembly_center_xy": [
+        0.0,
+        -0.15
+      ],
+      "yaw_deg": -90.0
+    },
+    "sdf_margin_m": 0.001
+  },
+  "background": {
+    "prim_path": null,
+    "translation": null,
+    "note": "factory_core_scene_has_no_warehouse_background"
+  },
+  "table": {
+    "layout": "single_clean_long_packing_table",
+    "worktable_ids": [
+      "main_table"
+    ],
+    "work_surface_z": 1.002551339,
+    "table_surface_local_z": 0.994051,
+    "note": "Fabrica parts rest on the black optical board top surface, not directly on the table."
+  },
+  "worktables": [
+    {
+      "id": "main_table",
+      "prim_name": "MainTable",
+      "prim_path": "/World/envs/env_0/MainTable",
+      "translation": [
+        0.5,
+        0.0,
+        0.0
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role": "clean_long_packing_table_shared_by_both_robots"
+    }
+  ],
+  "robots": [
+    {
+      "id": "robot_left",
+      "prim_path": "/World/envs/env_0/RobotLeft",
+      "translation": [
+        0.05,
+        0.25,
+        0.998051
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "rotation_wxyz": [
+        0.707106781,
+        0.0,
+        0.0,
+        -0.707106781
+      ],
+      "joint_targets_degrees": {
+        "shoulder_pan_joint": -90.0,
+        "shoulder_lift_joint": -90.0,
+        "elbow_joint": 90.0,
+        "wrist_1_joint": -90.0,
+        "wrist_2_joint": -90.0,
+        "wrist_3_joint": 0.0
+      },
+      "mounting": "directly_on_side_worktable_top"
+    },
+    {
+      "id": "robot_right",
+      "prim_path": "/World/envs/env_0/RobotRight",
+      "translation": [
+        0.95,
+        0.25,
+        0.998051
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "rotation_wxyz": [
+        0.707106781,
+        0.0,
+        0.0,
+        -0.707106781
+      ],
+      "joint_targets_degrees": {
+        "shoulder_pan_joint": -90.0,
+        "shoulder_lift_joint": -90.0,
+        "elbow_joint": 90.0,
+        "wrist_1_joint": -90.0,
+        "wrist_2_joint": -90.0,
+        "wrist_3_joint": 0.0
+      },
+      "mounting": "directly_on_side_worktable_top"
+    }
+  ],
+  "assembled_display": {
+    "prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+    "assembly": "plumbers_block",
+    "translation": [
+      0.32,
+      -0.18,
+      1.058051
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "dynamic": true,
+    "assembly_target_poses": {
+      "fabrica_plumbers_block_0": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/0.obj",
+        "target_frame": "/World/envs/env_0/assembled_plumbers_block_display",
+        "target_translation_local_m": [
+          6e-08,
+          0.0,
+          -0.00059162
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.32000006,
+          -0.18,
+          1.057459719
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          5.999999999964367e-08,
+          0.0,
+          0.051908380000000004
+        ],
+        "raw_to_aligned_translation_m": [
+          -5.999999999964367e-08,
+          -0.0,
+          -0.051908380000000004
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.04229572141278033,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_margin_m": 0.001
+      },
+      "fabrica_plumbers_block_1": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/1.obj",
+        "target_frame": "/World/envs/env_0/assembled_plumbers_block_display",
+        "target_translation_local_m": [
+          -0.04,
+          0.0012658,
+          0.0175
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.28,
+          -0.1787342,
+          1.075551339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          -0.04,
+          0.0012658,
+          0.07
+        ],
+        "raw_to_aligned_translation_m": [
+          0.04,
+          -0.0012658,
+          -0.07
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01261495431412838,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_margin_m": 0.001
+      },
+      "fabrica_plumbers_block_2": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/2.obj",
+        "target_frame": "/World/envs/env_0/assembled_plumbers_block_display",
+        "target_translation_local_m": [
+          0.0,
+          0.0012658,
+          -0.02
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.32,
+          -0.1787342,
+          1.038051339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          0.0,
+          0.0012657999999999992,
+          0.0325
+        ],
+        "raw_to_aligned_translation_m": [
+          -0.0,
+          -0.0012657999999999992,
+          -0.0325
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.10399999153614066,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_margin_m": 0.001
+      },
+      "fabrica_plumbers_block_3": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/3.obj",
+        "target_frame": "/World/envs/env_0/assembled_plumbers_block_display",
+        "target_translation_local_m": [
+          0.0,
+          0.0012658,
+          0.02557365
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.32,
+          -0.1787342,
+          1.083624989
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          0.0,
+          0.0012657999999999992,
+          0.07807365
+        ],
+        "raw_to_aligned_translation_m": [
+          -0.0,
+          -0.0012657999999999992,
+          -0.07807365
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.026147305770610963,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_margin_m": 0.001
+      },
+      "fabrica_plumbers_block_4": {
+        "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/4.obj",
+        "target_frame": "/World/envs/env_0/assembled_plumbers_block_display",
+        "target_translation_local_m": [
+          0.04,
+          0.0012658,
+          0.0175
+        ],
+        "target_rotation_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "target_translation_world_m": [
+          0.36,
+          -0.1787342,
+          1.075551339
+        ],
+        "target_scale": 1.0,
+        "raw_bbox_center_m": [
+          0.04,
+          0.0012658,
+          0.07
+        ],
+        "raw_to_aligned_translation_m": [
+          -0.04,
+          -0.0012658,
+          -0.07
+        ],
+        "density_kg_per_m3": 1250.0,
+        "mass_kg": 0.01261495431412838,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_margin_m": 0.001
+      }
+    }
+  },
+  "objects": [
+    {
+      "id": "assembled_display_part_0",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+      "translation": [
+        0.32,
+        -0.18,
+        1.05746
+      ],
+      "translation_local_in_assembly_frame": [
+        6e-08,
+        0.0,
+        -0.00059162
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.04229572141278033,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "bbox_world": {
+        "min": [
+          0.298638601,
+          -0.219999999,
+          1.032709701
+        ],
+        "max": [
+          0.341361521,
+          -0.140000001,
+          1.082209737
+        ]
+      }
+    },
+    {
+      "id": "assembled_display_part_1",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+      "translation": [
+        0.28,
+        -0.178734,
+        1.075551
+      ],
+      "translation_local_in_assembly_frame": [
+        -0.04,
+        0.0012658,
+        0.0175
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01261495431412838,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "bbox_world": {
+        "min": [
+          0.265583601,
+          -0.1912348,
+          1.040551339
+        ],
+        "max": [
+          0.294416399,
+          -0.1662336,
+          1.110551335
+        ]
+      }
+    },
+    {
+      "id": "assembled_display_part_2",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+      "translation": [
+        0.32,
+        -0.178734,
+        1.038051
+      ],
+      "translation_local_in_assembly_frame": [
+        0.0,
+        0.0012658,
+        -0.02
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.10399999153614066,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "bbox_world": {
+        "min": [
+          0.240000002,
+          -0.1987342,
+          1.00555134
+        ],
+        "max": [
+          0.399999998,
+          -0.1587342,
+          1.070551338
+        ]
+      }
+    },
+    {
+      "id": "assembled_display_part_3",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+      "translation": [
+        0.32,
+        -0.178734,
+        1.083625
+      ],
+      "translation_local_in_assembly_frame": [
+        0.0,
+        0.0012658,
+        0.02557365
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.026147305770610963,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "bbox_world": {
+        "min": [
+          0.269999999,
+          -0.1987342,
+          1.070551337
+        ],
+        "max": [
+          0.370000001,
+          -0.1587342,
+          1.096698643
+        ]
+      }
+    },
+    {
+      "id": "assembled_display_part_4",
+      "role": "fabrica_assembled_display_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+      "translation": [
+        0.36,
+        -0.178734,
+        1.075551
+      ],
+      "translation_local_in_assembly_frame": [
+        0.04,
+        0.0012658,
+        0.0175
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_official_target_pose",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "assembly_group_prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01261495431412838,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "bbox_world": {
+        "min": [
+          0.345583601,
+          -0.1912348,
+          1.040551339
+        ],
+        "max": [
+          0.374416399,
+          -0.1662336,
+          1.110551335
+        ]
+      }
+    },
+    {
+      "id": "fabrica_plumbers_block_0",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+      "translation": [
+        0.55,
+        -0.32,
+        1.030301
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.04229572141278033,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "assembly_target_pose_ref": "fabrica_plumbers_block_0",
+      "bbox_world": {
+        "min": [
+          0.528638541,
+          -0.359999999,
+          1.005551339
+        ],
+        "max": [
+          0.571361461,
+          -0.280000001,
+          1.055051376
+        ]
+      }
+    },
+    {
+      "id": "fabrica_plumbers_block_1",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+      "translation": [
+        0.73,
+        -0.32,
+        1.040551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01261495431412838,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "assembly_target_pose_ref": "fabrica_plumbers_block_1",
+      "bbox_world": {
+        "min": [
+          0.715583601,
+          -0.3325006,
+          1.005551339
+        ],
+        "max": [
+          0.744416399,
+          -0.3074994,
+          1.075551336
+        ]
+      }
+    },
+    {
+      "id": "fabrica_plumbers_block_2",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+      "translation": [
+        0.88,
+        -0.32,
+        1.038051
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.10399999153614066,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "assembly_target_pose_ref": "fabrica_plumbers_block_2",
+      "bbox_world": {
+        "min": [
+          0.800000002,
+          -0.34,
+          1.005551339
+        ],
+        "max": [
+          0.959999998,
+          -0.3,
+          1.070551337
+        ]
+      }
+    },
+    {
+      "id": "fabrica_plumbers_block_3",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+      "translation": [
+        0.62,
+        -0.16,
+        1.018625
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.026147305770610963,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "assembly_target_pose_ref": "fabrica_plumbers_block_3",
+      "bbox_world": {
+        "min": [
+          0.569999999,
+          -0.18,
+          1.005551339
+        ],
+        "max": [
+          0.670000001,
+          -0.14,
+          1.031698645
+        ]
+      }
+    },
+    {
+      "id": "fabrica_plumbers_block_4",
+      "role": "fabrica_part",
+      "asset_path": "assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+      "translation": [
+        0.82,
+        -0.16,
+        1.040551
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "physics_intent": "dynamic_loose_part",
+      "collision_enabled": true,
+      "rigid_body_enabled": true,
+      "kinematic_enabled": false,
+      "gravity_enabled": true,
+      "density_kg_per_m3": 1250.0,
+      "mass_kg": 0.01261495431412838,
+      "static_friction": 0.5,
+      "dynamic_friction": 0.5,
+      "sdf_margin_m": 0.001,
+      "assembly_target_pose_ref": "fabrica_plumbers_block_4",
+      "bbox_world": {
+        "min": [
+          0.805583601,
+          -0.1725006,
+          1.005551339
+        ],
+        "max": [
+          0.834416399,
+          -0.1474994,
+          1.075551336
+        ]
+      }
+    }
+  ],
+  "layout_quality": {
+    "loose_and_assembled_footprints_checked": true,
+    "footprint_overlap_margin_m": 0.01,
+    "current_assembly": "plumbers_block",
+    "all_fabrica_parts_inside_black_optical_board": true
+  },
+  "isaaclab_notes": [
+    "This package is scene-only. It does not define actions, observations, rewards, resets, or policy logic.",
+    "Use the JSON assembly_target_poses to build future insertion objectives.",
+    "Run generation with an Isaac/Omniverse USD Python environment, not plain system Python."
+  ],
+  "handoff_package": {
+    "package_name": "fabrica_franka_cooling_isaaclab_fullbundle_sdf001",
+    "isaaclab_cfg": "isaaclab_cfg/fabrica_dual_franka_scene_cfg.py",
+    "direct_usd_scene": "scene/scene.usda",
+    "requires_external_isaac_assets": true,
+    "isaac_asset_root_env": "ISAAC_ASSET_ROOT",
+    "bundles_isaac_official_assets": true,
+    "bundled_isaac_asset_root": "assets/isaac_official/Isaac",
+    "bundled_extra_dependencies": [
+      "assets/isaac_official/Isaac/Robots/Robotiq/2F-85",
+      "assets/isaac_official/Isaac/Props/PackingTable/materials/textures"
+    ],
+    "robot": "franka",
+    "assembly": "plumbers_block",
+    "full_bundle": true,
+    "scene_usda": "scene/scene.usda",
+    "scene_spec_json": "scene/scene_spec.json",
+    "sdf_margin_m": 0.001
+  },
+  "fabrica_official_physics": {
+    "part_density_kg_per_m3": 1250.0,
+    "part_static_friction": 0.5,
+    "part_dynamic_friction": 0.5,
+    "support_density_kg_per_m3": 1000.0,
+    "support_static_friction": 0.3,
+    "support_dynamic_friction": 0.3,
+    "rolling_friction": 0.0,
+    "torsion_friction": 0.0,
+    "restitution": 0.0
+  },
+  "support_surfaces": [
+    {
+      "id": "black_fabrica_optical_board",
+      "prim_path": "/World/envs/env_0/BlackFabricaOpticalBoard",
+      "asset_path": "assets/fabrica_support/optical_board.obj",
+      "source_path": "/data/hjj/src/Fabrica/assets/optical_board.obj",
+      "role": "shared_workspace_locating_board",
+      "translation": [
+        0.594975526,
+        -0.134500145,
+        1.002551339
+      ],
+      "rotation_xyz_degrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "obj_to_m": 0.01,
+      "board_scale": 0.85,
+      "extents_m": [
+        0.78625,
+        0.53125,
+        0.0085
+      ],
+      "top_z_m": 1.002551339,
+      "bottom_z_m": 0.994051339,
+      "bounds_xy_m": {
+        "min_x": 0.201850526,
+        "max_x": 0.988100526,
+        "min_y": -0.400125145,
+        "max_y": 0.131124855
+      },
+      "visual_material": {
+        "name": "BlackOpticalBoard_Material",
+        "diffuse_color": [
+          0.005,
+          0.005,
+          0.004
+        ],
+        "roughness": 0.72,
+        "metallic": 0.0
+      },
+      "physics": {
+        "collision_enabled": true,
+        "static_friction": 0.3,
+        "dynamic_friction": 0.3,
+        "density_kg_per_m3": 1000.0,
+        "restitution": 0.0,
+        "rolling_friction": 0.0,
+        "torsion_friction": 0.0
+      }
+    }
+  ],
+  "layout_constraints": {
+    "all_fabrica_parts_on_support_surface": "/World/envs/env_0/BlackFabricaOpticalBoard",
+    "part_min_z_above_board_top_m": 0.003,
+    "robots_share_common_workspace": true,
+    "robot_pair": [
+      "RobotLeft",
+      "RobotRight"
+    ]
+  },
+  "scene_graph": {
+    "authoritative_for_editing": true,
+    "note": "Modify translations/rotations/scales here, then run scripts/json_to_usd.py to update scene/scene.usda.",
+    "objects": [
+      {
+        "prim_path": "/World/IndustrialDomeLight",
+        "prim_name": "IndustrialDomeLight",
+        "type_name": "DomeLight",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "role": "lighting"
+      },
+      {
+        "prim_path": "/World/TopWorkcellLight",
+        "prim_name": "TopWorkcellLight",
+        "type_name": "RectLight",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.5,
+            0.0,
+            2.65
+          ],
+          "rotation_xyz_degrees": [
+            -90.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            -1.0,
+            0.0,
+            1.65
+          ],
+          "max": [
+            2.0,
+            0.0,
+            3.65
+          ]
+        },
+        "role": "lighting"
+      },
+      {
+        "prim_path": "/World/envs/env_0/MainTable",
+        "prim_name": "MainTable",
+        "type_name": "Xform",
+        "asset_reference": "clean_packing_table.usda",
+        "transform": {
+          "translation": [
+            0.5,
+            0.0,
+            0.0
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            -0.736823245,
+            -0.400625145,
+            0.0
+          ],
+          "max": [
+            1.736823245,
+            0.380999976,
+            0.994051339
+          ]
+        },
+        "role": "single clean shared packing/work table"
+      },
+      {
+        "prim_path": "/World/envs/env_0/RobotLeft",
+        "prim_name": "RobotLeft",
+        "type_name": "Xform",
+        "asset_reference": "../assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd",
+        "transform": {
+          "translation": [
+            0.05,
+            0.25,
+            0.998051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            -90.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            -0.079383139,
+            0.068594827,
+            0.998051363
+          ],
+          "max": [
+            0.179922888,
+            0.404085606,
+            2.112714955
+          ]
+        },
+        "role": "manipulator mounted on the shared work table"
+      },
+      {
+        "prim_path": "/World/envs/env_0/RobotRight",
+        "prim_name": "RobotRight",
+        "type_name": "Xform",
+        "asset_reference": "../assets/isaac_official/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd",
+        "transform": {
+          "translation": [
+            0.95,
+            0.25,
+            0.998051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            -90.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.820616861,
+            0.068594827,
+            0.998051363
+          ],
+          "max": [
+            1.079922888,
+            0.404085606,
+            2.112714955
+          ]
+        },
+        "role": "manipulator mounted on the shared work table"
+      },
+      {
+        "prim_path": "/World/envs/env_0/BlackFabricaOpticalBoard",
+        "prim_name": "BlackFabricaOpticalBoard",
+        "type_name": "Xform",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.594975526,
+            -0.134500145,
+            1.002551339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.201850528,
+            -0.400125145,
+            0.994051338
+          ],
+          "max": [
+            0.988100524,
+            0.131124855,
+            1.002551339
+          ]
+        },
+        "role": "black Fabrica optical board placed on shared workspace; supports all loose and assembled parts",
+        "physics": {
+          "rigid_body": "static support surface",
+          "collision_enabled": true,
+          "static_friction": 0.3,
+          "dynamic_friction": 0.3,
+          "restitution": 0.0,
+          "density_kg_per_m3": 1000.0
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_plumbers_block_display",
+        "prim_name": "assembled_plumbers_block_display",
+        "type_name": "Xform",
+        "asset_reference": null,
+        "transform": {
+          "translation": [
+            0.32,
+            -0.18,
+            1.058051339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.240000002,
+            -0.219999999,
+            1.00555134
+          ],
+          "max": [
+            0.399999998,
+            -0.140000001,
+            1.110551335
+          ]
+        },
+        "role": "assembled reference composed from individual Fabrica parts"
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_plumbers_block_display/assembled_display_part_0",
+        "prim_name": "assembled_display_part_0",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+        "transform": {
+          "translation": [
+            6e-08,
+            0.0,
+            -0.00059162
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.298638601,
+            -0.219999999,
+            1.032709701
+          ],
+          "max": [
+            0.341361521,
+            -0.140000001,
+            1.082209737
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_plumbers_block_display/assembled_display_part_1",
+        "prim_name": "assembled_display_part_1",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+        "transform": {
+          "translation": [
+            -0.04,
+            0.0012658,
+            0.0175
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.265583601,
+            -0.1912348,
+            1.040551339
+          ],
+          "max": [
+            0.294416399,
+            -0.1662336,
+            1.110551335
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_plumbers_block_display/assembled_display_part_2",
+        "prim_name": "assembled_display_part_2",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+        "transform": {
+          "translation": [
+            0.0,
+            0.0012658,
+            -0.02
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.240000002,
+            -0.1987342,
+            1.00555134
+          ],
+          "max": [
+            0.399999998,
+            -0.1587342,
+            1.070551338
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_plumbers_block_display/assembled_display_part_3",
+        "prim_name": "assembled_display_part_3",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+        "transform": {
+          "translation": [
+            0.0,
+            0.0012658,
+            0.02557365
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.269999999,
+            -0.1987342,
+            1.070551337
+          ],
+          "max": [
+            0.370000001,
+            -0.1587342,
+            1.096698643
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/assembled_plumbers_block_display/assembled_display_part_4",
+        "prim_name": "assembled_display_part_4",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+        "transform": {
+          "translation": [
+            0.04,
+            0.0012658,
+            0.0175
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.345583601,
+            -0.1912348,
+            1.040551339
+          ],
+          "max": [
+            0.374416399,
+            -0.1662336,
+            1.110551335
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_plumbers_block_0",
+        "prim_name": "fabrica_plumbers_block_0",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+        "transform": {
+          "translation": [
+            0.55,
+            -0.32,
+            1.030301357
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.528638541,
+            -0.359999999,
+            1.005551339
+          ],
+          "max": [
+            0.571361461,
+            -0.280000001,
+            1.055051376
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_plumbers_block_1",
+        "prim_name": "fabrica_plumbers_block_1",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+        "transform": {
+          "translation": [
+            0.73,
+            -0.32,
+            1.040551339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.715583601,
+            -0.3325006,
+            1.005551339
+          ],
+          "max": [
+            0.744416399,
+            -0.3074994,
+            1.075551336
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_plumbers_block_2",
+        "prim_name": "fabrica_plumbers_block_2",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+        "transform": {
+          "translation": [
+            0.88,
+            -0.32,
+            1.038051338
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.800000002,
+            -0.34,
+            1.005551339
+          ],
+          "max": [
+            0.959999998,
+            -0.3,
+            1.070551337
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_plumbers_block_3",
+        "prim_name": "fabrica_plumbers_block_3",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+        "transform": {
+          "translation": [
+            0.62,
+            -0.16,
+            1.018624991
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.569999999,
+            -0.18,
+            1.005551339
+          ],
+          "max": [
+            0.670000001,
+            -0.14,
+            1.031698645
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      },
+      {
+        "prim_path": "/World/envs/env_0/fabrica_plumbers_block_4",
+        "prim_name": "fabrica_plumbers_block_4",
+        "type_name": "Xform",
+        "asset_reference": "../assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+        "transform": {
+          "translation": [
+            0.82,
+            -0.16,
+            1.040551339
+          ],
+          "rotation_xyz_degrees": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "bbox_world": {
+          "min": [
+            0.805583601,
+            -0.1725006,
+            1.005551339
+          ],
+          "max": [
+            0.834416399,
+            -0.1474994,
+            1.075551336
+          ]
+        },
+        "role": "Fabrica plumbers_block part",
+        "physics": {
+          "rigid_body": "dynamic part, from referenced USD",
+          "collision_enabled": true,
+          "static_friction": 0.5,
+          "dynamic_friction": 0.5,
+          "density_kg_per_m3": 1250.0,
+          "restitution": 0,
+          "collision_approximation": "sdf",
+          "sdf_margin_m": 0.001
+        }
+      }
+    ]
+  },
+  "sensors": {
+    "camera_policy": "official_isaaclab_style",
+    "notes": [
+      "Franka wrist cameras are mounted at RobotLeft/RobotRight panda_hand/wrist_cam, matching IsaacLab Franka visuomotor task convention.",
+      "table_cam/table_high_cam are fixed environment-root cameras for table and overview observations.",
+      "Camera prims are true USD Camera prims only; no visible body/lens proxy geometry is added."
+    ],
+    "cameras": {
+      "table_cam": {
+        "prim_path": "/World/envs/env_0/table_cam",
+        "cfg_prim_path": "{ENV_REGEX_NS}/table_cam",
+        "mount": "env_root",
+        "official_reference": "IsaacLab Franka stack_ik_rel_visuomotor_env_cfg.py table_cam",
+        "height": 84,
+        "width": 84,
+        "data_types": [
+          "rgb",
+          "distance_to_image_plane"
+        ],
+        "offset_pos": [
+          1.0,
+          0.0,
+          0.4
+        ],
+        "offset_rot_wxyz": [
+          0.35355,
+          -0.61237,
+          -0.61237,
+          0.35355
+        ],
+        "offset_convention": "ros"
+      },
+      "table_high_cam": {
+        "prim_path": "/World/envs/env_0/table_high_cam",
+        "cfg_prim_path": "{ENV_REGEX_NS}/table_high_cam",
+        "mount": "env_root",
+        "official_reference": "IsaacLab Franka stack_ik_rel_blueprint_env_cfg.py table_high_cam",
+        "height": 704,
+        "width": 1280,
+        "data_types": [
+          "rgb",
+          "distance_to_image_plane"
+        ],
+        "offset_pos": [
+          1.4,
+          1.8,
+          1.2
+        ],
+        "offset_rot_wxyz": [
+          -0.1393,
+          0.2025,
+          0.8185,
+          -0.5192
+        ],
+        "offset_convention": "ros",
+        "pinhole_override": {
+          "clipping_range": [
+            1.5,
+            100000.0
+          ]
+        }
+      },
+      "left_wrist_cam": {
+        "prim_path": "/World/envs/env_0/RobotLeft/panda_hand/wrist_cam",
+        "cfg_prim_path": "{ENV_REGEX_NS}/RobotLeft/panda_hand/wrist_cam",
+        "mount": "RobotLeft/panda_hand",
+        "official_reference": "IsaacLab Franka stack_ik_rel_visuomotor_env_cfg.py wrist_cam",
+        "height": 84,
+        "width": 84,
+        "data_types": [
+          "rgb",
+          "distance_to_image_plane"
+        ],
+        "offset_pos": [
+          0.13,
+          0.0,
+          -0.15
+        ],
+        "offset_rot_wxyz": [
+          -0.70614,
+          0.03701,
+          0.03701,
+          -0.70614
+        ],
+        "offset_convention": "ros"
+      },
+      "right_wrist_cam": {
+        "prim_path": "/World/envs/env_0/RobotRight/panda_hand/wrist_cam",
+        "cfg_prim_path": "{ENV_REGEX_NS}/RobotRight/panda_hand/wrist_cam",
+        "mount": "RobotRight/panda_hand",
+        "official_reference": "IsaacLab Franka stack_ik_rel_visuomotor_env_cfg.py wrist_cam",
+        "height": 84,
+        "width": 84,
+        "data_types": [
+          "rgb",
+          "distance_to_image_plane"
+        ],
+        "offset_pos": [
+          0.13,
+          0.0,
+          -0.15
+        ],
+        "offset_rot_wxyz": [
+          -0.70614,
+          0.03701,
+          0.03701,
+          -0.70614
+        ],
+        "offset_convention": "ros"
+      }
+    },
+    "camera_view_fix": {
+      "reason": "USD viewport cameras need explicit OpenGL look-at transforms; IsaacLab official ROS CameraCfg offsets were not directly visible in Isaac Sim viewport for this scene.",
+      "target_fixture_center_m": [
+        0.7,
+        -0.23,
+        1.08
+      ],
+      "overview_target_m": [
+        0.5,
+        -0.03,
+        1.2
+      ],
+      "usd_camera_world_poses": {
+        "table_cam": {
+          "world_translation_m": [
+            1.35,
+            -1.05,
+            1.55
+          ],
+          "world_quat_wxyz_opengl": [
+            0.7928563865805323,
+            0.5130378135280668,
+            0.17867504305865875,
+            0.27612711047050176
+          ]
+        },
+        "table_high_cam": {
+          "world_translation_m": [
+            2.15,
+            -1.55,
+            2.35
+          ],
+          "world_quat_wxyz_opengl": [
+            0.7814700422158536,
+            0.4775711267649435,
+            0.20938240030902827,
+            0.3426213689197513
+          ]
+        },
+        "left_wrist_cam": {
+          "world_translation_m": [
+            0.12,
+            0.06,
+            2.02
+          ],
+          "world_quat_wxyz_opengl": [
+            0.5019476175622697,
+            0.15633870753457832,
+            -0.25296134254817704,
+            -0.8121683057877862
+          ]
+        },
+        "right_wrist_cam": {
+          "world_translation_m": [
+            0.88,
+            0.06,
+            2.02
+          ],
+          "world_quat_wxyz_opengl": [
+            0.2700421315246172,
+            0.04750962115805414,
+            0.1666323322019621,
+            0.9471292145024324
+          ]
+        }
+      }
+    }
+  },
+  "fabrica_pickup_fixture": {
+    "source": {
+      "fixture_obj": "/data/hjj/src/Fabrica/logs/isaaclab_fixture_20260608/plumbers_block/fixture/fixture.obj",
+      "pickup_json": "/data/hjj/src/Fabrica/logs/isaaclab_fixture_20260608/plumbers_block/fixture/pickup.json",
+      "generated_by": "Fabrica planning/run_fixture_gen.py with panda setup",
+      "scale_to_usd_m": 0.01
+    },
+    "fixture_prim_path": "/World/envs/env_0/FabricaPickupFixtureTray",
+    "fixture_translation_m": [
+      0.6999755259313225,
+      -0.42950014523149627,
+      1.0030513388652051
+    ],
+    "fixture_asset": "assets/fabrica_fixture/plumbers_block/fixture_pickup_tray.usda",
+    "parts": {
+      "0": {
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          2.999994000000004,
+          10.205344921164063,
+          0.21286057452175022,
+          -0.5370399692573166,
+          0.0,
+          0.0
+        ],
+        "usd_translation_m": [
+          0.7299755259313225,
+          -0.3008906336004792,
+          1.049781014810616
+        ],
+        "usd_rotation_xyz_degrees": [
+          -30.77012366827972,
+          0.0,
+          0.0
+        ]
+      },
+      "1": {
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          -3.752406589684784,
+          26.00178640416733,
+          -3.7575622423124377,
+          -0.0005475037118164374,
+          0.24778308688063588,
+          1.568563948017915
+        ],
+        "usd_translation_m": [
+          0.6610990951263063,
+          -0.1910899540328691,
+          1.0431473446798294
+        ],
+        "usd_rotation_xyz_degrees": [
+          -0.031369651954828756,
+          14.196925112983834,
+          89.87209411780438
+        ]
+      },
+      "2": {
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          -3.262726000000001,
+          16.315791763266464,
+          7.304902962679554,
+          -3.1672847401645537e-16,
+          1.0171498097134326,
+          -1.5707963267948972
+        ],
+        "usd_translation_m": [
+          0.6686140659313224,
+          -0.2939871458847173,
+          1.0931886244874705
+        ],
+        "usd_rotation_xyz_degrees": [
+          -1.814720481276185e-14,
+          58.278391229114476,
+          -90.00000000000004
+        ]
+      },
+      "3": {
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          2.9904340000000054,
+          28.298569884947888,
+          -1.8481565783697542,
+          -2.0530777750838057e-16,
+          -0.624696768900801,
+          1.570796326794897
+        ],
+        "usd_translation_m": [
+          0.7286140659313226,
+          -0.19217592495388094,
+          1.0478984727283007
+        ],
+        "usd_rotation_xyz_degrees": [
+          -1.1763269152441135e-14,
+          -35.792488333475234,
+          90.00000000000003
+        ]
+      },
+      "4": {
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          -3.7697201641879468,
+          24.44260169306682,
+          -2.398663230671462,
+          -0.00027918538662432483,
+          0.1282930159504323,
+          1.5686141949208159
+        ],
+        "usd_translation_m": [
+          0.6610990951263064,
+          -0.1364443193581045,
+          1.04337141966385
+        ],
+        "usd_rotation_xyz_degrees": [
+          -0.01599614435530196,
+          7.3506483549643225,
+          89.8749730532742
+        ]
+      }
+    }
+  }
+}
