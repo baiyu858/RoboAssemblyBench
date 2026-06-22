@@ -1,0 +1,9 @@
+{
+  "assembly": "plumbers_block",
+  "scene_usda": "../scene/scene.usda",
+  "status": "pass",
+  "errors": [],
+  "runtime_steps": 12,
+  "dynamic_pickup_parts_with_rigidbody_api": 5,
+  "dynamic_assembled_parts_with_gravity": 5
+}

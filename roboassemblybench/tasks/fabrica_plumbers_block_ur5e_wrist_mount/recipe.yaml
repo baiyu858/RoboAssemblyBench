@@ -1,0 +1,45 @@
+extends: fabrica_plumbers_block_ur5e
+task_name: fabrica_plumbers_block_ur5e_wrist_mount
+prompt: Two UR5e arms with Robotiq 2F-85 grippers mounted directly under wrist_3_link inspect the Fabrica plumbers-block task scene.
+
+metadata:
+  robot_mount_fix: wrist_3_link_scenegraph_mount
+  asset_references:
+    - name: ur5e_robotiq_2f85_wrist_mount_task
+      kind: robot_usd
+      path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_wrist_mount_task.usda
+      role: ur5e_robot_wrapper_with_robotiq_as_wrist_child
+  tags:
+    - fabrica
+    - plumbers-block
+    - ur5e
+    - robotiq
+    - wrist-mounted-gripper
+
+robots:
+  - name: franka_left
+    type: UR5eRobot
+    prim_path: /ur5e_left
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_wrist_mount_task.usda
+    end_effector_prim_name: wrist_3_link/Gripper/Robotiq_2F_85/base_link
+    configure_gripper_mount_joint: true
+    gripper_base_link_path: wrist_3_link/Gripper/Robotiq_2F_85/base_link
+    gripper_container_path: wrist_3_link/Gripper
+    gripper_container_orient: [0.707106781, 0.707106781, 0.0, 0.0]
+    gripper_mount_local_pos0: [0.0, 0.0, 0.0]
+    gripper_mount_local_pos1: [0.0, 0.0, 0.0]
+    gripper_mount_local_rot0: [0.707106781, 0.707106781, 0.0, 0.0]
+    gripper_mount_local_rot1: [1.0, 0.0, 0.0, 0.0]
+  - name: franka_right
+    type: UR5eRobot
+    prim_path: /ur5e_right
+    usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_wrist_mount_task.usda
+    end_effector_prim_name: wrist_3_link/Gripper/Robotiq_2F_85/base_link
+    configure_gripper_mount_joint: true
+    gripper_base_link_path: wrist_3_link/Gripper/Robotiq_2F_85/base_link
+    gripper_container_path: wrist_3_link/Gripper
+    gripper_container_orient: [0.707106781, 0.707106781, 0.0, 0.0]
+    gripper_mount_local_pos0: [0.0, 0.0, 0.0]
+    gripper_mount_local_pos1: [0.0, 0.0, 0.0]
+    gripper_mount_local_rot0: [0.707106781, 0.707106781, 0.0, 0.0]
+    gripper_mount_local_rot1: [1.0, 0.0, 0.0, 0.0]

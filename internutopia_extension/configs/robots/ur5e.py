@@ -53,10 +53,16 @@ class UR5eRobotCfg(RobotCfg):
     gripper_dof_name: Optional[str] = "finger_joint"
     gripper_open_position: float = 0.0
     gripper_closed_position: float = 0.80
+    gripper_close_openness: float = 0.08
     hand_link_name: Optional[str] = "wrist_3_link"
     left_finger_link_name: Optional[str] = "left_inner_finger"
     right_finger_link_name: Optional[str] = "right_inner_finger"
     initial_joint_positions: Optional[Dict[str, float]] = None
+    gripper_xform_orient: Optional[list[float]] = None
+    gripper_mount_local_pos0: Optional[list[float]] = None
+    gripper_mount_local_pos1: Optional[list[float]] = None
+    gripper_mount_local_rot0: Optional[list[float]] = None
+    gripper_mount_local_rot1: Optional[list[float]] = None
 
 
 DEFAULT_UR5E_READY_JOINTS = {

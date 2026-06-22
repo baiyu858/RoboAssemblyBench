@@ -14,6 +14,7 @@ from internutopia_extension.configs.controllers import GripperControllerCfg
 class GripperController(BaseController):
     def __init__(self, config: GripperControllerCfg, robot: BaseRobot, scene: IScene):
         self._gripper = robot.articulation.gripper  # for franka is OK
+        self._robot_config = getattr(robot, 'config', None)
         super().__init__(config, robot, scene)
 
     @staticmethod
@@ -45,7 +46,8 @@ class GripperController(BaseController):
     def _continuous_forward(self, openness: float) -> ArticulationAction:
         opened_positions = np.asarray(self._gripper.joint_opened_positions, dtype=float)
         closed_positions = np.asarray(self._gripper.joint_closed_positions, dtype=float)
-        openness = float(np.clip(openness, 0.0, 1.0))
+        min_openness = float(getattr(self._robot_config, 'gripper_close_openness', 0.0) or 0.0)
+        openness = float(np.clip(openness, max(min_openness, 0.0), 1.0))
         joint_positions = closed_positions + openness * (opened_positions - closed_positions)
         joint_indices = getattr(self._gripper, 'active_joint_indices', None)
         if joint_indices is not None:
@@ -57,6 +59,8 @@ class GripperController(BaseController):
     def forward(self, action: Any) -> ArticulationAction:
         normalized_action = self._normalize_action(action)
         if isinstance(normalized_action, str):
+            if normalized_action == 'close':
+                return self._continuous_forward(0.0)
             return self._gripper.forward(normalized_action)
         return self._continuous_forward(normalized_action)
 

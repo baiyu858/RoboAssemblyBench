@@ -102,6 +102,41 @@ class DualFrankaAssemblyDemoPolicy:
     _GRASP_CLOSE_RAMP_STEPS = 18
     _GRASP_CLOSE_HOLD_STEPS = 12
     _GRASP_CLOSE_DEFAULT_OPENNESS = 1.0
+    _JOINT_WRAP_ABS_LIMIT = np.pi + 0.25
+    _JOINT_CANDIDATE_ABS_LIMIT = 2.0 * np.pi
+
+    @classmethod
+    def _wrap_revolute_joints(cls, joint_positions) -> np.ndarray | None:
+        if joint_positions is None:
+            return None
+        try:
+            values = np.asarray(joint_positions, dtype=float).reshape(-1)
+        except Exception:
+            return None
+        if not np.all(np.isfinite(values)):
+            return None
+        wrapped = (values + np.pi) % (2.0 * np.pi) - np.pi
+        return np.where(np.abs(values) > cls._JOINT_WRAP_ABS_LIMIT, wrapped, values)
+
+    @classmethod
+    def _unwrap_joints_to_reference(cls, joint_positions, reference=None) -> np.ndarray | None:
+        values = cls._wrap_revolute_joints(joint_positions)
+        if values is None:
+            return None
+        reference_values = cls._wrap_revolute_joints(reference)
+        if reference_values is None or reference_values.shape != values.shape:
+            return values
+
+        period = 2.0 * np.pi
+        unwrapped = values.copy()
+        for index, value in enumerate(values):
+            candidates = value + np.arange(-2, 3, dtype=float) * period
+            bounded = candidates[np.abs(candidates) <= cls._JOINT_CANDIDATE_ABS_LIMIT]
+            if bounded.size:
+                candidates = bounded
+            costs = np.abs(candidates - reference_values[index])
+            unwrapped[index] = candidates[int(np.argmin(costs))]
+        return unwrapped
 
     @staticmethod
     def _gripper_controller_action(command):
@@ -746,7 +781,7 @@ class DualFrankaAssemblyDemoPolicy:
             subset = controller.get_joint_subset()
             if subset is not None:
                 try:
-                    return np.asarray(subset.get_joint_positions(), dtype=float)
+                    return self._wrap_revolute_joints(subset.get_joint_positions())
                 except Exception:
                     pass
         controller = robot.controllers.get(arm_ik_cfg.name)
@@ -754,7 +789,7 @@ class DualFrankaAssemblyDemoPolicy:
             subset = controller.get_joint_subset()
             if subset is not None:
                 try:
-                    return np.asarray(subset.get_joint_positions(), dtype=float)
+                    return self._wrap_revolute_joints(subset.get_joint_positions())
                 except Exception:
                     pass
         return None
@@ -789,7 +824,12 @@ class DualFrankaAssemblyDemoPolicy:
         if not success or goal_action is None or goal_action.joint_positions is None:
             return None
 
-        target_joint_positions = np.asarray(goal_action.joint_positions, dtype=float)
+        target_joint_positions = self._unwrap_joints_to_reference(
+            goal_action.joint_positions,
+            reference=current_joint_positions,
+        )
+        if target_joint_positions is None:
+            return None
         if target_joint_positions.shape != current_joint_positions.shape:
             return None
 
@@ -2036,11 +2076,15 @@ class DualFrankaAssemblyDemoPolicy:
             )
             planned_joint_target = self._planned_joint_target(state)
             if planned_joint_target is not None:
+                planned_joint_positions = self._unwrap_joints_to_reference(
+                    planned_joint_target['joint_positions'],
+                    reference=current_joint_positions,
+                )
                 arm_action = [
                     planned_joint_target['pose']['position'].tolist(),
                     planned_joint_target['pose']['orientation'].tolist(),
                 ]
-                joint_action = [planned_joint_target['joint_positions'].tolist()]
+                joint_action = None if planned_joint_positions is None else [planned_joint_positions.tolist()]
                 if (
                     state['last_action'] is not None
                     and state.get('last_joint_action') is not None

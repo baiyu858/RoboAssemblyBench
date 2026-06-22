@@ -1,0 +1,10 @@
+{
+  "assembly": "plumbers_block",
+  "package_root": "/data/hjj/src/fabrica_isaaclab/task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1",
+  "scene_usda": "../scene/scene.usda",
+  "part_count": 5,
+  "plan_steps": 4,
+  "status": "pass",
+  "errors": [],
+  "warnings": []
+}

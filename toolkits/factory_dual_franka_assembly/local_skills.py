@@ -220,6 +220,16 @@ class LocalSkillExecutor:
                 tracked_robots=tracked_robots,
                 tracked_objects=tracked_objects,
             )
+        elif spec.get('adapter') or spec.get('adapter_class'):
+            result = self._adapter_action(
+                task=task,
+                robot_name=robot_name,
+                phase_spec=phase_spec or {},
+                spec=spec,
+                tracked_robots=tracked_robots,
+                tracked_objects=tracked_objects,
+                default_adapter=str(spec.get('adapter') or spec.get('adapter_class')),
+            )
         else:
             result = LocalSkillResult(
                 status='fallback',
@@ -385,6 +395,9 @@ class LocalSkillExecutor:
         tracked_objects: dict,
         task,
     ) -> dict[str, Any] | None:
+        if spec.get('requires_held_object') is False or spec.get('skip_held_object_check') is True:
+            return None
+
         held_object = spec.get('held_object') or spec.get('object')
         if not held_object or not self._requires_success(spec):
             return None

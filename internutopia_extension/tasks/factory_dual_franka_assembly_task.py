@@ -17,6 +17,7 @@ from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task impo
 from toolkits.factory_dual_franka_assembly.planner_primitives import (
     compose_pose,
     euler_xyz_to_quat,
+    normalize_quat,
     pose_error,
     pose_within_tolerance,
     quat_conjugate,
@@ -139,6 +140,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._contact_sensors = {}
         self._handoff_history = []
         self._recovery_history = []
+        self._local_skill_completions = {}
         self._object_metadata_map = {
             metadata['name']: copy.deepcopy(metadata)
             for metadata in config.object_metadata
@@ -153,6 +155,16 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if 0 <= self.phase_index < len(self.phase_specs):
             return self.phase_specs[self.phase_index]
         return {}
+
+    def mark_local_skill_complete(self, robot_name: str, skill_name: str, detail: dict | None = None):
+        self._local_skill_completions[
+            (
+                self.phase_index,
+                self.phase_entry_step,
+                str(robot_name),
+                str(skill_name),
+            )
+        ] = copy.deepcopy(detail or {})
 
     def get_target_pose(self, target_name: str) -> dict:
         pose = self.target_poses[target_name]
@@ -954,7 +966,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         # Some assembly phases, especially the final retreat, are bookkeeping after all objects are
         # already locked into their success targets. If that cleanup motion times out, prefer a
         # completed benchmark episode over mislabeling the whole rollout as failed.
-        if self._check_success():
+        if self.cfg.success_criteria and self._check_success():
             self._set_terminal_state('complete', reason='success-criteria-met', status='success', detail=timeout_record)
             return True
 
@@ -1059,10 +1071,71 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         robot = self.robots.get(robot_name)
         if robot is None:
             return None
-        suffix = f'/{suffix}'
-        for prim_path, rigid_body in robot._rigid_body_map.items():
+        suffix = f'/{str(suffix).strip("/")}'
+        rigid_body_map = getattr(robot, '_rigid_body_map', {})
+        for prim_path, rigid_body in rigid_body_map.items():
             if prim_path.endswith(suffix):
                 return rigid_body
+        try:
+            from internutopia.core.robot.rigid_body import IRigidBody
+            from isaacsim.core.utils.prims import get_prim_at_path
+            from pxr import Usd
+        except Exception:
+            return None
+        try:
+            articulation = getattr(robot, 'articulation', None)
+            root_prims = []
+
+            def _add_root_prim(prim):
+                if prim is None or not prim.IsValid():
+                    return
+                prim_path = str(prim.GetPath())
+                if any(str(existing.GetPath()) == prim_path for existing in root_prims):
+                    return
+                root_prims.append(prim)
+
+            _add_root_prim(getattr(articulation, 'prim', None))
+            candidate_paths = [
+                getattr(getattr(robot, 'config', None), 'prim_path', None),
+                getattr(articulation, '_root_prim_path', None),
+                getattr(articulation, 'prim_path', None),
+                getattr(robot, 'prim_path', None),
+            ]
+            for candidate_path in candidate_paths:
+                if not candidate_path:
+                    continue
+                try:
+                    candidate_prim = get_prim_at_path(str(candidate_path))
+                except Exception:
+                    candidate_prim = None
+                _add_root_prim(candidate_prim)
+                try:
+                    parent_path = str(candidate_prim.GetPath().GetParentPath()) if candidate_prim is not None else ''
+                    if parent_path and parent_path != '/':
+                        _add_root_prim(get_prim_at_path(parent_path))
+                except Exception:
+                    pass
+
+            for root_prim in root_prims:
+                for prim in Usd.PrimRange.AllPrims(root_prim):
+                    prim_path = str(prim.GetPath())
+                    if not prim_path.endswith(suffix):
+                        continue
+                    rigid_body = IRigidBody.create(prim_path=prim_path, name=prim_path)
+                    try:
+                        from isaacsim.core.simulation_manager import SimulationManager
+
+                        simulation_view = SimulationManager.get_physics_sim_view()
+                        if simulation_view is not None and hasattr(rigid_body.unwrap(), 'initialize'):
+                            rigid_body.unwrap().initialize(physics_sim_view=simulation_view)
+                    except Exception:
+                        pass
+                    if not hasattr(robot, '_rigid_body_map') or getattr(robot, '_rigid_body_map') is None:
+                        robot._rigid_body_map = {}
+                    robot._rigid_body_map[prim_path] = rigid_body
+                    return rigid_body
+        except Exception:
+            return None
         return None
 
     def _robot_config_link_name(self, robot_name: str, config_field: str, fallback: str) -> str:
@@ -2052,6 +2125,23 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         object_orientation = np.asarray(object_pose[1], dtype=float)
         desired_object_position = object_position
         desired_object_orientation = object_orientation
+        attach_spec = attach_spec or {}
+
+        snap_local_offset = attach_spec.get('snap_object_local_offset_on_attach')
+        snap_world_offset = attach_spec.get('snap_object_world_offset_on_attach')
+        if snap_local_offset is not None:
+            snap_offset = np.asarray(snap_local_offset, dtype=float)
+            if snap_offset.shape == (3,) and np.all(np.isfinite(snap_offset)):
+                desired_object_position = desired_object_position + quat_rotate(
+                    desired_object_orientation,
+                    snap_offset,
+                )
+        if snap_world_offset is not None:
+            snap_offset = np.asarray(snap_world_offset, dtype=float)
+            if snap_offset.shape == (3,) and np.all(np.isfinite(snap_offset)):
+                desired_object_position = desired_object_position + snap_offset
+        if snap_local_offset is not None or snap_world_offset is not None:
+            self._set_object_pose(object_name, desired_object_position, desired_object_orientation)
 
         relative_position, relative_orientation = relative_pose(
             base_position=robot_pose[0],
@@ -2059,7 +2149,26 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             world_position=desired_object_position,
             world_orientation=desired_object_orientation,
         )
-        attach_spec = attach_spec or {}
+        local_position_override = attach_spec.get(
+            'attachment_local_position',
+            attach_spec.get('attach_local_position', attach_spec.get('local_position')),
+        )
+        local_orientation_override = attach_spec.get(
+            'attachment_local_orientation',
+            attach_spec.get('attach_local_orientation', attach_spec.get('local_orientation')),
+        )
+        if local_position_override is not None or local_orientation_override is not None:
+            if local_position_override is not None:
+                relative_position = np.asarray(local_position_override, dtype=float)
+            if local_orientation_override is not None:
+                relative_orientation = normalize_quat(np.asarray(local_orientation_override, dtype=float))
+            desired_object_position, desired_object_orientation = compose_pose(
+                base_position=robot_pose[0],
+                base_orientation=robot_pose[1],
+                local_position=relative_position,
+                local_orientation=relative_orientation,
+            )
+            self._set_object_pose(object_name, desired_object_position, desired_object_orientation)
         contact_metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
         attach_mode = self._attachment_mode(attach_spec)
         uses_joint_attachment = attach_mode in self._JOINT_ATTACHMENT_MODES
@@ -2317,6 +2426,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             }
         )
         min_gripper_opening = attach_spec.get('min_gripper_opening')
+        if min_gripper_opening is not None:
+            debug_payload['min_gripper_opening'] = float(min_gripper_opening)
         if min_gripper_opening is not None and gripper_opening is not None:
             if float(gripper_opening) < float(min_gripper_opening):
                 debug_payload['blocked_by'] = 'gripper_too_closed'
@@ -2572,6 +2683,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             orientation_tolerance=orientation_tolerance,
         ):
             return True
+
+        if bool(lock_spec.get('snap_free_object', False)) and attachment_state is None:
+            min_snap_steps = int(lock_spec.get('free_snap_steps', lock_spec.get('snap_steps', 0)))
+            return self.phase_step_counter >= min_snap_steps
 
         # Keep pose snapping opt-in. Release/finalize phase names used to enable this
         # implicitly, which made objects look like they were magnetically pulled into place.
@@ -3079,6 +3194,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             )
         if advance_type == 'timer':
             return True
+        if advance_type in {'local_skill_complete', 'local_skills_complete', 'skill_complete', 'skills_complete'}:
+            return self._local_skill_complete(phase_spec=phase_spec, advance=advance)
         orientation_tolerance = advance.get('orientation_tolerance')
         if orientation_tolerance is not None:
             orientation_tolerance = float(orientation_tolerance)
@@ -3160,6 +3277,63 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if advance_type == 'success_criteria_met':
             return self._check_success()
         raise ValueError(f'Unsupported advance condition: {advance_type}')
+
+    def _local_skill_complete(self, *, phase_spec: dict, advance: dict) -> bool:
+        def _skill_name(raw_spec):
+            if isinstance(raw_spec, str):
+                return raw_spec
+            if isinstance(raw_spec, dict):
+                return raw_spec.get('name') or raw_spec.get('type')
+            return None
+
+        required = []
+        explicit_skill = advance.get('skill') or advance.get('skill_name') or advance.get('name')
+        explicit_robot = advance.get('robot') or advance.get('robot_name')
+        if explicit_skill is not None:
+            required.append((explicit_robot, explicit_skill))
+        else:
+            raw_entries = advance.get('skills')
+            if raw_entries is None:
+                raw_entries = []
+                local_skills = phase_spec.get('local_skills')
+                if isinstance(local_skills, dict):
+                    raw_entries.extend(
+                        {'robot': robot_name, **skill_spec}
+                        if isinstance(skill_spec, dict)
+                        else {'robot': robot_name, 'name': skill_spec}
+                        for robot_name, skill_spec in local_skills.items()
+                    )
+                elif isinstance(local_skills, list):
+                    raw_entries.extend(local_skills)
+                if phase_spec.get('local_skill') is not None:
+                    raw_entries.append(phase_spec.get('local_skill'))
+            if not isinstance(raw_entries, list):
+                raw_entries = [raw_entries]
+            for entry in raw_entries:
+                if isinstance(entry, str):
+                    required.append((explicit_robot, entry))
+                elif isinstance(entry, dict):
+                    skill_name = _skill_name(entry)
+                    if skill_name is not None:
+                        required.append((entry.get('robot') or entry.get('robot_name') or explicit_robot, skill_name))
+
+        if not required:
+            return False
+
+        for robot_name, skill_name in required:
+            robot_names = [robot_name] if robot_name is not None else list(self.cfg.robot_names)
+            if not any(
+                (
+                    self.phase_index,
+                    self.phase_entry_step,
+                    str(candidate_robot),
+                    str(skill_name),
+                )
+                in self._local_skill_completions
+                for candidate_robot in robot_names
+            ):
+                return False
+        return True
 
     def _check_success(self) -> bool:
         for success_criterion in self.cfg.success_criteria:

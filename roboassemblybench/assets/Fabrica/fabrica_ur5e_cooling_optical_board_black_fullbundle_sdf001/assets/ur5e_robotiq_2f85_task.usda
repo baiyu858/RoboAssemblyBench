@@ -1,0 +1,30 @@
+#usda 1.0
+(
+    defaultPrim = "ur5e"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "ur5e" (
+    prepend references = @./isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd@
+    variants = {
+        string Gripper = "Robotiq_2f_85"
+        string Physics = "PhysX"
+        string Sensor = "Sensors"
+    }
+)
+{
+    over Xform "Gripper"
+    {
+        quatd xformOp:orient = (0.707106781, -0.707106781, 0, 0)
+    }
+
+    over Scope "joints"
+    {
+        over PhysicsFixedJoint "robot_gripper_joint"
+        {
+            quatf physics:localRot0 = (0, 0, 0, -1)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+        }
+    }
+}

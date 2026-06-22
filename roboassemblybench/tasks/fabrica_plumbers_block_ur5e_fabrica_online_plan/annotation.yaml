@@ -1,0 +1,29 @@
+task_name: fabrica_plumbers_block_ur5e_fabrica_online_plan
+title: Fabrica plumbers block UR5e online pickup and transport planning
+summary: UR5e plumbers-block task variant that calls Fabrica's IK/RRT planner online for pickup and transport phases.
+task_description: >-
+  Two UR5e arms execute the Fabrica plumbers-block phase flow in the RoboAssemblyBench factory scene.
+  Pickup, transport, and pre-insert phases are planned from current object poses using the official
+  Fabrica arm motion planner instead of replaying fixed joint trajectories.
+metadata:
+  tags:
+    - fabrica
+    - plumbers-block
+    - ur5e
+    - online-planning
+    - pickup-transport-replan
+  object_roles:
+    fabrica_fixture:
+      role: pickup_fixture
+      summary: Static pickup fixture used to stage loose plumbers-block parts.
+    optical_board:
+      role: support_surface
+      summary: Fabrica optical board support surface.
+    assembled_plumbers_preview:
+      role: visual_reference
+      summary: Completed assembly preview.
+  phase_notes:
+    - name: approach_part_0_online
+      summary: Replans UR5e motion to the current pickup pose of part 0 with Fabrica IK/RRT.
+    - name: transport_part_0_online
+      summary: Replans transport while carrying part 0 with the carried mesh included in collision checks.

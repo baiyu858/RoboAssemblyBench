@@ -1,0 +1,80 @@
+#usda 1.0
+(
+    defaultPrim = "fabrica_cooling_manifold_assembled"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "fabrica_cooling_manifold_assembled"
+{
+    def Xform "cooling_manifold_0" (
+        prepend references = @../parts/fabrica_cooling_manifold_0.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (-0.031221850000000002, 0.0000966000000000005, 0.007500000000000003)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "cooling_manifold_1" (
+        prepend references = @../parts/fabrica_cooling_manifold_1.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (-0.000048949999999998994, 0.0000965999999999953, -0.013250000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "cooling_manifold_2" (
+        prepend references = @../parts/fabrica_cooling_manifold_2.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (-0.050048949999999995, -0.0499034, -0.013250000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "cooling_manifold_3" (
+        prepend references = @../parts/fabrica_cooling_manifold_3.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0.04995105, 0.050096600000000005, -0.013250000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "cooling_manifold_4" (
+        prepend references = @../parts/fabrica_cooling_manifold_4.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0.03112395, 0.0000966000000000005, 0.007500000000000003)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "cooling_manifold_5" (
+        prepend references = @../parts/fabrica_cooling_manifold_5.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0.04995105, -0.0499034, -0.013250000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "cooling_manifold_6" (
+        prepend references = @../parts/fabrica_cooling_manifold_6.usd@
+    )
+    {
+        bool physics:kinematicEnabled = 1
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (-0.050048949999999995, 0.050096600000000005, -0.013250000000000001)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}
+

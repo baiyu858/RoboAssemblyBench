@@ -1,0 +1,52 @@
+task_name: fabrica_ur5e_d405_plumbers_block_minimal_workcell
+title: Fabrica UR5e D405 plumbers-block minimal workcell
+summary: Standalone Fabrica plumbers-block task using the self-contained UR5e, Robotiq 2F-85, D405 wrist-camera, worktable,
+  fixture, optical-board, and part assets from the minimal workcell bundle.
+task_description: A fully standalone RoboAssemblyBench task built from the Fabrica UR5e+D405 plumbers-block minimal workcell
+  bundle. The recipe directly references the bundle scene, robot, camera, layout, worktable, fixture, optical board, and SDF
+  plumbers-block part assets without extending any existing task.
+metadata:
+  tags:
+  - fabrica
+  - plumbers-block
+  - ur5e
+  - robotiq
+  - d405
+  - minimal-workcell
+  - standalone
+  object_roles:
+    main_workbench:
+      summary: Bundle-provided clean long packing worktable.
+    optical_board:
+      summary: Official Fabrica optical board support surface from the bundle.
+    pickup_fixture:
+      summary: Official plumbers-block pickup fixture from the bundle.
+    fabrica_plumbers_block_0:
+      summary: Official raw-frame SDF plumbers-block part 0 from the bundle.
+    fabrica_plumbers_block_1:
+      summary: Official raw-frame SDF plumbers-block part 1 from the bundle.
+    fabrica_plumbers_block_2:
+      summary: Official raw-frame SDF plumbers-block part 2 from the bundle.
+    fabrica_plumbers_block_3:
+      summary: Official raw-frame SDF plumbers-block part 3 from the bundle.
+    fabrica_plumbers_block_4:
+      summary: Official raw-frame SDF plumbers-block part 4 from the bundle.
+  target_roles:
+    part_0_seated:
+      phase: assembly_reference
+      summary: Raw-frame final assembled reference pose from the bundle scene.
+    part_1_seated:
+      phase: assembly_reference
+      summary: Raw-frame final assembled reference pose from the bundle scene.
+    part_2_seated:
+      phase: assembly_reference
+      summary: Raw-frame final assembled reference pose from the bundle scene.
+    part_3_seated:
+      phase: assembly_reference
+      summary: Raw-frame final assembled reference pose from the bundle scene.
+    part_4_seated:
+      phase: assembly_reference
+      summary: Raw-frame final assembled reference pose from the bundle scene.
+  phase_notes:
+  - name: initial_wait
+    summary: Holds the bundle workcell open for inspection without running a policy.

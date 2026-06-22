@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    defaultPrim = "ur5e"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "ur5e" (
+    prepend references = @./isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd@
+    variants = {
+        string Gripper = "None"
+        string Physics = "PhysX"
+        string Sensor = "Sensors"
+    }
+)
+{
+}

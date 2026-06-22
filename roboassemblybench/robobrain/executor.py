@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,8 @@ class RoboBrainRunConfig:
     perception_vlm_grounding: bool = False
     perception_vlm_model: str | None = None
     local_replanning: bool = True
+    event_callback: Callable[[dict[str, Any]], None] | None = None
+    capture_demo_output: bool = False
 
 
 @dataclass
@@ -96,8 +99,25 @@ class RoboBrainRunner:
         self.checker = RoboChecker()
 
     def run(self, task_instruction: str) -> RoboBrainRunResult:
+        self._emit_event(
+            'run_started',
+            task_instruction=task_instruction,
+            scene_profile=self.config.scene_profile,
+            plan_only=self.config.plan_only,
+            mock_llm=self.config.mock_llm,
+        )
         inventory = RoboAssemblyInventory.load(scene_profile=self.config.scene_profile)
+        self._emit_event(
+            'inventory_loaded',
+            template_count=len(inventory.recipes),
+            templates=inventory.template_names(),
+        )
         selected_template = self.config.selected_template or inventory.best_template_for(task_instruction)
+        self._emit_event(
+            'template_selected',
+            selected_template=selected_template,
+            forced=bool(self.config.selected_template),
+        )
         feedback: list[str] = []
         feedback_observation_images: list[str] = []
         feedback_runtime_payload: dict[str, Any] | None = None
@@ -105,6 +125,12 @@ class RoboBrainRunner:
         last_error: subprocess.CalledProcessError | None = None
 
         for replan_attempt in range(max_runtime_replans + 1):
+            self._emit_event(
+                'replan_attempt_started',
+                replan_attempt=replan_attempt,
+                feedback_count=len(feedback),
+                observation_image_count=len(feedback_observation_images),
+            )
             plan, recipe, check_result = self._plan_until_static_valid(
                 task_instruction=task_instruction,
                 inventory=inventory,
@@ -115,8 +141,10 @@ class RoboBrainRunner:
             )
             run_dir = self._run_dir_for(task_instruction=task_instruction, plan=plan, attempt=replan_attempt)
             bundle_paths = write_recipe_bundle(output_dir=run_dir, plan=plan, recipe=recipe, check_result=check_result)
+            self._emit_event('bundle_written', run_dir=run_dir, bundle_paths=bundle_paths)
 
             if self.config.plan_only:
+                self._emit_event('run_completed', run_dir=run_dir, plan_only=True)
                 return RoboBrainRunResult(
                     plan=plan,
                     recipe=recipe,
@@ -135,10 +163,18 @@ class RoboBrainRunner:
                 runtime_observation_dir=runtime_observation_dir,
             )
             (run_dir / 'demo_command.json').write_text(json.dumps(demo_command, indent=2), encoding='utf-8')
+            self._emit_event('demo_command_prepared', command=demo_command, output_dir=demo_output_dir)
 
             try:
-                subprocess.run(demo_command, check=True)
+                self._run_demo_command(demo_command)
                 runtime_feedback = self._read_runtime_feedback(runtime_feedback_path)
+                self._emit_event(
+                    'demo_completed',
+                    output_dir=demo_output_dir,
+                    runtime_feedback_path=runtime_feedback_path,
+                    runtime_feedback=runtime_feedback,
+                )
+                self._emit_event('run_completed', run_dir=run_dir, plan_only=False)
                 return RoboBrainRunResult(
                     plan=plan,
                     recipe=recipe,
@@ -152,6 +188,13 @@ class RoboBrainRunner:
             except subprocess.CalledProcessError as exc:
                 last_error = exc
                 runtime_feedback = self._read_runtime_feedback(runtime_feedback_path)
+                self._emit_event(
+                    'demo_failed',
+                    returncode=exc.returncode,
+                    command=demo_command,
+                    runtime_feedback=runtime_feedback,
+                    replan_attempt=replan_attempt,
+                )
                 error_path = run_dir / 'execution_error.json'
                 error_path.write_text(
                     json.dumps(
@@ -204,6 +247,13 @@ class RoboBrainRunner:
         recipe = None
         check_result = None
         for attempt in range(max(int(self.config.max_retries), 0) + 1):
+            self._emit_event(
+                'static_plan_attempt_started',
+                attempt=attempt,
+                max_retries=self.config.max_retries,
+                selected_template=selected_template,
+                feedback_count=len(feedback),
+            )
             plan = self._generate_plan(
                 task_instruction=task_instruction,
                 inventory=inventory,
@@ -220,7 +270,16 @@ class RoboBrainRunner:
 
             base_recipe = load_task_recipe(plan.selected_template, scene_profile=self.config.scene_profile)
             recipe = compile_plan_to_recipe(plan=plan, base_recipe=base_recipe, scene_profile=self.config.scene_profile)
+            self._emit_event(
+                'recipe_compiled',
+                attempt=attempt,
+                task_name=recipe.get('task_name'),
+                object_count=len(recipe.get('objects', [])),
+                target_count=len(recipe.get('targets', [])),
+                phase_count=len(recipe.get('phases', [])),
+            )
             check_result = self.checker.check(plan=plan, recipe=recipe)
+            self._emit_event('checker_completed', attempt=attempt, check_result=check_result.to_dict())
             if check_result.ok:
                 return plan, recipe, check_result
             feedback.extend(check_result.errors)
@@ -247,7 +306,19 @@ class RoboBrainRunner:
             observation_images=observation_images or [],
             runtime_feedback=runtime_feedback,
         )
+        self._emit_event(
+            'grounding_completed',
+            grounding=grounding,
+            observation_image_count=len(observation_images or []),
+            runtime_feedback_available=runtime_feedback is not None,
+        )
         if self.config.mock_llm:
+            self._emit_event(
+                'planner_request_prepared',
+                backend='mock',
+                selected_template=selected_template,
+                feedback_count=len(feedback),
+            )
             payload = MockRoboBrainClient().generate(
                 task_instruction=task_instruction,
                 inventory=inventory,
@@ -256,6 +327,7 @@ class RoboBrainRunner:
             )
             plan = RoboBrainPlan.from_dict(payload, task_instruction=task_instruction, source='mock')
             plan.grounding = grounding
+            self._emit_plan_event(plan)
             return plan
 
         client = OpenAIRoboBrainClient(model=self.config.model, temperature=self.config.temperature)
@@ -266,6 +338,16 @@ class RoboBrainRunner:
             feedback=feedback,
             grounding=grounding,
         )
+        self._emit_event(
+            'planner_request_prepared',
+            backend='openai',
+            model=client.model,
+            temperature=client.temperature,
+            selected_template=selected_template,
+            feedback_count=len(feedback),
+            observation_image_count=len([*self.config.observation_images, *(observation_images or [])]),
+            prompt_chars=len(user_prompt),
+        )
         payload = client.generate(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
@@ -274,6 +356,7 @@ class RoboBrainRunner:
         plan = RoboBrainPlan.from_dict(payload, task_instruction=task_instruction, source='openai')
         if grounding and not plan.grounding:
             plan.grounding = grounding
+        self._emit_plan_event(plan)
         return plan
 
     def _ground_observations(
@@ -410,10 +493,24 @@ class RoboBrainRunner:
             runtime_observation_dir=runtime_observation_dir,
         )
         (run_dir / 'demo_command.json').write_text(json.dumps(demo_command, indent=2), encoding='utf-8')
+        self._emit_event(
+            'local_replan_prepared',
+            run_dir=run_dir,
+            replan_attempt=replan_attempt,
+            report=local_replan.report,
+            command=demo_command,
+        )
 
         try:
-            subprocess.run(demo_command, check=True)
+            self._run_demo_command(demo_command)
             local_feedback = self._read_runtime_feedback(runtime_feedback_path)
+            self._emit_event(
+                'local_replan_completed',
+                run_dir=run_dir,
+                runtime_feedback=local_feedback,
+                replan_attempt=replan_attempt,
+            )
+            self._emit_event('run_completed', run_dir=run_dir, plan_only=False, local_replan=True)
             return (
                 RoboBrainRunResult(
                     plan=local_replan.plan,
@@ -430,6 +527,13 @@ class RoboBrainRunner:
             )
         except subprocess.CalledProcessError as exc:
             local_feedback = self._read_runtime_feedback(runtime_feedback_path)
+            self._emit_event(
+                'local_replan_failed',
+                returncode=exc.returncode,
+                command=demo_command,
+                runtime_feedback=local_feedback,
+                replan_attempt=replan_attempt,
+            )
             (run_dir / 'execution_error.json').write_text(
                 json.dumps(
                     {
@@ -445,6 +549,67 @@ class RoboBrainRunner:
                 encoding='utf-8',
             )
             return None, local_feedback
+
+    def _run_demo_command(self, command: list[str]):
+        self._emit_event('demo_started', command=command)
+        if not self.config.capture_demo_output:
+            subprocess.run(command, check=True)
+            return
+
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert process.stdout is not None
+        for line in process.stdout:
+            self._emit_event('demo_output', line=line.rstrip())
+        returncode = process.wait()
+        if returncode != 0:
+            raise subprocess.CalledProcessError(returncode, command)
+
+    def _emit_plan_event(self, plan: RoboBrainPlan):
+        self._emit_event(
+            'plan_generated',
+            task_name=plan.task_name,
+            selected_template=plan.selected_template,
+            source=plan.source,
+            rationale=plan.rationale,
+            assumptions=plan.assumptions,
+            subgoals=plan.subgoals,
+            constraint_counts={key: len(value) for key, value in plan.constraints.items()},
+            skill_count=len(plan.skills),
+            target_count=len(plan.targets),
+            phase_count=len(plan.phases),
+        )
+
+    def _emit_event(self, event_type: str, **payload: Any):
+        callback = self.config.event_callback
+        if callback is None:
+            return
+        callback(
+            {
+                'type': event_type,
+                'time': time.strftime('%Y-%m-%dT%H:%M:%S'),
+                'payload': self._event_jsonable(payload),
+            }
+        )
+
+    @classmethod
+    def _event_jsonable(cls, value: Any):
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, CheckResult):
+            return value.to_dict()
+        if isinstance(value, dict):
+            return {str(key): cls._event_jsonable(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._event_jsonable(item) for item in value]
+        if hasattr(value, 'tolist'):
+            return value.tolist()
+        return value
 
     @staticmethod
     def _read_runtime_feedback(path: Path) -> dict[str, Any] | None:

@@ -1,0 +1,447 @@
+{
+  "schema_version": "fabrica_official_aligned_scene/v0.2",
+  "scene_name": "fabrica_official_plumbers_block_fixture_pickup_sdf512_v1",
+  "assembly": "plumbers_block",
+  "official_sources": {
+    "fabrica_repo": "/data/hjj/src/Fabrica",
+    "source_obj_dir": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block",
+    "official_log_dir": "/data/hjj/src/Fabrica/logs/official_panda_full7_20260611_codex/plumbers_block",
+    "fixture_obj": "/data/hjj/src/Fabrica/logs/official_panda_full7_20260611_codex/plumbers_block/fixture/fixture.obj",
+    "pickup_json": "/data/hjj/src/Fabrica/logs/official_panda_full7_20260611_codex/plumbers_block/fixture/pickup.json",
+    "plan_info_pkl": "/data/hjj/src/Fabrica/learning/isaacgymenvs/tasks/fabrica/data/plan_info_official_panda_full7_20260611_codex_plus_car_dense/plumbers_block.pkl",
+    "optical_board_obj": "/data/hjj/src/Fabrica/assets/optical_board.obj"
+  },
+  "official_units": {
+    "source_mesh_unit": "centimeter",
+    "usd_unit": "meter",
+    "scale_cm_to_m": 0.01
+  },
+  "physics_alignment": {
+    "stage_gravity": [
+      0.0,
+      0.0,
+      -9.81
+    ],
+    "part_density_kg_per_m3": 1250.0,
+    "part_friction": 0.5,
+    "part_linear_damping": 0.5,
+    "part_angular_damping": 0.5,
+    "fixture_and_board": "static PhysX SDF colliders generated from official fixture.obj and optical_board.obj",
+    "collision": {
+      "part_collision": "PhysX SDF mesh collision on raw-frame OBJ-derived USD parts",
+      "sdf_resolution": 512,
+      "sdf_margin_m": 0.001,
+      "note": "Fabrica Isaac Gym URDF specifies SDF resolution=512. This package encodes the closest PhysX USD SDF schema."
+    },
+    "support_surface": "optical_board_only_no_internal_cube_table"
+  },
+  "coordinate_alignment": {
+    "part_asset_variant": "raw_frame",
+    "part_asset_policy": "Parts are not bbox-centered; official pickup/final poses act on original OBJ assembly coordinates.",
+    "pickup_pose_policy": "pickup.json xyz/euler is converted from cm/rad to m/degrees and applied to each raw-frame part.",
+    "assembled_reference_policy": "Raw parts are referenced at their official final OBJ frame under AssembledReference. Each assembled child part is an independent dynamic rigid body with gravity enabled, so physics exposes any residual overlap or bad final pose instead of hiding it.",
+    "recipe_origin_policy": "The internal OfficialFabricaTable cube was removed; FabricaOfficialFrame translate is zero so the optical board/support plane is the recipe local origin."
+  },
+  "raw_frame_manifest": {
+    "source_manifest": "/data/hjj/src/fabrica_isaaclab/assets/fabrica_original_usd_sdf_margin_001/raw_frame/plumbers_block/manifest.json",
+    "part_count": 5,
+    "bbox_min_m": [
+      -0.08,
+      -0.04,
+      0.0
+    ],
+    "bbox_max_m": [
+      0.08,
+      0.04,
+      0.105
+    ],
+    "bbox_size_m": [
+      0.16,
+      0.08,
+      0.105
+    ]
+  },
+  "assets": {
+    "optical_board": {
+      "source_obj": "/data/hjj/src/Fabrica/assets/optical_board.obj",
+      "usd_path": "../assets/fabrica_official_support/optical_board_raw_sdf512.usda",
+      "bbox_min_m": [
+        -0.4625,
+        -0.3125,
+        -0.01
+      ],
+      "bbox_max_m": [
+        0.4625,
+        0.3125,
+        0.0
+      ],
+      "bbox_size_m": [
+        0.925,
+        0.625,
+        0.01
+      ],
+      "vertex_count": 55304,
+      "triangle_count": 114060,
+      "friction": 0.0,
+      "collision_approximation": "sdf",
+      "sdf_resolution": 512,
+      "sdf_margin_m": 0.0
+    },
+    "fixture": {
+      "source_obj": "/data/hjj/src/Fabrica/logs/official_panda_full7_20260611_codex/plumbers_block/fixture/fixture.obj",
+      "usd_path": "../assets/fabrica_official_fixture/plumbers_block/fixture_raw_sdf512.usda",
+      "bbox_min_m": [
+        -0.1,
+        0.1,
+        0.0
+      ],
+      "bbox_max_m": [
+        0.1,
+        0.3,
+        0.045
+      ],
+      "bbox_size_m": [
+        0.2,
+        0.19999999999999998,
+        0.045
+      ],
+      "vertex_count": 1370,
+      "triangle_count": 2752,
+      "friction": 0.0,
+      "collision_approximation": "sdf",
+      "sdf_resolution": 512,
+      "sdf_margin_m": 0.0
+    },
+    "pickup_json": {
+      "source_json": "/data/hjj/src/Fabrica/logs/official_panda_full7_20260611_codex/plumbers_block/fixture/pickup.json",
+      "path": "../assets/fabrica_official_fixture/plumbers_block/pickup.json",
+      "relative_path": "assets/fabrica_official_fixture/plumbers_block/pickup.json"
+    }
+  },
+  "metadata": {
+    "precedence.pkl": "metadata/precedence.pkl",
+    "grasps.pkl": "metadata/grasps.pkl",
+    "tree.pkl": "metadata/tree.pkl",
+    "tree_opt.pkl": "metadata/tree_opt.pkl",
+    "motion.pkl": "metadata/motion.pkl",
+    "stats.json": "metadata/stats.json",
+    "plan_info.pkl": "metadata/plan_info.pkl"
+  },
+  "scene": {
+    "scene_usda": "scene.usda",
+    "table_top_z_m": 0.0,
+    "official_frame_prim": "/World/FabricaOfficialFrame",
+    "parts": {
+      "0": {
+        "part_id": "0",
+        "part_name": "plumbers_block_0",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/0.obj",
+        "source_usd": "/data/hjj/src/fabrica_isaaclab/assets/fabrica_original_usd_sdf_margin_001/raw_frame/plumbers_block/parts/fabrica_plumbers_block_0.usd",
+        "usd_path": "../assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_0.usd",
+        "relative_usd_path": "assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_0.usd",
+        "bbox_min_m": [
+          -0.021361400000000003,
+          -0.04,
+          0.02715836
+        ],
+        "bbox_max_m": [
+          0.021361520000000002,
+          0.04,
+          0.0766584
+        ],
+        "bbox_size_m": [
+          0.042722920000000005,
+          0.08,
+          0.04950004
+        ],
+        "density_kg_per_m3": 1250.0,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "linear_damping": 0.5,
+        "angular_damping": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_resolution": 512,
+        "sdf_margin_m": 0.001,
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          2.999994000000004,
+          10.404398942777902,
+          0.21286057452175022,
+          -0.5370399692573166,
+          0.0,
+          0.0
+        ],
+        "scene_pickup_translation_m_local_to_board": [
+          0.02999994000000004,
+          0.10404398942777902,
+          0.0021286057452175023
+        ],
+        "scene_pickup_rotation_xyz_degrees": [
+          -30.77012366827972,
+          0.0,
+          0.0
+        ],
+        "pickup_prim": "/World/FabricaOfficialFrame/PickupParts/part_0",
+        "assembled_reference_prim": "/World/FabricaOfficialFrame/AssembledReference/part_0",
+        "pickup_dynamic": true,
+        "assembled_reference_mode": "independent_dynamic_rigid_parts"
+      },
+      "1": {
+        "part_id": "1",
+        "part_name": "plumbers_block_1",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/1.obj",
+        "source_usd": "/data/hjj/src/fabrica_isaaclab/assets/fabrica_original_usd_sdf_margin_001/raw_frame/plumbers_block/parts/fabrica_plumbers_block_1.usd",
+        "usd_path": "../assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_1.usd",
+        "relative_usd_path": "assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_1.usd",
+        "bbox_min_m": [
+          -0.0544164,
+          -0.011234800000000001,
+          0.035
+        ],
+        "bbox_max_m": [
+          -0.0255836,
+          0.013766400000000002,
+          0.105
+        ],
+        "bbox_size_m": [
+          0.028832799999999995,
+          0.0250012,
+          0.06999999999999999
+        ],
+        "density_kg_per_m3": 1250.0,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "linear_damping": 0.5,
+        "angular_damping": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_resolution": 512,
+        "sdf_margin_m": 0.001,
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          -3.7524065896847785,
+          27.062308239652232,
+          -3.422194224602289,
+          -0.00027918538662435286,
+          0.12829301595043252,
+          1.5686141949208157
+        ],
+        "scene_pickup_translation_m_local_to_board": [
+          -0.037524065896847786,
+          0.27062308239652233,
+          -0.03422194224602289
+        ],
+        "scene_pickup_rotation_xyz_degrees": [
+          -0.015996144355303565,
+          7.350648354964335,
+          89.87497305327419
+        ],
+        "pickup_prim": "/World/FabricaOfficialFrame/PickupParts/part_1",
+        "assembled_reference_prim": "/World/FabricaOfficialFrame/AssembledReference/part_1",
+        "pickup_dynamic": true,
+        "assembled_reference_mode": "independent_dynamic_rigid_parts"
+      },
+      "2": {
+        "part_id": "2",
+        "part_name": "plumbers_block_2",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/2.obj",
+        "source_usd": "/data/hjj/src/fabrica_isaaclab/assets/fabrica_original_usd_sdf_margin_001/raw_frame/plumbers_block/parts/fabrica_plumbers_block_2.usd",
+        "usd_path": "../assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_2.usd",
+        "relative_usd_path": "assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_2.usd",
+        "bbox_min_m": [
+          -0.08,
+          -0.018734200000000003,
+          0.0
+        ],
+        "bbox_max_m": [
+          0.08,
+          0.0212658,
+          0.065
+        ],
+        "bbox_size_m": [
+          0.16,
+          0.04000000000000001,
+          0.065
+        ],
+        "density_kg_per_m3": 1250.0,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "linear_damping": 0.5,
+        "angular_damping": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_resolution": 512,
+        "sdf_margin_m": 0.001,
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          -3.262726000000001,
+          16.514845784880304,
+          7.304902962679554,
+          -3.1672847401645537e-16,
+          1.0171498097134326,
+          -1.5707963267948972
+        ],
+        "scene_pickup_translation_m_local_to_board": [
+          -0.03262726000000001,
+          0.16514845784880305,
+          0.07304902962679555
+        ],
+        "scene_pickup_rotation_xyz_degrees": [
+          -1.814720481276185e-14,
+          58.278391229114476,
+          -90.00000000000004
+        ],
+        "pickup_prim": "/World/FabricaOfficialFrame/PickupParts/part_2",
+        "assembled_reference_prim": "/World/FabricaOfficialFrame/AssembledReference/part_2",
+        "pickup_dynamic": true,
+        "assembled_reference_mode": "independent_dynamic_rigid_parts"
+      },
+      "3": {
+        "part_id": "3",
+        "part_name": "plumbers_block_3",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/3.obj",
+        "source_usd": "/data/hjj/src/fabrica_isaaclab/assets/fabrica_original_usd_sdf_margin_001/raw_frame/plumbers_block/parts/fabrica_plumbers_block_3.usd",
+        "usd_path": "../assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_3.usd",
+        "relative_usd_path": "assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_3.usd",
+        "bbox_min_m": [
+          -0.05,
+          -0.018734200000000003,
+          0.065
+        ],
+        "bbox_max_m": [
+          0.05,
+          0.0212658,
+          0.0911473
+        ],
+        "bbox_size_m": [
+          0.1,
+          0.04000000000000001,
+          0.0261473
+        ],
+        "density_kg_per_m3": 1250.0,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "linear_damping": 0.5,
+        "angular_damping": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_resolution": 512,
+        "sdf_margin_m": 0.001,
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          2.9904340000000054,
+          28.497623906561728,
+          -1.8481565783697542,
+          -2.0530777750838057e-16,
+          -0.624696768900801,
+          1.570796326794897
+        ],
+        "scene_pickup_translation_m_local_to_board": [
+          0.029904340000000054,
+          0.2849762390656173,
+          -0.018481565783697543
+        ],
+        "scene_pickup_rotation_xyz_degrees": [
+          -1.1763269152441135e-14,
+          -35.792488333475234,
+          90.00000000000003
+        ],
+        "pickup_prim": "/World/FabricaOfficialFrame/PickupParts/part_3",
+        "assembled_reference_prim": "/World/FabricaOfficialFrame/AssembledReference/part_3",
+        "pickup_dynamic": true,
+        "assembled_reference_mode": "independent_dynamic_rigid_parts"
+      },
+      "4": {
+        "part_id": "4",
+        "part_name": "plumbers_block_4",
+        "source_obj": "/data/hjj/src/Fabrica/assets/fabrica/plumbers_block/4.obj",
+        "source_usd": "/data/hjj/src/fabrica_isaaclab/assets/fabrica_original_usd_sdf_margin_001/raw_frame/plumbers_block/parts/fabrica_plumbers_block_4.usd",
+        "usd_path": "../assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_4.usd",
+        "relative_usd_path": "assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_4.usd",
+        "bbox_min_m": [
+          0.0255836,
+          -0.011234800000000001,
+          0.035
+        ],
+        "bbox_max_m": [
+          0.0544164,
+          0.013766400000000002,
+          0.105
+        ],
+        "bbox_size_m": [
+          0.028832799999999995,
+          0.0250012,
+          0.06999999999999999
+        ],
+        "density_kg_per_m3": 1250.0,
+        "static_friction": 0.5,
+        "dynamic_friction": 0.5,
+        "linear_damping": 0.5,
+        "angular_damping": 0.5,
+        "collision_approximation": "sdf",
+        "sdf_resolution": 512,
+        "sdf_margin_m": 0.001,
+        "pickup_state_fabrica_cm_xyz_euler_rad": [
+          -3.7697201641879468,
+          24.24354767145298,
+          -2.398663230671462,
+          -0.00027918538662432483,
+          0.1282930159504323,
+          1.5686141949208159
+        ],
+        "scene_pickup_translation_m_local_to_board": [
+          -0.037697201641879466,
+          0.2424354767145298,
+          -0.02398663230671462
+        ],
+        "scene_pickup_rotation_xyz_degrees": [
+          -0.01599614435530196,
+          7.3506483549643225,
+          89.8749730532742
+        ],
+        "pickup_prim": "/World/FabricaOfficialFrame/PickupParts/part_4",
+        "assembled_reference_prim": "/World/FabricaOfficialFrame/AssembledReference/part_4",
+        "pickup_dynamic": true,
+        "assembled_reference_mode": "independent_dynamic_rigid_parts"
+      }
+    },
+    "support_surface_z_m": 0.0,
+    "internal_official_fabrica_table_removed": true,
+    "support_policy": "optical_board_only; /World/FabricaOfficialFrame origin is the optical board plane"
+  },
+  "pickup_json": {
+    "2": [
+      -3.262726000000001,
+      16.514845784880304,
+      7.304902962679554,
+      -3.1672847401645537e-16,
+      1.0171498097134326,
+      -1.5707963267948972
+    ],
+    "0": [
+      2.999994000000004,
+      10.404398942777902,
+      0.21286057452175022,
+      -0.5370399692573166,
+      0.0,
+      0.0
+    ],
+    "3": [
+      2.9904340000000054,
+      28.497623906561728,
+      -1.8481565783697542,
+      -2.0530777750838057e-16,
+      -0.624696768900801,
+      1.570796326794897
+    ],
+    "1": [
+      -3.7524065896847785,
+      27.062308239652232,
+      -3.422194224602289,
+      -0.00027918538662435286,
+      0.12829301595043252,
+      1.5686141949208157
+    ],
+    "4": [
+      -3.7697201641879468,
+      24.24354767145298,
+      -2.398663230671462,
+      -0.00027918538662432483,
+      0.1282930159504323,
+      1.5686141949208159
+    ]
+  }
+}

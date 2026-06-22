@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -169,7 +170,8 @@ class LiveRolloutVideoRecorder:
         self.episode_idx = int(episode_idx)
         self.keep_frames = keep_frames
         self.frame_stride = max(int(frame_stride), 1)
-        self.fps = max(int(fps), 1)
+        self.requested_fps = max(float(fps), 1.0)
+        self.fps = self.requested_fps
         self.frames_root_dir = self.output_dir / f'episode_{self.episode_idx:04d}_live_frames'
         self.frames_root_dir.mkdir(parents=True, exist_ok=True)
 
@@ -281,7 +283,9 @@ class LiveRolloutVideoRecorder:
             summaries[camera_video_key] = {
                 'frames_dir': str(frame_dir),
                 'video_path': str(video_path),
-                'fps': int(self.fps),
+                'fps': float(self.fps),
+                'requested_fps': float(self.requested_fps),
+                'frame_stride': int(self.frame_stride),
                 'width': int(encode_summary.get('width', width)),
                 'height': int(encode_summary.get('height', height)),
                 'renderer': 'live_rollout_frame_capture',
@@ -488,14 +492,61 @@ def _run_task_sequence(
         if results_output_path is not None:
             _write_json(results_output_path, results)
     finally:
+        exc_type, exc_value, _ = sys.exc_info()
         if runtime_checker is not None:
             try:
                 runtime_checker.finalize()
             except Exception:
                 pass
+        live_video_output = None
         if video_recorder is not None:
             try:
-                video_recorder.finalize()
+                live_video_output = video_recorder.finalize()
+            except Exception:
+                pass
+        if recorder is not None and last_task is not None:
+            try:
+                metrics = _attach_policy_diagnostics(last_task.calculate_metrics(), policy)
+            except Exception:
+                metrics = {}
+            metrics['success'] = False
+            metrics.setdefault('status', 'failed')
+            if not metrics.get('terminal_reason'):
+                metrics['terminal_reason'] = 'rollout-interrupted-before-normal-termination'
+            if exc_value is not None:
+                print("[demo-debug] rollout interrupted by exception:", flush=True)
+                traceback.print_exception(exc_type, exc_value, exc_value.__traceback__)
+                metrics['exception'] = {
+                    'type': exc_type.__name__ if exc_type is not None else type(exc_value).__name__,
+                    'message': str(exc_value),
+                }
+            recorded_videos = {}
+            recorded_video_summaries = {}
+            recorded_video_mode = None
+            recorded_frames = {}
+            recorded_frame_summaries = {}
+            recorded_frame_mode = None
+            if isinstance(live_video_output, dict):
+                recorded_videos = live_video_output.get('videos', {})
+                recorded_video_summaries = live_video_output.get('summaries', {})
+                recorded_video_mode = live_video_output.get('video_mode')
+                recorded_frames = live_video_output.get('frames', {})
+                recorded_frame_summaries = live_video_output.get('frame_summaries', {})
+                recorded_frame_mode = live_video_output.get('frame_mode')
+            try:
+                recorder.save(
+                    task=last_task,
+                    episode_idx=episode_idx,
+                    metrics=metrics,
+                    recorded_videos=recorded_videos,
+                    recorded_video_summaries=recorded_video_summaries,
+                    recorded_video_mode=recorded_video_mode,
+                    recorded_frames=recorded_frames,
+                    recorded_frame_summaries=recorded_frame_summaries,
+                    recorded_frame_mode=recorded_frame_mode,
+                )
+                if results_output_path is not None and not results:
+                    _write_json(results_output_path, [metrics])
             except Exception:
                 pass
         env.close()

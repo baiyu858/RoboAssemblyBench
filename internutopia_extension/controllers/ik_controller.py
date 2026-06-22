@@ -100,17 +100,48 @@ class InverseKinematicsController(BaseController):
             ik_base_pose = self.robot.get_robot_ik_base().get_pose()
         return ik_base_pose
 
+    @staticmethod
+    def _bounded_revolute_joint_values(values):
+        values = np.asarray(values, dtype=float).copy()
+        wrapped = (values + np.pi) % (2.0 * np.pi) - np.pi
+        return np.where(np.abs(values) > np.pi + 0.25, wrapped, values)
+
+    @classmethod
+    def _unwrap_joints_to_current(cls, joint_positions, current_positions):
+        try:
+            values = cls._bounded_revolute_joint_values(joint_positions)
+            current = np.asarray(current_positions, dtype=float).reshape(-1)
+        except Exception:
+            return None
+        if values.shape != current.shape or not np.all(np.isfinite(values)) or not np.all(np.isfinite(current)):
+            return None
+
+        period = 2.0 * np.pi
+        result = values.copy()
+        for index, value in enumerate(values):
+            center = int(round((float(current[index]) - float(value)) / period))
+            candidates = value + (center + np.arange(-2, 3, dtype=float)) * period
+            costs = np.abs(candidates - current[index])
+            result[index] = candidates[int(np.argmin(costs))]
+        return result
+
     def forward(
         self, eef_target_position: np.ndarray, eef_target_orientation: np.ndarray
     ) -> Tuple[ArticulationAction, bool]:
         self.last_action = [eef_target_position, eef_target_orientation]
 
+        subset = self._kinematics_solver.get_joints_subset()
         if eef_target_position is None:
             # Keep joint positions to lock pose.
-            subset = self._kinematics_solver.get_joints_subset()
+            joint_positions = subset.get_joint_positions()
+            if joint_positions is not None:
+                joint_positions = self._bounded_revolute_joint_values(joint_positions)
+                joint_velocities = np.zeros_like(joint_positions)
+            else:
+                joint_velocities = None
             return (
                 subset.make_articulation_action(
-                    joint_positions=subset.get_joint_positions(), joint_velocities=subset.get_joint_velocities()
+                    joint_positions=joint_positions, joint_velocities=joint_velocities
                 ),
                 True,
             )
@@ -119,10 +150,20 @@ class InverseKinematicsController(BaseController):
         self._kinematics_solver.set_robot_base_pose(
             robot_position=ik_base_pose[0] / self._robot_scale, robot_orientation=ik_base_pose[1]
         )
-        return self._kinematics_solver.compute_inverse_kinematics(
+        result, success = self._kinematics_solver.compute_inverse_kinematics(
             target_position=eef_target_position / self._robot_scale,
             target_orientation=eef_target_orientation,
         )
+        if success and result is not None and result.joint_positions is not None:
+            joint_positions = self._unwrap_joints_to_current(
+                result.joint_positions,
+                subset.get_joint_positions(),
+            )
+            if joint_positions is None:
+                return ArticulationAction(), False
+            result.joint_positions = joint_positions
+            result.joint_velocities = np.zeros_like(joint_positions)
+        return result, success
 
     def action_to_control(self, action: List | np.ndarray):
         """

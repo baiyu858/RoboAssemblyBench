@@ -93,6 +93,11 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
                 'left_finger_link_name',
                 'right_finger_link_name',
                 'initial_joint_positions',
+                'gripper_xform_orient',
+                'gripper_mount_local_pos0',
+                'gripper_mount_local_pos1',
+                'gripper_mount_local_rot0',
+                'gripper_mount_local_rot1',
             ):
                 if field_name in robot_spec:
                     ur5e_kwargs[field_name] = copy.deepcopy(robot_spec[field_name])

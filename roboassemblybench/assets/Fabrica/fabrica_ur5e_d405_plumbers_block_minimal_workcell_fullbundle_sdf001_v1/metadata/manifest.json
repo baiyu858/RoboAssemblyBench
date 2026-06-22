@@ -1,0 +1,53 @@
+{
+  "package_name": "fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1",
+  "created_at": "2026-06-16 08:32:33 UTC",
+  "source_full_package": "/data/hjj/src/isaac_scene_skill_lite/runs/packages/fabrica_ur5e_d405_plumbers_block_warehouse_go2_g2_omnipicker_transport_tray_loose_only_fullbundle_sdf001_v1",
+  "entry_scene": "scene/scene.usda",
+  "scene_refs": [
+    "../assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/scene/scene.usda",
+    "../assets/imported_assets/ur5e_d405_asset_bundle_2026-06-15/extracted/source/isaaclab_tasks/isaaclab_tasks/direct/factory_ur5e_robotiq/assets/ur5e_robotiq_2f85_d405_camera.usda",
+    "../assets/skill_assets/worktables/isaac_long_packing_worktable_clean.usda"
+  ],
+  "contents": {
+    "background": "none",
+    "worktables": [
+      "main clean long packing worktable only"
+    ],
+    "robots": [
+      "2x UR5E + Robotiq 2F85 + D405 wrist camera"
+    ],
+    "assembly": "Fabrica official plumbers_block loose pickup parts, optical board and pickup fixture"
+  },
+  "removed_from_full_package": [
+    "Isaac Simple Warehouse background",
+    "Unitree Go2",
+    "GenieSim G2_omnipicker",
+    "transport tray",
+    "distant workbench",
+    "inactive Franka references"
+  ],
+  "physics": {
+    "fabrica_parts": {
+      "collision": "PhysX SDF mesh collision",
+      "sdf_resolution": 512,
+      "sdf_margin_m": 0.001,
+      "friction": 0.5,
+      "density_kg_per_m3": 1250.0,
+      "gravity_enabled": true
+    }
+  },
+  "bundle_policy": {
+    "built_from_minimal_scene": true,
+    "self_contained_assets": true,
+    "usd_external_reference_or_metadata_hits": [
+      "assets/imported_assets/ur5e_d405_asset_bundle_2026-06-15/extracted/source/isaaclab_tasks/isaaclab_tasks/direct/factory_ur5e_robotiq/assets/ur5e_robotiq_2f85_fixed_camera/SubUSDs/ur5e_robotiq_2f85_fixed.usd:217507:\u00060\u0000Robotiq\u0003\u0005edit\u0000ur5h\u0005qArticul\u0002\u0000\b\u0000j\u0004\u0004\u0006rotateXYZE\u0000\u0017\u0000file:/home/user/Downloads/isaac-sim-a \u00030s-r~\u0000\u0005s_and_sensors-5.1.0/@\u00030s/I1\u0000C/5.1",
+      "assets/isaac_official/Isaac/Props/PackingTable/packing_table.usd:331317:https://5\u0007\u0000",
+      "assets/isaac_official/Isaac/Props/PackingTable/props/container_h20/container_h20.usd:76170:\u000f\u0000\u0000\u0000\u0000\u0000\u0000\u0000+;-)\u0000SimReady_Metadata\u0000type\u0000prop\u0000version\u00000.9.1\u0000customLayerD(\u0000YRootNode\u0000defaultPrim\u0000metersPerUnit\u0000Z\u0000upAxis\u0000Tagging\u0000primChildren\u0000Generated from Composed Stage of root lq\u0000 https://omni\u0000e-content-sta[\u0000\u0018.s3.us-west-2."
+    ]
+  },
+  "asset_summary": {
+    "asset_file_count": 134,
+    "asset_total_size_bytes": 215618326,
+    "material_like_file_count": 78
+  }
+}

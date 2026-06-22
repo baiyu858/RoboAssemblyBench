@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    defaultPrim = "OpticalBoard"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "OpticalBoard" (
+    prepend references = @../../scene/scene.usda@</World/envs/env_0/BlackFabricaOpticalBoard>
+)
+{
+}

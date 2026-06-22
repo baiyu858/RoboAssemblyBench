@@ -1,0 +1,49 @@
+extends: fabrica_plumbers_block_ur5e_fabrica_online_plan
+
+task_name: fabrica_plumbers_block_ur5e_hold_debug
+prompt: Debug task that holds the dual UR5e plumbers-block scene without Fabrica path execution.
+max_steps: 900
+phase_timeout_steps: 900
+
+metadata:
+  tags:
+    - fabrica
+    - plumbers-block
+    - ur5e
+    - debug
+  hold_nonlocal_skill_robots: true
+  disable_gripper_actions: true
+  auto_advance_completed_local_skills: true
+  auto_attach_completed_local_skills: false
+
+phases:
+  - name: hold_dual_ur5e_debug
+    robot_targets: {}
+    local_skill:
+      name: hold_current_joints
+    lock:
+      - object: fabrica_plumbers_block_0
+        target: part_0_pickup
+        position_tolerance: 0.03
+        orientation_tolerance: 3.1416
+      - object: fabrica_plumbers_block_1
+        target: part_1_pickup
+        position_tolerance: 0.03
+        orientation_tolerance: 3.1416
+      - object: fabrica_plumbers_block_2
+        target: part_2_pickup
+        position_tolerance: 0.03
+        orientation_tolerance: 3.1416
+      - object: fabrica_plumbers_block_3
+        target: part_3_pickup
+        position_tolerance: 0.03
+        orientation_tolerance: 3.1416
+      - object: fabrica_plumbers_block_4
+        target: part_4_pickup
+        position_tolerance: 0.03
+        orientation_tolerance: 3.1416
+    advance:
+      type: timer
+      min_steps: 700
+
+success: []

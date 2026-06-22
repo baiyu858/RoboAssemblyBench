@@ -1,0 +1,556 @@
+task_name: fabrica_ur5e_d405_plumbers_block_minimal_workcell
+prompt: Two UR5e arms with Robotiq 2F-85 grippers and D405 wrist cameras operate in a self-contained Fabrica plumbers-block
+  minimal workcell.
+scene_profile: raw
+scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+workspace_offset:
+- 0.0
+- 0.0
+- 0.0
+max_steps: 7200
+phase_timeout_steps: 420
+phase_timeout_action: fail
+source_benchmark: fabrica
+source_config_path: roboassemblybench/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1
+metadata:
+  asset_source: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1
+  asset_note: Standalone task authored directly from the self-contained UR5e+D405 plumbers-block minimal workcell bundle.
+    It does not extend or depend on any existing RoboAssemblyBench task.
+  bundle_manifest:
+    package_name: fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1
+    created_at: 2026-06-16 08:32:33 UTC
+    entry_scene: scene/scene.usda
+    contents:
+      background: none
+      worktables:
+      - main clean long packing worktable only
+      robots:
+      - 2x UR5E + Robotiq 2F85 + D405 wrist camera
+      assembly: Fabrica official plumbers_block loose pickup parts, optical board and pickup fixture
+    physics:
+      fabrica_parts:
+        collision: PhysX SDF mesh collision
+        sdf_resolution: 512
+        sdf_margin_m: 0.001
+        friction: 0.5
+        density_kg_per_m3: 1250.0
+        gravity_enabled: true
+  fabrica_minimal_workcell_layout:
+    source_scene: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/scene/scene.usda
+    source_scene_recipe_offset:
+    - 0.0
+    - -0.15
+    - 1.0041
+    source_robot_layout: 2x UR5E + Robotiq 2F85 + D405 wrist camera from bundle scene/scene.usda
+    source_camera: /World/Camera from bundle scene/scene.usda
+  asset_references:
+  - name: minimal_workcell_bundle
+    kind: directory
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1
+    role: source_bundle
+  - name: minimal_workcell_scene
+    kind: scene
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/scene/scene.usda
+    role: complete_source_scene_reference
+  - name: minimal_workcell_manifest
+    kind: manifest
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/metadata/manifest.json
+    role: bundle_manifest
+  - name: plumbers_block_scene_spec
+    kind: manifest
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/scene/scene_spec.json
+    role: official_pickup_layout
+  - name: ur5e_d405_robot_usd
+    kind: robot_usd
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/imported_assets/ur5e_d405_asset_bundle_2026-06-15/extracted/source/isaaclab_tasks/isaaclab_tasks/direct/factory_ur5e_robotiq/assets/ur5e_robotiq_2f85_d405_camera.usda
+    role: ur5e_robotiq_d405_robot
+  - name: main_workbench_usd
+    kind: usd
+    path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/skill_assets/worktables/isaac_long_packing_worktable_clean.usda
+    role: worktable
+  tags:
+  - fabrica
+  - plumbers-block
+  - ur5e
+  - robotiq
+  - d405
+  - minimal-workcell
+  - standalone
+robots:
+- name: franka_left
+  prim_path: /ur5e_d405_left
+  position:
+  - -1.4961024224094444
+  - 1.0594760527250724
+  - -0.12074919702938958
+  type: UR5eRobot
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/imported_assets/ur5e_d405_asset_bundle_2026-06-15/extracted/source/isaaclab_tasks/isaaclab_tasks/direct/factory_ur5e_robotiq/assets/ur5e_robotiq_2f85_d405_camera.usda
+  orientation:
+  - 0.707106781
+  - 0.0
+  - 0.0
+  - -0.707106781
+  apply_workspace_offset: false
+  end_effector_prim_name: ur5e/ur5e/wrist_3_link
+  ik_base_prim_name: ur5e/ur5e/base_link
+  gripper_dof_name: finger_joint
+  gripper_open_position: 0.0
+  gripper_closed_position: 0.8
+  hand_link_name: ur5e/ur5e/wrist_3_link
+  left_finger_link_name: Robotiq_2F_85_edit/Robotiq_2F_85_edit/Robotiq_2F_85/left_inner_finger
+  right_finger_link_name: Robotiq_2F_85_edit/Robotiq_2F_85_edit/Robotiq_2F_85/right_inner_finger
+  gripper_xform_orient:
+  - 0.707106781
+  - 0.707106781
+  - 0.0
+  - 0.0
+  gripper_mount_local_pos0:
+  - 0.0
+  - 0.0
+  - 0.0
+  gripper_mount_local_pos1:
+  - 0.0
+  - 0.0
+  - 0.0
+  gripper_mount_local_rot0:
+  - 0.707106781
+  - 0.707106781
+  - 0.0
+  - 0.0
+  gripper_mount_local_rot1:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  initial_joint_positions:
+    shoulder_pan_joint: 0.0
+    shoulder_lift_joint: 0.0
+    elbow_joint: 0.0
+    wrist_1_joint: 0.0
+    wrist_2_joint: 0.0
+    wrist_3_joint: 0.0
+    finger_joint: 0.0
+    right_outer_knuckle_joint: 0.0
+    left_inner_finger_joint: 0.0
+    right_inner_finger_joint: 0.0
+    left_inner_finger_knuckle_joint: 0.0
+    right_inner_finger_knuckle_joint: 0.0
+- name: franka_right
+  prim_path: /ur5e_d405_right
+  position:
+  - -0.5961024224094444
+  - 1.0594760527250724
+  - -0.12074919702938958
+  type: UR5eRobot
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/imported_assets/ur5e_d405_asset_bundle_2026-06-15/extracted/source/isaaclab_tasks/isaaclab_tasks/direct/factory_ur5e_robotiq/assets/ur5e_robotiq_2f85_d405_camera.usda
+  orientation:
+  - 0.707106781
+  - 0.0
+  - 0.0
+  - -0.707106781
+  apply_workspace_offset: false
+  end_effector_prim_name: ur5e/ur5e/wrist_3_link
+  ik_base_prim_name: ur5e/ur5e/base_link
+  gripper_dof_name: finger_joint
+  gripper_open_position: 0.0
+  gripper_closed_position: 0.8
+  hand_link_name: ur5e/ur5e/wrist_3_link
+  left_finger_link_name: Robotiq_2F_85_edit/Robotiq_2F_85_edit/Robotiq_2F_85/left_inner_finger
+  right_finger_link_name: Robotiq_2F_85_edit/Robotiq_2F_85_edit/Robotiq_2F_85/right_inner_finger
+  gripper_xform_orient:
+  - 0.707106781
+  - 0.707106781
+  - 0.0
+  - 0.0
+  gripper_mount_local_pos0:
+  - 0.0
+  - 0.0
+  - 0.0
+  gripper_mount_local_pos1:
+  - 0.0
+  - 0.0
+  - 0.0
+  gripper_mount_local_rot0:
+  - 0.707106781
+  - 0.707106781
+  - 0.0
+  - 0.0
+  gripper_mount_local_rot1:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  initial_joint_positions:
+    shoulder_pan_joint: 0.0
+    shoulder_lift_joint: 0.0
+    elbow_joint: 0.0
+    wrist_1_joint: 0.0
+    wrist_2_joint: 0.0
+    wrist_3_joint: 0.0
+    finger_joint: 0.0
+    right_outer_knuckle_joint: 0.0
+    left_inner_finger_joint: 0.0
+    right_inner_finger_joint: 0.0
+    left_inner_finger_knuckle_joint: 0.0
+    right_inner_finger_knuckle_joint: 0.0
+camera_specs:
+- name: bundle_preview_camera
+  owner: franka_left
+  prim_path: /World/env_0/cameras/bundle_preview_camera
+  view_type: third_person
+  video_key: observation.images.bundle_preview
+  resolution:
+  - 960
+  - 540
+  rgba: false
+  attach_runtime_sensor: false
+  translation:
+  - 3.2
+  - -4.0
+  - 2.7
+  orientation_euler:
+  - 1.0122909661567112
+  - 0.0
+  - 0.6632251157578452
+  focal_length: 24.0
+  clipping_range:
+  - 0.01
+  - 1000.0
+- name: left_d405_wrist_metadata
+  owner: franka_left
+  prim_path: ur5e/ur5e/wrist_3_link/ft_frame/realsense_d405/Camera_Color
+  view_type: wrist_d405
+  robot: franka_left
+  video_key: observation.images.left_d405
+  resolution:
+  - 640
+  - 480
+  rgba: false
+  attach_runtime_sensor: false
+- name: right_d405_wrist_metadata
+  owner: franka_right
+  prim_path: ur5e/ur5e/wrist_3_link/ft_frame/realsense_d405/Camera_Color
+  view_type: wrist_d405
+  robot: franka_right
+  video_key: observation.images.right_d405
+  resolution:
+  - 640
+  - 480
+  rgba: false
+  attach_runtime_sensor: false
+scene_lights:
+- name: bundle_dome
+  kind: dome
+  intensity: 450
+- name: bundle_key
+  kind: distant
+  intensity: 5000
+  rotation_euler:
+  - -45.0
+  - 0.0
+  - 35.0
+objects:
+- name: main_workbench
+  kind: usd
+  prim_path: /main_workbench
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/skill_assets/worktables/isaac_long_packing_worktable_clean.usda
+  position:
+  - 0.0
+  - 0.0
+  - 0.0
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: false
+  rigid_body: false
+  tracked: false
+- name: optical_board
+  kind: usd
+  prim_path: /optical_board
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_official_support/optical_board_raw_sdf512.usda
+  position:
+  - 0.0
+  - -0.15
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: false
+  rigid_body: false
+  tracked: false
+  static_friction: 0.0
+  dynamic_friction: 0.0
+  restitution: 0.0
+- name: pickup_fixture
+  kind: usd
+  prim_path: /pickup_fixture
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_official_fixture/plumbers_block/fixture_raw_sdf512.usda
+  position:
+  - 0.0
+  - -0.15
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: false
+  rigid_body: false
+  tracked: false
+  static_friction: 0.0
+  dynamic_friction: 0.0
+  restitution: 0.0
+- name: fabrica_plumbers_block_0
+  kind: usd
+  prim_path: /fabrica_plumbers_block_0
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_0.usd
+  position:
+  - 0.02999994000000004
+  - -0.04595601057222097
+  - 1.0062286057452174
+  orientation_euler:
+  - -0.5370399692573166
+  - 0.0
+  - 0.0
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  collision_approximation: sdf
+  rigid_body: true
+  density: 1250.0
+  static_friction: 0.5
+  dynamic_friction: 0.5
+  restitution: 0.0
+- name: fabrica_plumbers_block_1
+  kind: usd
+  prim_path: /fabrica_plumbers_block_1
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_1.usd
+  position:
+  - -0.037524065896847786
+  - 0.12062308239652234
+  - 0.9698780577539771
+  orientation_euler:
+  - -0.00027918538662435286
+  - 0.12829301595043252
+  - 1.5686141949208157
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  collision_approximation: sdf
+  rigid_body: true
+  density: 1250.0
+  static_friction: 0.5
+  dynamic_friction: 0.5
+  restitution: 0.0
+- name: fabrica_plumbers_block_2
+  kind: usd
+  prim_path: /fabrica_plumbers_block_2
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_2.usd
+  position:
+  - -0.03262726000000001
+  - 0.01514845784880306
+  - 1.0771490296267956
+  orientation_euler:
+  - -3.1672847401645537e-16
+  - 1.0171498097134326
+  - -1.5707963267948972
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  collision_approximation: sdf
+  rigid_body: true
+  density: 1250.0
+  static_friction: 0.5
+  dynamic_friction: 0.5
+  restitution: 0.0
+- name: fabrica_plumbers_block_3
+  kind: usd
+  prim_path: /fabrica_plumbers_block_3
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_3.usd
+  position:
+  - 0.029904340000000054
+  - 0.13497623906561731
+  - 0.9856184342163025
+  orientation_euler:
+  - -2.0530777750838057e-16
+  - -0.624696768900801
+  - 1.570796326794897
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  collision_approximation: sdf
+  rigid_body: true
+  density: 1250.0
+  static_friction: 0.5
+  dynamic_friction: 0.5
+  restitution: 0.0
+- name: fabrica_plumbers_block_4
+  kind: usd
+  prim_path: /fabrica_plumbers_block_4
+  usd_path: ${BENCHMARK_ROOT}/assets/Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/fabrica_task_bundles/fabrica_official_plumbers_block_fixture_pickup_sdf512_v1/assets/fabrica_parts/plumbers_block/fabrica_plumbers_block_4.usd
+  position:
+  - -0.037697201641879466
+  - 0.09243547671452981
+  - 0.9801133676932854
+  orientation_euler:
+  - -0.00027918538662432483
+  - 0.1282930159504323
+  - 1.5686141949208159
+  scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  collider: true
+  auto_collider: true
+  collision_approximation: sdf
+  rigid_body: true
+  density: 1250.0
+  static_friction: 0.5
+  dynamic_friction: 0.5
+  restitution: 0.0
+targets:
+- name: left_wait
+  reference: world
+  position:
+  - -1.05
+  - 0.78
+  - 1.22
+  orientation_euler:
+  - 3.1415926536
+  - 0.0
+  - -1.5707963268
+- name: right_wait
+  reference: world
+  position:
+  - -0.15
+  - 0.78
+  - 1.22
+  orientation_euler:
+  - 3.1415926536
+  - 0.0
+  - -1.5707963268
+- name: part_0_seated
+  reference: world
+  position:
+  - 0.0
+  - -0.31
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: false
+- name: part_1_seated
+  reference: world
+  position:
+  - 0.0
+  - -0.31
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: false
+- name: part_2_seated
+  reference: world
+  position:
+  - 0.0
+  - -0.31
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: false
+- name: part_3_seated
+  reference: world
+  position:
+  - 0.0
+  - -0.31
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: false
+- name: part_4_seated
+  reference: world
+  position:
+  - 0.0
+  - -0.31
+  - 1.0041
+  orientation:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  apply_workspace_offset: false
+phases:
+- name: initial_wait
+  robot_targets: {}
+  local_skill:
+    name: hold_current_joints
+  gripper_commands:
+    franka_left: open
+    franka_right: open
+  advance:
+    type: timer
+    min_steps: 24
+success:
+- type: all_locked
+  locks:
+  - object: fabrica_plumbers_block_0
+    target: part_0_seated
+    position_tolerance: 0.04
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_1
+    target: part_1_seated
+    position_tolerance: 0.04
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_2
+    target: part_2_seated
+    position_tolerance: 0.04
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_3
+    target: part_3_seated
+    position_tolerance: 0.04
+    orientation_tolerance: 3.1416
+  - object: fabrica_plumbers_block_4
+    target: part_4_seated
+    position_tolerance: 0.04
+    orientation_tolerance: 3.1416

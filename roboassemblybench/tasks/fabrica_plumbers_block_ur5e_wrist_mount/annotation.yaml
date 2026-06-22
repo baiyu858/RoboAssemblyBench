@@ -1,0 +1,14 @@
+extends: fabrica_plumbers_block_ur5e
+task_name: fabrica_plumbers_block_ur5e_wrist_mount
+title: Fabrica plumbers block UR5e wrist-mounted Robotiq
+summary: UR5e plumbers-block variant with the Robotiq gripper composed as a child of wrist_3_link.
+task_description: >-
+  This is a clean UR5e mount-debug variant. It keeps the existing plumbers-block
+  scene and robot placement, but uses a new USD wrapper where the Robotiq 2F-85
+  is mounted under wrist_3_link instead of as a sibling under the robot root.
+metadata:
+  tags:
+    - fabrica
+    - plumbers-block
+    - ur5e
+    - wrist-mounted-gripper
