@@ -124,8 +124,8 @@ echo "$PYTHONPATH"
 test -f roboassemblybench/tasks/fabrica_plumbers_block_ur5e/recipe.yaml
 test -f roboassemblybench/scenes/profiles/taoyuan_grscenes_tabletop.yaml
 test -f roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
-test -f third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block/traj.npy
-test -f third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block/fixture/fixture.obj
+test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/traj.npy
+test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/fixture/fixture.obj
 test -d third_part/Fabrica/assets/fabrica/plumbers_block
 test -f third_part/Fabrica/assets/optical_board.obj
 test -d third_part/Fabrica/assets/ur5e/visual
@@ -162,7 +162,7 @@ MAX_FRAMES=10 WIDTH=640 HEIGHT=360 STRIDE=24 \
 | `WARMUP_STEPS` | `8` | 正式截帧前先刷新多少次渲染管线 |
 | `WORLD_OFFSET` | `0.47,0,1.012` | 把 Fabrica cm 坐标轨迹映射到 task env 世界坐标时添加的米制偏移 |
 | `KEEP_TASK_REPLAY_OVERLAPS` | `0` | 默认隐藏 task env 中会和回放重叠的机器人/物体；设为 `1` 保留 |
-| `LOG_DIR` | `third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block` | Fabrica 官方轨迹目录，必须包含 `traj.npy` 和 `fixture/fixture.obj` |
+| `LOG_DIR` | `roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block` | Fabrica 官方轨迹目录，必须包含 `traj.npy` 和 `fixture/fixture.obj` |
 | `ASSEMBLY_DIR` | `third_part/Fabrica/assets/fabrica/plumbers_block` | plumbers_block 零件 OBJ 目录 |
 | `ASSET_DIR` | `third_part/Fabrica/assets` | UR5e、Robotiq、optical board 等共享 mesh 根目录 |
 | `OUTPUT` | `outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4` | 输出视频路径 |
