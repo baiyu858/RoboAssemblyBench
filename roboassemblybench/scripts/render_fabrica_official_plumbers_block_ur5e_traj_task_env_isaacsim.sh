@@ -19,7 +19,7 @@ WORLD_OFFSET="${WORLD_OFFSET:-0.47,0,1.012}"
 KEEP_TASK_REPLAY_OVERLAPS="${KEEP_TASK_REPLAY_OVERLAPS:-0}"
 HEADLESS="${HEADLESS:-0}"
 
-LOG_DIR="${LOG_DIR:-$REPO_ROOT/third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block}"
+LOG_DIR="${LOG_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block}"
 ASSEMBLY_DIR="${ASSEMBLY_DIR:-$REPO_ROOT/third_part/Fabrica/assets/fabrica/plumbers_block}"
 ASSET_DIR="${ASSET_DIR:-$REPO_ROOT/third_part/Fabrica/assets}"
 OUTPUT="${OUTPUT:-$REPO_ROOT/outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4}"
