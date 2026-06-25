@@ -12,7 +12,7 @@ STRIDE="${STRIDE:-6}"
 CAMERA_OPTION="${CAMERA_OPTION:-close}"
 MAX_FRAMES="${MAX_FRAMES:-}"
 
-LOG_DIR="${LOG_DIR:-$REPO_ROOT/third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block}"
+LOG_DIR="${LOG_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block}"
 ASSEMBLY_DIR="${ASSEMBLY_DIR:-$REPO_ROOT/third_part/Fabrica/assets/fabrica/plumbers_block}"
 ASSET_DIR="${ASSET_DIR:-$REPO_ROOT/third_part/Fabrica/assets}"
 OUTPUT="${OUTPUT:-$REPO_ROOT/outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_replay.mp4}"
