@@ -11,7 +11,7 @@ from internutopia_extension.configs.controllers import (
 )
 
 
-_ISAAC_SIM_ROOT = os.environ.get("ISAAC_SIM_ROOT", "/home/baiyu24/APP/isaac-smi")
+_ISAAC_SIM_ROOT = os.environ.get("ISAAC_SIM_ROOT") or os.environ.get("ISAAC_PATH") or "/home/baiyu24/APP/isaac-smi"
 _UR5E_MOTION_CFG_ROOT = os.path.join(
     _ISAAC_SIM_ROOT,
     "exts/isaacsim.robot_motion.motion_generation/motion_policy_configs/universal_robots/ur5e",

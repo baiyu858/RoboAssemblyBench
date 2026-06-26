@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,8 +15,13 @@ import trimesh
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOG_DIR = REPO_ROOT / "roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block"
-DEFAULT_ASSEMBLY_DIR = REPO_ROOT / "third_part/Fabrica/assets/fabrica/plumbers_block"
-DEFAULT_ASSET_DIR = REPO_ROOT / "third_part/Fabrica/assets"
+DEFAULT_ASSET_DIR = (
+    REPO_ROOT
+    / "roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets"
+)
+DEFAULT_ASSEMBLY_DIR = (
+    DEFAULT_ASSET_DIR / "fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts"
+)
 DEFAULT_OUTPUT = REPO_ROOT / "outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_replay.mp4"
 
 UNIT_SCALE = 0.01
@@ -41,6 +47,33 @@ ROBOTIQ_85_LINK_MESHES = {
     "robotiq_right_outer_finger": "robotiq_85/visual/outer_finger_fine.obj",
     "robotiq_right_inner_knuckle": "robotiq_85/visual/inner_knuckle_fine.obj",
     "robotiq_right_inner_finger": "robotiq_85/visual/inner_finger_fine.obj",
+}
+
+UR5E_BUNDLE_ASSET_DIR = (
+    REPO_ROOT
+    / "roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets"
+)
+
+UR5E_LINK_USD_PRIMS = {
+    "base_link": "/ur5e/base_link",
+    "shoulder_link": "/ur5e/shoulder_link",
+    "upper_arm_link": "/ur5e/upper_arm_link",
+    "forearm_link": "/ur5e/forearm_link",
+    "wrist_1_link": "/ur5e/wrist_1_link",
+    "wrist_2_link": "/ur5e/wrist_2_link",
+    "wrist_3_link": "/ur5e/wrist_3_link",
+}
+
+ROBOTIQ_85_PART_USD = {
+    "robotiq_base": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_basestep_JFX.usd",
+    "robotiq_left_outer_knuckle": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger4step_JFH.usd",
+    "robotiq_left_outer_finger": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_Finger1step_JFT.usd",
+    "robotiq_left_inner_knuckle": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger3step_JFL.usd",
+    "robotiq_left_inner_finger": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_fingertipsstep_JFD.usd",
+    "robotiq_right_outer_knuckle": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger4step_JFH.usd",
+    "robotiq_right_outer_finger": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger2step_JFP.usd",
+    "robotiq_right_inner_knuckle": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_finger3step_JFL.usd",
+    "robotiq_right_inner_finger": "isaac_official/Isaac/Robots/Robotiq/2F-85/parts/Defeatured_2F_85_PAD_OPEN_fingertipsstep_JFD.usd",
 }
 
 PART_COLORS = [
@@ -92,6 +125,18 @@ def _to_uint8_rgba(frame) -> np.ndarray:
 
 def _safe_name(name: str) -> str:
     return name.replace("-", "_").replace(".", "_")
+
+
+def _load_fabrica_traj(traj_path: Path) -> np.ndarray:
+    try:
+        return np.load(traj_path, allow_pickle=True)
+    except ModuleNotFoundError as exc:
+        if exc.name != "numpy._core":
+            raise
+        sys.modules.setdefault("numpy._core", np.core)
+        sys.modules.setdefault("numpy._core.multiarray", np.core.multiarray)
+        sys.modules.setdefault("numpy._core.numeric", np.core.numeric)
+        return np.load(traj_path, allow_pickle=True)
 
 
 def _quat_to_matrix_wxyz(quat_wxyz: np.ndarray) -> np.ndarray:
@@ -219,6 +264,78 @@ def _create_replay_mesh(
         gprim.CreateDisplayOpacityAttr([1.0])
         mesh_prim.GetPrim().CreateAttribute("doubleSided", Sdf.ValueTypeNames.Bool).Set(True)
     return ReplayPrim(body_key=body_key, translate_op=translate_op, orient_op=orient_op)
+
+
+def _create_replay_reference(
+    stage,
+    *,
+    body_key: str,
+    asset_path: Path,
+    prim_path: str | None = None,
+) -> ReplayPrim:
+    from pxr import UsdGeom
+
+    xform_path = f"/World/replay/{_safe_name(body_key)}"
+    xform = UsdGeom.Xform.Define(stage, xform_path)
+    translate_op = xform.AddTranslateOp(precision=UsdGeom.XformOp.PrecisionDouble)
+    orient_op = xform.AddOrientOp(precision=UsdGeom.XformOp.PrecisionDouble)
+    reference_prim = UsdGeom.Xform.Define(stage, f"{xform_path}/asset").GetPrim()
+    if prim_path:
+        reference_prim.GetReferences().AddReference(str(asset_path), prim_path)
+    else:
+        reference_prim.GetReferences().AddReference(str(asset_path))
+    return ReplayPrim(body_key=body_key, translate_op=translate_op, orient_op=orient_op)
+
+
+def _create_replay_placeholder(
+    stage,
+    *,
+    body_key: str,
+    scale: tuple[float, float, float] = (0.05, 0.05, 0.05),
+    color: tuple[float, float, float] = (0.85, 0.22, 0.18),
+) -> ReplayPrim:
+    from pxr import Gf, UsdGeom
+
+    xform_path = f"/World/replay/{_safe_name(body_key)}"
+    xform = UsdGeom.Xform.Define(stage, xform_path)
+    translate_op = xform.AddTranslateOp(precision=UsdGeom.XformOp.PrecisionDouble)
+    orient_op = xform.AddOrientOp(precision=UsdGeom.XformOp.PrecisionDouble)
+    cube = UsdGeom.Cube.Define(stage, f"{xform_path}/missing_asset")
+    cube.CreateSizeAttr(1.0)
+    UsdGeom.Xformable(cube.GetPrim()).AddScaleOp().Set(Gf.Vec3d(*scale))
+    UsdGeom.Gprim(cube.GetPrim()).CreateDisplayColorAttr([Gf.Vec3f(*color)])
+    return ReplayPrim(body_key=body_key, translate_op=translate_op, orient_op=orient_op)
+
+
+def _create_replay_asset(
+    stage,
+    *,
+    body_key: str,
+    asset_path: Path,
+    color: tuple[float, float, float] | None,
+    usd_prim_path: str | None = None,
+    local_pos_cm: tuple[float, float, float] | None = None,
+    local_quat_wxyz: tuple[float, float, float, float] | None = None,
+) -> ReplayPrim:
+    suffix = asset_path.suffix.lower()
+    if asset_path.exists() and suffix in {".usd", ".usda", ".usdc"}:
+        return _create_replay_reference(
+            stage,
+            body_key=body_key,
+            asset_path=asset_path,
+            prim_path=usd_prim_path,
+        )
+    if asset_path.exists():
+        return _create_replay_mesh(
+            stage,
+            body_key=body_key,
+            mesh_path=asset_path,
+            color=color,
+            local_pos_cm=local_pos_cm,
+            local_quat_wxyz=local_quat_wxyz,
+        )
+    print(f"[render_fabrica_traj_replay] warning: missing replay asset for {body_key}: {asset_path}")
+    return _create_replay_placeholder(stage, body_key=body_key)
 
 
 def _set_replay_prim(prim: ReplayPrim, matrix_cm: np.ndarray, *, world_offset_m: np.ndarray) -> None:
@@ -353,51 +470,77 @@ def _add_factory_scene(stage, *, scene_profile: str | None, include_profile_obje
 def _add_all_replay_prims(stage, *, assembly_dir: Path, asset_dir: Path, log_dir: Path) -> list[ReplayPrim]:
     replay_prims: list[ReplayPrim] = []
 
+    robot_asset_dir = UR5E_BUNDLE_ASSET_DIR
+    ur5e_usd_path = robot_asset_dir / "isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd"
+    optical_board_path = asset_dir / "optical_board.obj"
+    if not optical_board_path.exists():
+        optical_board_path = asset_dir / "fabrica_support/optical_board.obj"
+
     replay_prims.append(
-        _create_replay_mesh(
+        _create_replay_asset(
             stage,
             body_key="optical_board",
-            mesh_path=asset_dir / "optical_board.obj",
+            asset_path=optical_board_path,
             color=(0.02, 0.02, 0.02),
         )
     )
     replay_prims.append(
-        _create_replay_mesh(
+        _create_replay_asset(
             stage,
             body_key="fixture",
-            mesh_path=log_dir / "fixture/fixture.obj",
+            asset_path=log_dir / "fixture/fixture.obj",
             color=(0.86, 0.84, 0.76),
         )
     )
 
-    for part_path in sorted(assembly_dir.glob("*.obj"), key=lambda path: int(path.stem)):
-        part_id = int(part_path.stem)
+    obj_parts = sorted(assembly_dir.glob("*.obj"), key=lambda path: int(path.stem))
+    usd_parts = sorted(
+        assembly_dir.glob("*.usd"),
+        key=lambda path: int(path.stem.rsplit("_", maxsplit=1)[-1]),
+    )
+    part_paths = obj_parts or usd_parts
+    if not part_paths:
+        print(f"[render_fabrica_traj_replay] warning: no OBJ/USD assembly parts found in {assembly_dir}")
+
+    for part_path in part_paths:
+        part_id = int(part_path.stem.rsplit("_", maxsplit=1)[-1])
         replay_prims.append(
-            _create_replay_mesh(
+            _create_replay_asset(
                 stage,
                 body_key=f"part{part_id}",
-                mesh_path=part_path,
+                asset_path=part_path,
                 color=PART_COLORS[part_id % len(PART_COLORS)],
             )
         )
 
     for motion_type in ("move", "hold"):
         for link_name, relative_path in UR5E_LINK_MESHES.items():
+            mesh_path = asset_dir / relative_path
+            usd_prim_path = None
+            asset_path = mesh_path
+            if not mesh_path.exists():
+                asset_path = ur5e_usd_path
+                usd_prim_path = UR5E_LINK_USD_PRIMS[link_name]
             replay_prims.append(
-                _create_replay_mesh(
+                _create_replay_asset(
                     stage,
                     body_key=f"{link_name}_{motion_type}",
-                    mesh_path=asset_dir / relative_path,
+                    asset_path=asset_path,
                     color=None,
+                    usd_prim_path=usd_prim_path,
                 )
             )
         for link_name, relative_path in ROBOTIQ_85_LINK_MESHES.items():
             is_knuckle = "knuckle" in link_name
+            mesh_path = asset_dir / relative_path
+            asset_path = mesh_path
+            if not mesh_path.exists():
+                asset_path = robot_asset_dir / ROBOTIQ_85_PART_USD[link_name]
             replay_prims.append(
-                _create_replay_mesh(
+                _create_replay_asset(
                     stage,
                     body_key=f"{link_name}_{motion_type}",
-                    mesh_path=asset_dir / relative_path,
+                    asset_path=asset_path,
                     color=(0.42, 0.42, 0.42) if is_knuckle else (0.05, 0.05, 0.05),
                 )
             )
@@ -486,7 +629,7 @@ def render_fabrica_traj_replay(
         frames_dir.mkdir(parents=True, exist_ok=True)
 
         traj_path = log_dir / "traj.npy"
-        traj = np.load(traj_path, allow_pickle=True)
+        traj = _load_fabrica_traj(traj_path)
         render_indices = list(range(0, len(traj), max(stride, 1)))
         if render_indices[-1] != len(traj) - 1:
             render_indices.append(len(traj) - 1)

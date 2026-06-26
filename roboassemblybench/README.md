@@ -37,7 +37,7 @@ source Isaac Sim 的 `setup_conda_env.sh`，这样 `isaacsim`、`omni.*`、`pxr`
 - 一台带 NVIDIA GPU 和可用驱动的 Linux 机器；无显示器机器也可以跑 headless 渲染。
 - 已安装 conda，并且当前 shell 可以使用 `conda`。
 - 已安装 Isaac Sim，目录下需要有 `isaac-sim.sh`、`python.sh`、`setup_conda_env.sh`。
-  当前机器可用路径示例为 `/home/baiyu24/APP/isaac-smi`；换机器时改成自己的 Isaac Sim 路径。
+  换机器时使用自己的 Isaac Sim 路径；激活 `internutopia311` 后应能看到 `ISAAC_PATH` 指向该目录。
 - 已拉取本仓库以及 RoboAssemblyBench/Fabrica 相关资产。
 
 推荐安装方式是直接运行仓库根目录下的安装脚本：
@@ -108,8 +108,11 @@ echo "$ISAAC_PATH"
 echo "$PYTHONPATH"
 ```
 
-`env_vars.sh` 里应该 source 当前 Isaac Sim 目录下的 `setup_conda_env.sh`。如果路径不对，重新运行
-`bash setup_conda.sh`，或手动修正该文件后重新打开 shell/重新激活环境。
+`env_vars.sh` 里应该 source 当前 Isaac Sim 目录下的 `setup_conda_env.sh`，并设置正确的 `ISAAC_PATH`。
+UR5e motion policy 配置会优先读取 `ISAAC_SIM_ROOT`，其次读取 `ISAAC_PATH`。如果路径不对，重新运行
+`bash setup_conda.sh`，或手动修正该文件后重新打开 shell/重新激活环境。若报错里仍出现旧机器路径
+（例如 `/home/baiyu24/APP/isaac-smi/.../ur5e_robot_description.yaml`），说明当前 shell 没有正确激活
+Isaac Sim 环境变量。
 
 ## 渲染 Fabrica 官方 plumbers_block UR5e 轨迹
 
@@ -126,10 +129,10 @@ test -f roboassemblybench/scenes/profiles/taoyuan_grscenes_tabletop.yaml
 test -f roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
 test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/traj.npy
 test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/fixture/fixture.obj
-test -d third_part/Fabrica/assets/fabrica/plumbers_block
-test -f third_part/Fabrica/assets/optical_board.obj
-test -d third_part/Fabrica/assets/ur5e/visual
-test -d third_part/Fabrica/assets/robotiq_85/visual
+test -d roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts
+test -f roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_support/optical_board.obj
+test -f roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/isaac_official/Isaac/Robots/UniversalRobots/ur5e/ur5e.usd
+test -d roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/isaac_official/Isaac/Robots/Robotiq/2F-85/parts
 ```
 
 默认完整渲染命令：
@@ -138,6 +141,25 @@ test -d third_part/Fabrica/assets/robotiq_85/visual
 cd /home/baiyu24/model/InternUtopia
 bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
 ```
+
+脚本默认使用 headless 模式，适合服务器或没有本地显示器的机器。如果要在本机直接打开 Isaac Sim GUI，
+显式关闭 headless：
+
+```bash
+HEADLESS=0 \
+  bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
+```
+
+如果要远程可视化，启用 Isaac Sim WebRTC livestream。先在运行 Isaac Sim 的机器上启动：
+
+```bash
+HEADLESS=1 WEBRTC=1 \
+  bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
+```
+
+然后在另一台机器上打开 Isaac Sim WebRTC Streaming Client，连接运行脚本机器的 IP。局域网一般直接使用
+内网 IP；公网或跨网段部署时，按 Isaac Sim 文档配置 public endpoint，并确保运行 Isaac Sim 的机器开放
+`TCP 49100` 和 `UDP 47998`。同一个 Isaac Sim 实例同一时间只能连接一个 streaming client。
 
 第一次建议先跑一个小样本，确认 Isaac Sim、路径和 mp4 编码都正常：
 
@@ -162,9 +184,11 @@ MAX_FRAMES=10 WIDTH=640 HEIGHT=360 STRIDE=24 \
 | `WARMUP_STEPS` | `8` | 正式截帧前先刷新多少次渲染管线 |
 | `WORLD_OFFSET` | `0.47,0,1.012` | 把 Fabrica cm 坐标轨迹映射到 task env 世界坐标时添加的米制偏移 |
 | `KEEP_TASK_REPLAY_OVERLAPS` | `0` | 默认隐藏 task env 中会和回放重叠的机器人/物体；设为 `1` 保留 |
+| `HEADLESS` | `1` | `1` 后台运行 Isaac Sim；`0` 使用本地 GUI，需要可用 display |
+| `WEBRTC` | `0` | `1` 启用 Isaac Sim WebRTC 远程可视化；通常与 `HEADLESS=1` 一起使用 |
 | `LOG_DIR` | `roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block` | Fabrica 官方轨迹目录，必须包含 `traj.npy` 和 `fixture/fixture.obj` |
-| `ASSEMBLY_DIR` | `third_part/Fabrica/assets/fabrica/plumbers_block` | plumbers_block 零件 OBJ 目录 |
-| `ASSET_DIR` | `third_part/Fabrica/assets` | UR5e、Robotiq、optical board 等共享 mesh 根目录 |
+| `ASSEMBLY_DIR` | `roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts` | plumbers_block 零件目录；支持当前 bundle 的 USD，也兼容旧 Fabrica OBJ 目录 |
+| `ASSET_DIR` | `roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets` | plumbers_block/optical board 资源根目录；缺旧式 UR5e/Robotiq OBJ 时会使用仓库内 UR5e bundle 的 USD 资源 |
 | `OUTPUT` | `outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4` | 输出视频路径 |
 | `FRAMES_DIR` | `outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay_frames` | 输出 PNG 帧目录 |
 
@@ -181,10 +205,11 @@ FRAMES_DIR=outputs/fabrica_official_isaacsim/plumbers_block_ur5e_front_720p_fram
 运行时脚本会执行：
 
 1. 用 `build_dual_franka_assembly_episode(...)` 构建 `fabrica_plumbers_block_ur5e` task env。
-2. 启动 InternUtopia/Isaac Sim headless 环境，并加载 `taoyuan_grscenes_tabletop` 场景。
+2. 按 `HEADLESS`/`WEBRTC` 配置启动 InternUtopia/Isaac Sim，并加载 `taoyuan_grscenes_tabletop` 场景。
 3. 默认隐藏 task env 中和回放 mesh 重叠的机器人、Fabrica 零件、fixture 和 preview prim。
-4. 从 `traj.npy` 读取 Fabrica 官方 body matrix 轨迹，从 `ASSEMBLY_DIR`/`ASSET_DIR` 加载零件、UR5e、
-   Robotiq 和 optical board mesh。
+4. 从 `traj.npy` 读取 Fabrica 官方 body matrix 轨迹，从 `ASSEMBLY_DIR`/`ASSET_DIR` 加载零件和
+   optical board，并从仓库内 UR5e bundle 加载 UR5e/Robotiq 资源；如果用户提供旧 Fabrica OBJ 目录，
+   仍会优先使用 OBJ mesh。
 5. 在 `/World/replay` 下创建回放 prim，按 `STRIDE` 采样源轨迹，并按 `WORLD_OFFSET` 放到任务场景中。
 6. 用 Replicator `LdrColor` annotator 写出 PNG 帧，再用 `imageio`/`libx264` 编成 mp4。
 
@@ -232,6 +257,10 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_r
   `test -f`/`test -d` 清单逐项补齐。
 - mp4 写出失败或提示 `libx264`/`ffmpeg`：在 conda 环境安装 `imageio-ffmpeg`，并确认系统 `ffmpeg` 可用。
 - 渲染启动很慢：Isaac Sim 第一次 headless 启动会加载扩展和 shader cache；先用 `MAX_FRAMES=10` 做 smoke test。
+- `GLFW initialization failed` 或 `failed to open the default display`：当前机器没有可用本地显示环境。使用
+  `HEADLESS=1` 后台渲染，或使用 `HEADLESS=1 WEBRTC=1` 通过 Isaac Sim WebRTC Streaming Client 远程查看。
+- WebRTC 客户端连不上：确认脚本输出里 `WebRTC: 1`，等待 Isaac Sim 完全启动后再连接；局域网连接使用运行脚本机器的
+  IP，跨公网连接需开放 `TCP 49100` 和 `UDP 47998`。
 
 ## Online RoboBrain
 

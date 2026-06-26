@@ -64,7 +64,7 @@ def _encode_mp4(frames_dir: Path, output_path: Path, fps: int) -> list[str]:
     return png_paths
 
 
-def _build_env(task_cfg, *, headless: bool) -> Env:
+def _build_env(task_cfg, *, headless: bool, webrtc: bool = False) -> Env:
     config = Config(
         simulator=SimConfig(
             physics_dt=1 / 240,
@@ -72,7 +72,7 @@ def _build_env(task_cfg, *, headless: bool) -> Env:
             use_fabric=False,
             headless=headless,
             native=False,
-            webrtc=False,
+            webrtc=webrtc,
         ),
         env_num=1,
         metrics_save_path="none",

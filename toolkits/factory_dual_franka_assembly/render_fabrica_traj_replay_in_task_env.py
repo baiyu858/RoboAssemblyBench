@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
+import traceback
 from pathlib import Path
 
 import imageio.v2 as imageio
@@ -22,6 +24,7 @@ from toolkits.factory_dual_franka_assembly.render_fabrica_traj_replay_isaac impo
     UNIT_SCALE,
     _add_all_replay_prims,
     _camera_pose,
+    _load_fabrica_traj,
     _parse_vector3,
     _set_replay_prim,
 )
@@ -125,6 +128,7 @@ def render_fabrica_traj_replay_in_task_env(
     warmup_steps: int,
     hide_task_replay_overlaps: bool,
     headless: bool,
+    webrtc: bool = False,
 ) -> dict:
     task_cfg = build_dual_franka_assembly_episode(
         recipe=recipe,
@@ -137,11 +141,13 @@ def render_fabrica_traj_replay_in_task_env(
         shutil.rmtree(frames_dir)
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    env = _build_env(task_cfg, headless=headless)
+    env = _build_env(task_cfg, headless=headless, webrtc=webrtc)
     env.runner.render_interval = 0
 
     try:
+        print("[render_fabrica_task_env] resetting task environment...", flush=True)
         env.reset()
+        print("[render_fabrica_task_env] task environment reset complete.", flush=True)
 
         import omni.replicator.core as rep
         import omni.usd
@@ -162,7 +168,7 @@ def render_fabrica_traj_replay_in_task_env(
         rep.orchestrator.set_capture_on_play(False)
 
         traj_path = log_dir / "traj.npy"
-        traj = np.load(traj_path, allow_pickle=True)
+        traj = _load_fabrica_traj(traj_path)
         render_indices = list(range(0, len(traj), max(stride, 1)))
         if render_indices[-1] != len(traj) - 1:
             render_indices.append(len(traj) - 1)
@@ -214,6 +220,8 @@ def render_fabrica_traj_replay_in_task_env(
             "camera_option": camera_option,
             "camera_position": camera_position,
             "camera_look_at": look_at,
+            "headless": bool(headless),
+            "webrtc": bool(webrtc),
             "scene_asset_path": getattr(task_cfg, "scene_asset_path", ""),
             "scene_asset_fallback_path": getattr(task_cfg, "scene_asset_fallback_path", ""),
             "workspace_offset": getattr(task_cfg, "workspace_offset", []),
@@ -228,6 +236,9 @@ def render_fabrica_traj_replay_in_task_env(
         }
         output_path.with_suffix(".json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         return summary
+    except BaseException as exc:
+        print(f"[render_fabrica_task_env] aborting during render setup: {type(exc).__name__}: {exc}", flush=True)
+        raise
     finally:
         try:
             env.close()
@@ -262,31 +273,37 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-task-replay-overlaps", action="store_true")
     parser.add_argument("--headless", action="store_true", default=True)
     parser.add_argument("--no-headless", action="store_false", dest="headless")
+    parser.add_argument("--webrtc", action="store_true", help="Enable Isaac Sim WebRTC remote visualization.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    summary = render_fabrica_traj_replay_in_task_env(
-        recipe=args.recipe,
-        scene_profile=args.scene_profile,
-        seed=args.seed,
-        log_dir=args.log_dir,
-        assembly_dir=args.assembly_dir,
-        asset_dir=args.asset_dir,
-        output_path=args.output,
-        frames_dir=args.frames_dir,
-        width=args.width,
-        height=args.height,
-        fps=args.fps,
-        stride=args.stride,
-        max_frames=args.max_frames,
-        camera_option=args.camera_option,
-        world_offset=args.world_offset,
-        warmup_steps=args.warmup_steps,
-        hide_task_replay_overlaps=not bool(args.keep_task_replay_overlaps),
-        headless=bool(args.headless),
-    )
+    try:
+        summary = render_fabrica_traj_replay_in_task_env(
+            recipe=args.recipe,
+            scene_profile=args.scene_profile,
+            seed=args.seed,
+            log_dir=args.log_dir,
+            assembly_dir=args.assembly_dir,
+            asset_dir=args.asset_dir,
+            output_path=args.output,
+            frames_dir=args.frames_dir,
+            width=args.width,
+            height=args.height,
+            fps=args.fps,
+            stride=args.stride,
+            max_frames=args.max_frames,
+            camera_option=args.camera_option,
+            world_offset=args.world_offset,
+            warmup_steps=args.warmup_steps,
+            hide_task_replay_overlaps=not bool(args.keep_task_replay_overlaps),
+            headless=bool(args.headless),
+            webrtc=bool(args.webrtc),
+        )
+    except Exception:
+        traceback.print_exc()
+        sys.exit(1)
     print(json.dumps(summary, indent=2))
 
 
