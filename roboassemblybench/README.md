@@ -111,6 +111,43 @@ echo "$PYTHONPATH"
 `env_vars.sh` 里应该 source 当前 Isaac Sim 目录下的 `setup_conda_env.sh`。如果路径不对，重新运行
 `bash setup_conda.sh`，或手动修正该文件后重新打开 shell/重新激活环境。
 
+## 下载 Hugging Face 大资产
+
+GitHub 分支只保存可直接随仓库分发的代码、小型配置和必要 replay 资产。完整本机复现还可能需要
+`third_part/Fabrica`、`third_part/factory_dual_franka_peg_transfer`、`IsaacLab` 或 `recordings` 等大目录；
+这些目录不适合直接放进普通 GitHub 仓库，超过 GitHub 单文件/仓库体量限制时放在 Hugging Face：
+
+```bash
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets
+```
+
+默认会把 HF dataset repo 中的这些路径下载回仓库根目录：
+
+```text
+third_part/Fabrica/
+third_part/factory_dual_franka_peg_transfer/
+IsaacLab/
+recordings/
+```
+
+如果只需要 Fabrica 第三方目录，可以限制 include：
+
+```bash
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets \
+  --include 'third_part/Fabrica/**'
+```
+
+维护者上传本机大资产时使用：
+
+```bash
+python roboassemblybench/scripts/upload_repro_assets_to_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets
+```
+
+上传需要先提供 Hugging Face token，例如设置 `HF_TOKEN` 或运行 `huggingface-cli login`。
+
 ## 渲染 Fabrica 官方 plumbers_block UR5e 轨迹
 
 `roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh`
@@ -126,10 +163,10 @@ test -f roboassemblybench/scenes/profiles/taoyuan_grscenes_tabletop.yaml
 test -f roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda
 test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/traj.npy
 test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/fixture/fixture.obj
-test -d third_part/Fabrica/assets/fabrica/plumbers_block
-test -f third_part/Fabrica/assets/optical_board.obj
-test -d third_part/Fabrica/assets/ur5e/visual
-test -d third_part/Fabrica/assets/robotiq_85/visual
+test -d roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block
+test -f roboassemblybench/assets/Fabrica/official_replay_assets/optical_board.obj
+test -d roboassemblybench/assets/Fabrica/official_replay_assets/ur5e/visual
+test -d roboassemblybench/assets/Fabrica/official_replay_assets/robotiq_85/visual
 ```
 
 默认完整渲染命令：
@@ -163,8 +200,8 @@ MAX_FRAMES=10 WIDTH=640 HEIGHT=360 STRIDE=24 \
 | `WORLD_OFFSET` | `0.47,0,1.012` | 把 Fabrica cm 坐标轨迹映射到 task env 世界坐标时添加的米制偏移 |
 | `KEEP_TASK_REPLAY_OVERLAPS` | `0` | 默认隐藏 task env 中会和回放重叠的机器人/物体；设为 `1` 保留 |
 | `LOG_DIR` | `roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block` | Fabrica 官方轨迹目录，必须包含 `traj.npy` 和 `fixture/fixture.obj` |
-| `ASSEMBLY_DIR` | `third_part/Fabrica/assets/fabrica/plumbers_block` | plumbers_block 零件 OBJ 目录 |
-| `ASSET_DIR` | `third_part/Fabrica/assets` | UR5e、Robotiq、optical board 等共享 mesh 根目录 |
+| `ASSEMBLY_DIR` | `roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block` | plumbers_block 零件 OBJ 目录 |
+| `ASSET_DIR` | `roboassemblybench/assets/Fabrica/official_replay_assets` | UR5e、Robotiq、optical board 等共享 mesh 根目录 |
 | `OUTPUT` | `outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4` | 输出视频路径 |
 | `FRAMES_DIR` | `outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay_frames` | 输出 PNG 帧目录 |
 
@@ -288,14 +325,14 @@ bash roboassemblybench/scripts/run_robobrain_agent_app.sh
 ```
 
 Then open `http://127.0.0.1:7861`. By default the UI uses
-`fabrica_plumbers_block_ur5e_right_base_prepare` as the executable template. If `OPENAI_API_KEY` is
+`UR5e assembly Template` as the executable reference. If `OPENAI_API_KEY` is
 not set, new jobs default to `Mock LLM` for a fast plan-only smoke run. To call the real planner,
 set `OPENAI_API_KEY`, uncheck `Mock LLM`, and enable `运行仿真` only when Isaac Sim is available.
 Enable `导出 LeRobot` together with demo generation to write a LeRobot-style dataset under the run
 directory. UI jobs default to `roboassemblybench/outputs/robobrain_agent_app/`.
 
-For a no-LLM walkthrough, click `Run Manual Example`. That path uses
-`tasks/fabrica_plumbers_block_ur5e_right_base_prepare` directly and writes a hand-authored,
+For a no-LLM walkthrough, click `Run Manual Example`. That path uses the local UR5e assembly
+reference task directly and writes a hand-authored,
 auditable trace:
 
 - `manual_reasoning_trace.json`: task intake, template resolution, asset selection, task
