@@ -11,6 +11,8 @@ FPS="${FPS:-30}"
 STRIDE="${STRIDE:-6}"
 CAMERA_OPTION="${CAMERA_OPTION:-close}"
 MAX_FRAMES="${MAX_FRAMES:-}"
+HEADLESS="${HEADLESS:-1}"
+WEBRTC="${WEBRTC:-0}"
 
 FACTORY_SCENE="${FACTORY_SCENE:-taoyuan_grscenes_tabletop}"
 INCLUDE_PROFILE_OBJECTS="${INCLUDE_PROFILE_OBJECTS:-1}"
@@ -27,6 +29,8 @@ echo "Input log: $LOG_DIR"
 echo "Factory scene: $FACTORY_SCENE"
 echo "Replay world offset: $WORLD_OFFSET"
 echo "Output: $OUTPUT"
+echo "Headless: $HEADLESS"
+echo "WebRTC: $WEBRTC"
 
 args=(
   python toolkits/factory_dual_franka_assembly/render_fabrica_traj_replay_isaac.py
@@ -42,8 +46,17 @@ args=(
   --camera-option "$CAMERA_OPTION"
   --factory-scene "$FACTORY_SCENE"
   --world-offset "$WORLD_OFFSET"
-  --headless
 )
+
+if [[ "$HEADLESS" == "1" || "$HEADLESS" == "true" ]]; then
+  args+=(--headless)
+else
+  args+=(--no-headless)
+fi
+
+if [[ "$WEBRTC" == "1" || "$WEBRTC" == "true" ]]; then
+  args+=(--webrtc)
+fi
 
 if [[ "$INCLUDE_PROFILE_OBJECTS" == "1" || "$INCLUDE_PROFILE_OBJECTS" == "true" ]]; then
   args+=(--include-profile-objects)

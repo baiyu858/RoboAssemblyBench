@@ -18,12 +18,14 @@ WARMUP_STEPS="${WARMUP_STEPS:-8}"
 CAMERA_OPTION="${CAMERA_OPTION:-official_like}"
 OBJECT_PREFIX="${OBJECT_PREFIX:-fabrica_plumbers_block}"
 INCLUDE_ROBOTS_IN_CAMERA="${INCLUDE_ROBOTS_IN_CAMERA:-1}"
+WEBRTC="${WEBRTC:-0}"
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
 cd "${REPO_ROOT}"
 echo "Rendering Isaac Sim scene preview for ${RECIPE}."
 echo "Output: ${OUTPUT_PATH}"
+echo "WebRTC: ${WEBRTC}"
 echo "Note: this is not a UR5e retargeted assembly-motion replay."
 
 conda run -n "${CONDA_ENV}" env \
@@ -42,5 +44,6 @@ conda run -n "${CONDA_ENV}" env \
     --camera-option "${CAMERA_OPTION}" \
     --object-prefix "${OBJECT_PREFIX}" \
     --headless \
+    $(if [[ "${WEBRTC}" == "1" || "${WEBRTC}" == "true" ]]; then printf '%s' "--webrtc"; fi) \
     $(if [[ "${INCLUDE_ROBOTS_IN_CAMERA}" == "1" ]]; then printf '%s' "--include-robots-in-camera"; fi) \
     "$@"

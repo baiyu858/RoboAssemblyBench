@@ -13,7 +13,7 @@ from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_P
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes
 
 
-def _build_env(task_configs, *, headless: bool) -> Env:
+def _build_env(task_configs, *, headless: bool, webrtc: bool = False) -> Env:
     config = Config(
         simulator=SimConfig(
             physics_dt=1 / 240,
@@ -21,7 +21,7 @@ def _build_env(task_configs, *, headless: bool) -> Env:
             use_fabric=False,
             headless=headless,
             native=False,
-            webrtc=False,
+            webrtc=webrtc,
         ),
         env_num=1,
         metrics_save_path='none',
@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--scene-profile', default=DEFAULT_SCENE_PROFILE, choices=list_scene_profiles())
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--webrtc', action='store_true', help='Enable Isaac Sim WebRTC remote visualization.')
     parser.add_argument(
         '--warmup-render-steps',
         type=int,
@@ -61,7 +62,7 @@ def main():
     args = parser.parse_args()
 
     if not args.headless and not has_display():
-        raise RuntimeError('No display detected. Use a desktop session or pass --headless.')
+        raise RuntimeError('No display detected. Use a desktop session or pass --headless; add --webrtc for remote viewing.')
 
     env = _build_env(
         task_configs=build_dual_franka_assembly_batch(
@@ -71,6 +72,7 @@ def main():
             attach_runtime_cameras=bool(args.attach_runtime_cameras),
         ),
         headless=bool(args.headless),
+        webrtc=bool(args.webrtc),
     )
 
     try:

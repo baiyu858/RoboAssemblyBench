@@ -18,6 +18,7 @@ MAPPING_MODE="${MAPPING_MODE:-scene_spec_raw_center}"
 CAMERA_OPTION="${CAMERA_OPTION:-official_like}"
 ROBOT_LAYOUT="${ROBOT_LAYOUT:-fabrica_workcell}"
 PART_REPLAY_MODE="${PART_REPLAY_MODE:-isaac_gripper_attach}"
+WEBRTC="${WEBRTC:-0}"
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
@@ -25,6 +26,7 @@ cd "${REPO_ROOT}"
 echo "Rendering Fabrica official cooling_manifold motion replay in Isaac Sim."
 echo "Input log: ${LOG_DIR}"
 echo "Output: ${OUTPUT_PATH}"
+echo "WebRTC: ${WEBRTC}"
 
 conda run -n "${CONDA_ENV}" env \
   PYTHONNOUSERSITE=1 \
@@ -43,4 +45,5 @@ conda run -n "${CONDA_ENV}" env \
     --robot-layout "${ROBOT_LAYOUT}" \
     --part-replay-mode "${PART_REPLAY_MODE}" \
     --headless \
+    $(if [[ "${WEBRTC}" == "1" || "${WEBRTC}" == "true" ]]; then printf '%s' "--webrtc"; fi) \
     "$@"

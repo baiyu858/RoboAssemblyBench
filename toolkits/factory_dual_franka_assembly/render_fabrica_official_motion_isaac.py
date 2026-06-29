@@ -4,6 +4,7 @@ import argparse
 import json
 import pickle
 import shutil
+import subprocess
 from pathlib import Path
 
 import imageio.v2 as imageio
@@ -55,6 +56,29 @@ def _encode_mp4(frames_dir: Path, output_path: Path, fps: int) -> list[str]:
         raise RuntimeError(f"No PNG frames were written to {frames_dir}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    expected_paths = [frames_dir / f"rgb_{index:05d}.png" for index in range(len(png_paths))]
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path and [Path(path) for path in png_paths] == expected_paths:
+        subprocess.run(
+            [
+                ffmpeg_path,
+                "-y",
+                "-framerate",
+                str(fps),
+                "-i",
+                str(frames_dir / "rgb_%05d.png"),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                str(output_path),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return png_paths
+
     writer = imageio.get_writer(output_path, fps=fps, codec="libx264", quality=8)
     try:
         for png_path in png_paths:
@@ -843,6 +867,7 @@ def render_official_motion(
     camera_option: str,
     robot_layout: str,
     part_replay_mode: str,
+    webrtc: bool = False,
 ):
     motion = _load_pickle(log_dir / "motion.pkl")
     traj = np.load(log_dir / "traj.npy", allow_pickle=True)
@@ -914,7 +939,7 @@ def render_official_motion(
         shutil.rmtree(frames_dir)
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    env = _build_env(task_cfg, headless=headless)
+    env = _build_env(task_cfg, headless=headless, webrtc=webrtc)
     env.runner.render_interval = 0
     summary = None
     captured_indices: list[int] = []
@@ -1017,6 +1042,8 @@ def render_official_motion(
             "camera_option": camera_option,
             "camera_position": camera_position,
             "camera_look_at": look_at,
+            "headless": bool(headless),
+            "webrtc": bool(webrtc),
             "mapping": mapping_diagnostics,
             "robot_layout": robot_layout,
             "robot_layout_diagnostics": robot_layout_diagnostics,
@@ -1057,6 +1084,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--frames-dir", type=Path, required=True)
     parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--webrtc", action="store_true", help="Enable Isaac Sim WebRTC remote visualization.")
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=540)
     parser.add_argument("--fps", type=int, default=30)
@@ -1104,6 +1132,7 @@ def main():
         camera_option=args.camera_option,
         robot_layout=args.robot_layout,
         part_replay_mode=args.part_replay_mode,
+        webrtc=bool(args.webrtc),
     )
     print(json.dumps(summary, indent=2))
 

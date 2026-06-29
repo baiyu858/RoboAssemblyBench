@@ -192,8 +192,11 @@ def render_fabrica_traj_replay_in_task_env(
             imageio.imwrite(frames_dir / f"rgb_{output_index:05d}.png", _to_uint8_rgba(annotator.get_data()))
             captured_indices.append(source_index)
 
+        print("[render_fabrica_task_env] waiting for replicator completion...", flush=True)
         rep.orchestrator.wait_until_complete()
+        print("[render_fabrica_task_env] encoding mp4...", flush=True)
         png_paths = _encode_mp4(frames_dir=frames_dir, output_path=output_path, fps=fps)
+        print("[render_fabrica_task_env] mp4 encoding complete.", flush=True)
 
         summary = {
             "mode": "official_fabrica_traj_replay_inside_roboassemblybench_task_env",
@@ -240,8 +243,10 @@ def render_fabrica_traj_replay_in_task_env(
         print(f"[render_fabrica_task_env] aborting during render setup: {type(exc).__name__}: {exc}", flush=True)
         raise
     finally:
+        print("[render_fabrica_task_env] closing task environment...", flush=True)
         try:
             env.close()
+            print("[render_fabrica_task_env] task environment closed.", flush=True)
         except Exception:
             pass
 

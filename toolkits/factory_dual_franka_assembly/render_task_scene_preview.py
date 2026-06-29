@@ -72,6 +72,7 @@ def render_task_scene_preview(
     warmup_steps: int,
     include_robots_in_camera: bool,
     headless: bool,
+    webrtc: bool = False,
 ) -> dict:
     task_cfg = build_dual_franka_assembly_episode(
         recipe=recipe,
@@ -84,7 +85,7 @@ def render_task_scene_preview(
         shutil.rmtree(frames_dir)
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    env = _build_env(task_cfg, headless=headless)
+    env = _build_env(task_cfg, headless=headless, webrtc=webrtc)
     env.runner.render_interval = 0
 
     try:
@@ -137,6 +138,8 @@ def render_task_scene_preview(
             "camera_look_at": look_at,
             "include_robots_in_camera": include_robots_in_camera,
             "object_prefix": object_prefix,
+            "headless": bool(headless),
+            "webrtc": bool(webrtc),
             "limitations": [
                 "This is a scene preview MP4 for the requested Isaac Sim task.",
                 "It does not replay Fabrica Franka joints on UR5e and does not perform UR5e retargeted assembly motion.",
@@ -175,6 +178,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-steps", type=int, default=8)
     parser.add_argument("--include-robots-in-camera", action="store_true")
     parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--webrtc", action="store_true", help="Enable Isaac Sim WebRTC remote visualization.")
     return parser.parse_args()
 
 
@@ -195,6 +199,7 @@ def main():
         warmup_steps=args.warmup_steps,
         include_robots_in_camera=bool(args.include_robots_in_camera),
         headless=bool(args.headless),
+        webrtc=bool(args.webrtc),
     )
     print(json.dumps(summary, indent=2))
 

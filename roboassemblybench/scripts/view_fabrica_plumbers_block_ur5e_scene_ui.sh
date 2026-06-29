@@ -10,6 +10,7 @@ SCENE_PROFILE="${SCENE_PROFILE:-taoyuan_grscenes_tabletop}"
 SEED="${SEED:-0}"
 WARMUP_RENDER_STEPS="${WARMUP_RENDER_STEPS:-8}"
 ATTACH_RUNTIME_CAMERAS="${ATTACH_RUNTIME_CAMERAS:-0}"
+WEBRTC="${WEBRTC:-0}"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
@@ -45,9 +46,14 @@ if [[ "${ATTACH_RUNTIME_CAMERAS}" == "1" ]]; then
   args+=(--attach-runtime-cameras)
 fi
 
+if [[ "${WEBRTC}" == "1" || "${WEBRTC}" == "true" ]]; then
+  args+=(--headless --webrtc)
+fi
+
 cd "${REPO_ROOT}"
 echo "Opening ${RECIPE} scene with profile ${SCENE_PROFILE} in Isaac Sim UI..."
 echo "Viewer mode only: no demo policy, no robot actions, no data collection."
+echo "WebRTC: ${WEBRTC}"
 echo "Robots: logical names franka_left/franka_right, actual type UR5eRobot at prims /ur5e_left and /ur5e_right."
 echo "Plumbers assets: roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001"
 echo "UR5e robot asset: roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001"

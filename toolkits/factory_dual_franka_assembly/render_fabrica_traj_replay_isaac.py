@@ -565,6 +565,13 @@ def _camera_pose(option: str, *, world_offset_m: np.ndarray) -> tuple[tuple[floa
     return tuple(position.tolist()), tuple(look_at.tolist())
 
 
+def _enable_webrtc_streaming(simulation_app) -> None:
+    from omni.isaac.core.utils.extensions import enable_extension
+
+    simulation_app.set_setting("/app/window/drawMouse", True)
+    enable_extension("omni.kit.livestream.webrtc")
+
+
 def render_fabrica_traj_replay(
     *,
     log_dir: Path,
@@ -582,6 +589,7 @@ def render_fabrica_traj_replay(
     include_profile_objects: bool,
     world_offset: str | tuple[float, float, float] | list[float],
     headless: bool,
+    webrtc: bool = False,
 ) -> dict:
     from isaacsim import SimulationApp
 
@@ -593,6 +601,8 @@ def render_fabrica_traj_replay(
             "renderer": "RaytracedLighting",
         }
     )
+    if webrtc:
+        _enable_webrtc_streaming(simulation_app)
 
     try:
         import omni.replicator.core as rep
@@ -680,6 +690,8 @@ def render_fabrica_traj_replay(
             "camera_look_at": look_at,
             "factory_scene": factory_scene_summary,
             "world_offset_m": world_offset_m.tolist(),
+            "headless": bool(headless),
+            "webrtc": bool(webrtc),
             "unit_scale_m_per_fabrica_unit": UNIT_SCALE,
             "limitations": [
                 "This replays Fabrica's official RedMax traj.npy body matrices inside Isaac Sim.",
@@ -711,6 +723,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--world-offset", default="0,0,0")
     parser.add_argument("--headless", action="store_true", default=True)
     parser.add_argument("--no-headless", action="store_false", dest="headless")
+    parser.add_argument("--webrtc", action="store_true", help="Enable Isaac Sim WebRTC remote visualization.")
     return parser.parse_args()
 
 
@@ -732,6 +745,7 @@ def main() -> None:
         include_profile_objects=args.include_profile_objects,
         world_offset=args.world_offset,
         headless=args.headless,
+        webrtc=bool(args.webrtc),
     )
     print(json.dumps(summary, indent=2))
 

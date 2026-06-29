@@ -161,6 +161,10 @@ HEADLESS=1 WEBRTC=1 \
 内网 IP；公网或跨网段部署时，按 Isaac Sim 文档配置 public endpoint，并确保运行 Isaac Sim 的机器开放
 `TCP 49100` 和 `UDP 47998`。同一个 Isaac Sim 实例同一时间只能连接一个 streaming client。
 
+同样的 `WEBRTC=1` 环境变量也适用于其它 Isaac Sim 渲染入口，例如官方 traj replay、factory-scene
+replay、scene preview 和主要 UR5e scene viewer。直接调用 Python 工具时使用 `--webrtc`；viewer 场景通常
+同时加 `--headless`，例如 `roboassemblybench/scripts/view_task_scene.py --headless --webrtc ...`。
+
 第一次建议先跑一个小样本，确认 Isaac Sim、路径和 mp4 编码都正常：
 
 ```bash

@@ -11,6 +11,8 @@ FPS="${FPS:-30}"
 STRIDE="${STRIDE:-6}"
 CAMERA_OPTION="${CAMERA_OPTION:-close}"
 MAX_FRAMES="${MAX_FRAMES:-}"
+HEADLESS="${HEADLESS:-1}"
+WEBRTC="${WEBRTC:-0}"
 
 LOG_DIR="${LOG_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block}"
 ASSEMBLY_DIR="${ASSEMBLY_DIR:-$REPO_ROOT/third_part/Fabrica/assets/fabrica/plumbers_block}"
@@ -21,6 +23,8 @@ FRAMES_DIR="${FRAMES_DIR:-$REPO_ROOT/outputs/fabrica_official_isaacsim/plumbers_
 echo "Rendering official Fabrica UR5e plumbers_block traj replay in Isaac Sim."
 echo "Input log: $LOG_DIR"
 echo "Output: $OUTPUT"
+echo "Headless: $HEADLESS"
+echo "WebRTC: $WEBRTC"
 
 args=(
   python toolkits/factory_dual_franka_assembly/render_fabrica_traj_replay_isaac.py
@@ -34,8 +38,17 @@ args=(
   --fps "$FPS"
   --stride "$STRIDE"
   --camera-option "$CAMERA_OPTION"
-  --headless
 )
+
+if [[ "$HEADLESS" == "1" || "$HEADLESS" == "true" ]]; then
+  args+=(--headless)
+else
+  args+=(--no-headless)
+fi
+
+if [[ "$WEBRTC" == "1" || "$WEBRTC" == "true" ]]; then
+  args+=(--webrtc)
+fi
 
 if [[ -n "$MAX_FRAMES" ]]; then
   args+=(--max-frames "$MAX_FRAMES")
