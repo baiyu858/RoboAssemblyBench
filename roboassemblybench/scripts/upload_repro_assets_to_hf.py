@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -35,13 +36,21 @@ IGNORE_PATTERNS = [
 ]
 
 
+def _matches_any_pattern(relpath: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatch(relpath, pattern) for pattern in patterns)
+
+
 def _dir_summary(path: Path) -> dict[str, int]:
     file_count = 0
     total_bytes = 0
     for item in path.rglob("*"):
-        if item.is_file():
-            file_count += 1
-            total_bytes += item.stat().st_size
+        if not item.is_file():
+            continue
+        relpath = item.relative_to(path).as_posix()
+        if _matches_any_pattern(relpath, IGNORE_PATTERNS):
+            continue
+        file_count += 1
+        total_bytes += item.stat().st_size
     return {"file_count": file_count, "total_bytes": total_bytes}
 
 
