@@ -130,6 +130,9 @@ python roboassemblybench/scripts/download_repro_assets_from_hf.py \
   --repo-id baiyu858/InternUtopia-repro-assets
 ```
 
+如果当前 `huggingface_hub` 版本对 `hf-mirror.com` 的 metadata 校验失败，下载脚本会自动退回到
+镜像站 resolve URL 的流式下载；用户侧仍然使用上面的命令即可。
+
 默认会把 HF dataset repo 中的这些路径下载回仓库根目录：
 
 ```text
