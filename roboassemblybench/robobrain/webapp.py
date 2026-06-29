@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -9,6 +11,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +41,9 @@ except ImportError as exc:  # pragma: no cover - exercised only in minimal envir
 
 
 DEFAULT_TEMPLATE = 'fabrica_plumbers_block_ur5e_right_base_prepare'
+PUBLIC_TEMPLATE_ID = 'ur5e_assembly_template'
+PUBLIC_TEMPLATE_NAME = 'UR5e assembly Template'
+PUBLIC_GENERATED_TASK_NAME = 'fabrica_plumbers_block_ur5e_assembly'
 DEFAULT_OUTPUT_DIR = BENCHMARK_ROOT / 'outputs' / 'robobrain_agent_app'
 DEFAULT_MANUAL_THINKING_DELAY = 3.0
 MANUAL_THINKING_FINISHED_PAUSE = 0.0
@@ -48,6 +54,14 @@ REPO_ROOT = BENCHMARK_ROOT.parent.resolve()
 SIMULATION_SCRIPT = REPO_ROOT / 'roboassemblybench' / 'scripts' / 'render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh'
 SIMULATION_OUTPUT = REPO_ROOT / 'outputs' / 'fabrica_official_isaacsim' / 'plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4'
 RECORDINGS_DIR = DEFAULT_OUTPUT_DIR / 'recordings'
+RECORDING_UPLOAD_SUFFIXES = {
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+}
+ASSET_MODEL_SUFFIXES = {'.usd', '.usda', '.usdc', '.urdf', '.obj', '.stl', '.fbx', '.glb'}
+ASSET_IMAGE_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp'}
+ASSET_LIBRARY_LIMITS = {'robots': 500, 'scenes': 2200, 'objects': 2200}
 _EXECUTOR = ThreadPoolExecutor(max_workers=max(int(os.environ.get('ROBOBRAIN_AGENT_WORKERS', '1')), 1))
 _JOBS: dict[str, 'AgentJob'] = {}
 _JOBS_LOCK = threading.Lock()
@@ -153,7 +167,7 @@ class AgentRunRequest:
         return cls(
             task=task,
             scene_profile=_normalize_scene_profile(payload.get('scene_profile', DEFAULT_SCENE_PROFILE)),
-            template=str(payload.get('template') or DEFAULT_TEMPLATE).strip() or None,
+            template=_template_internal_id(payload.get('template') or DEFAULT_TEMPLATE),
             output_dir=Path(payload.get('output_dir') or DEFAULT_OUTPUT_DIR).expanduser(),
             model=str(payload.get('model') or '').strip() or None,
             temperature=_as_float(payload.get('temperature'), 0.2),
@@ -218,7 +232,9 @@ class AgentRunRequest:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return _jsonable(self.__dict__)
+        payload = dict(self.__dict__)
+        payload['template'] = _template_public_id(self.template)
+        return _jsonable(payload)
 
 
 @dataclass
@@ -313,9 +329,28 @@ def _scene_profiles() -> list[str]:
     return profiles
 
 
-def _asset_catalog(limit: int = 250) -> list[dict[str, Any]]:
+def _template_display_name(name: str | None) -> str:
+    if name == DEFAULT_TEMPLATE:
+        return PUBLIC_TEMPLATE_NAME
+    return str(name or '')
+
+
+def _template_public_id(name: str | None) -> str:
+    if name == DEFAULT_TEMPLATE:
+        return PUBLIC_TEMPLATE_ID
+    return str(name or '')
+
+
+def _template_internal_id(name: str | None) -> str:
+    value = str(name or '').strip()
+    if value in {PUBLIC_TEMPLATE_ID, PUBLIC_TEMPLATE_NAME, PUBLIC_GENERATED_TASK_NAME}:
+        return DEFAULT_TEMPLATE
+    return value or DEFAULT_TEMPLATE
+
+
+def _asset_catalog(limit: int = 5000) -> list[dict[str, Any]]:
     assets_root = BENCHMARK_ROOT / 'assets'
-    suffixes = {'.usd', '.usda', '.usdc', '.zip', '.yaml', '.json', '.md'}
+    suffixes = ASSET_MODEL_SUFFIXES | ASSET_IMAGE_SUFFIXES | {'.zip', '.yaml', '.json', '.md'}
     rows = []
     if not assets_root.exists():
         return rows
@@ -333,190 +368,339 @@ def _asset_catalog(limit: int = 250) -> list[dict[str, Any]]:
     return rows
 
 
-def _existing_image(*candidates: str | Path | None) -> str | None:
+def _asset_title(path: Path) -> str:
+    stem = path.name
+    for suffix in ('.usd.png', '.usda.png', '.usdc.png', '.urdf.png', '.obj.png', '.stl.png', '.fbx.png', '.glb.png'):
+        if stem.lower().endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    else:
+        stem = path.stem
+    stem = re.sub(r'\.(thumb|auto)$', '', stem, flags=re.IGNORECASE)
+    return re.sub(r'[_\-.]+', ' ', stem).strip().title() or path.name
+
+
+def _asset_relative(path: Path) -> str:
+    try:
+        return str(path.relative_to(BENCHMARK_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _asset_parts_text(path: Path) -> str:
+    try:
+        rel = path.relative_to(BENCHMARK_ROOT / 'assets')
+    except ValueError:
+        rel = path
+    return '/'.join(rel.parts).lower()
+
+
+def _asset_kind_for_path(path: Path) -> str:
+    text = _asset_parts_text(path)
+    name = path.name.lower()
+    if any(token in text for token in ('/robots/', '/robot/', 'universalrobots', 'frankarobotics')):
+        return 'robots'
+    if any(token in name for token in ('ur5e', 'franka', 'panda', 'kuka', 'iiwa', 'robotiq', 'gripper')):
+        return 'robots'
+    if any(token in text for token in ('/environments/', '/scenes/', 'warehouse', 'factory', 'workcell', 'tabletop')):
+        return 'scenes'
+    if any(token in name for token in ('table', 'shelf', 'rack', 'forklift', 'vehicle', 'pallet', 'platform', 'crate', 'cart')):
+        return 'scenes'
+    return 'objects'
+
+
+def _asset_tags(path: Path, kind: str) -> list[str]:
+    tags = [kind[:-1] if kind.endswith('s') else kind]
+    rel_parts = Path(_asset_relative(path)).parts
+    if len(rel_parts) > 2:
+        tags.append(rel_parts[2].replace('_', ' '))
+    suffix = path.suffix.lower().lstrip('.')
+    if suffix:
+        tags.append(suffix)
+    if 'fabrica' in _asset_parts_text(path):
+        tags.append('Fabrica')
+    if len(tags) < 3 and 'IsaacUSD' in rel_parts:
+        tags.append('IsaacUSD')
+    return list(dict.fromkeys(tags[:4]))
+
+
+def _asset_sort_priority(path: Path) -> int:
+    text = _asset_parts_text(path)
+    name = path.name.lower()
+    priorities = (
+        ('ur5e', 0),
+        ('ur5e_robotiq', 1),
+        ('franka', 2),
+        ('panda', 3),
+        ('kuka', 4),
+        ('iiwa', 5),
+        ('robotiq', 6),
+        ('gripper', 7),
+        ('plumbers_block', 10),
+        ('fixture', 11),
+        ('optical_board', 12),
+        ('workcell', 20),
+        ('warehouse', 21),
+        ('table', 22),
+    )
+    for token, priority in priorities:
+        if token in name:
+            return priority
+    for token, priority in priorities:
+        if token in text:
+            return priority + 30
+    return 100
+
+
+def _asset_description(path: Path, kind: str, preview_only: bool = False) -> str:
+    source = ' / '.join(Path(_asset_relative(path)).parts[2:5])
+    if kind == 'robots':
+        prefix = '机器人库资产'
+    elif kind == 'scenes':
+        prefix = '场景库资产'
+    else:
+        prefix = '交互物体库资产'
+    if preview_only:
+        return f'{prefix}，来自 assets 目录的真实渲染预览。'
+    return f'{prefix}，来源：{source or "roboassemblybench/assets"}。'
+
+
+def _is_texture_image(path: Path) -> bool:
+    text = _asset_parts_text(path)
+    return '/textures/' in text or '/materials/textures/' in text
+
+
+def _is_rendered_asset_preview(path: Path) -> bool:
+    text = _asset_parts_text(path)
+    name = path.name.lower()
+    if '_generated_previews/' in text:
+        return True
+    if '.thumbs/256x256/' in text and not _is_texture_image(path):
+        return any(name.endswith(f'{suffix}.png') for suffix in ASSET_MODEL_SUFFIXES)
+    return any(name.endswith(f'{suffix}.png') for suffix in ASSET_MODEL_SUFFIXES)
+
+
+def _preview_rank(path: Path) -> tuple[int, str]:
+    text = _asset_parts_text(path)
+    rank = 40
+    if '_generated_previews/' in text:
+        rank = 0
+    elif '.thumbs/256x256/' in text and not _is_texture_image(path):
+        rank = 10
+    elif _is_rendered_asset_preview(path):
+        rank = 20
+    elif _is_texture_image(path):
+        rank = 90
+    return rank, str(path).lower()
+
+
+def _preview_key_variants(path: Path) -> set[str]:
+    name = path.name.lower()
+    keys = {name, path.stem.lower()}
+    if name.endswith('.png'):
+        base = name[:-4]
+        keys.add(base)
+        keys.add(Path(base).stem.lower())
+        for model_suffix in ('.thumb.usd', '.thumb.usda', '.thumb.usdc'):
+            if base.endswith(model_suffix):
+                clean = base.replace('.thumb', '')
+                keys.add(clean)
+                keys.add(Path(clean).stem.lower())
+    return {key for key in keys if key}
+
+
+def _model_key_variants(path: Path) -> set[str]:
+    name = path.name.lower()
+    keys = {name, path.stem.lower(), f'{name}.png'}
+    return {key for key in keys if key}
+
+
+def _is_library_model_file(path: Path) -> bool:
+    text = _asset_parts_text(path)
+    name = path.name.lower()
+    if path.suffix.lower() not in ASSET_MODEL_SUFFIXES:
+        return False
+    if '/.thumbs/' in text or '/textures/' in text:
+        return False
+    if name in {'materials.usd', 'material.usd'} or name.startswith('materials.'):
+        return False
+    return True
+
+
+@lru_cache(maxsize=1)
+def _asset_preview_sources() -> tuple[tuple[Path, ...], dict[str, Path]]:
+    assets_root = BENCHMARK_ROOT / 'assets'
+    if not assets_root.exists():
+        return (), {}
+    previews = tuple(
+        sorted(
+            (
+                path.resolve()
+                for path in assets_root.rglob('*')
+                if path.is_file() and path.suffix.lower() in ASSET_IMAGE_SUFFIXES and _is_rendered_asset_preview(path)
+            ),
+            key=_preview_rank,
+        )
+    )
+    index: dict[str, Path] = {}
+    for preview in previews:
+        for key in _preview_key_variants(preview):
+            index.setdefault(key, preview)
+    return previews, index
+
+
+def _preview_for_asset(path: Path, preview_index: dict[str, Path]) -> Path | None:
+    for key in _model_key_variants(path):
+        preview = preview_index.get(key)
+        if preview is not None:
+            return preview
+    thumb_dir = path.parent / '.thumbs' / '256x256'
+    candidates = [
+        thumb_dir / f'{path.name}.png',
+        thumb_dir / f'{path.stem}.usd.png',
+        path.with_name(f'{path.name}.png'),
+        path.with_suffix(f'{path.suffix}.png'),
+    ]
     for candidate in candidates:
-        if not candidate:
-            continue
-        path = Path(candidate)
-        if not path.is_absolute():
-            path = REPO_ROOT / path
-        if path.exists() and path.is_file() and path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
-            return str(path.resolve())
+        if candidate.exists() and candidate.is_file() and candidate.suffix.lower() in ASSET_IMAGE_SUFFIXES:
+            return candidate.resolve()
     return None
 
 
-def _preview_image(index: int = 0) -> str | None:
-    candidates = [
-        REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e' / 'plumbers_block_ur5e_scene_preview_check_frames' / 'rgb_00000.png',
-        REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e' / 'plumbers_block_ur5e_scene_preview_frames' / 'rgb_00074.png',
-        REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e' / 'plumbers_block_ur5e_scene_preview_frames' / 'rgb_00066.png',
-        REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e' / 'plumbers_block_ur5e_scene_preview_frames' / 'rgb_00091.png',
-        REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e' / 'plumbers_block_ur5e_scene_preview_frames' / 'rgb_00102.png',
-    ]
-    existing = [path for path in candidates if path.exists()]
-    if not existing:
+def _asset_card(asset_path: Path, preview_path: Path, kind: str, preview_only: bool = False) -> dict[str, Any]:
+    source_path = preview_path if preview_only else asset_path
+    return {
+        'name': _asset_title(source_path),
+        'description': _asset_description(source_path, kind, preview_only=preview_only),
+        'asset_path': _asset_relative(source_path),
+        'preview': str(preview_path.resolve()),
+        'tags': _asset_tags(source_path, kind),
+    }
+
+
+def _first_existing_asset_path(*relative_paths: str) -> str | None:
+    for relative_path in relative_paths:
+        path = BENCHMARK_ROOT / 'assets' / relative_path
+        if path.exists() and path.is_file():
+            return _asset_relative(path.resolve())
+    return None
+
+
+def _robot_family(card: dict[str, Any]) -> str | None:
+    name = str(card.get('name', '')).lower()
+    asset_path = str(card.get('asset_path', '')).lower()
+    if '/robots/robotiq/' in asset_path:
         return None
-    return str(existing[index % len(existing)])
+    if 'ur5e' in name or '/universalrobots/ur5e/' in asset_path or '/ur5e/' in asset_path:
+        return 'ur5e'
+    if 'franka' in name or 'panda' in name or '/frankarobotics/frankapanda/' in asset_path:
+        return 'franka'
+    if 'kuka' in name or 'iiwa' in name or '/kuka/' in asset_path:
+        return 'kuka'
+    return None
+
+
+def _robot_representative_card(family: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    base = dict(candidates[0])
+    if family == 'ur5e':
+        base.update(
+            {
+                'name': 'UR5e + Robotiq 2F-85',
+                'description': '机器人库资产，UR5e 协作臂与 Robotiq 2F-85 夹爪，用于双臂装配任务。',
+                'asset_path': _first_existing_asset_path(
+                    'Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_task.usda',
+                    'Fabrica/fabrica_ur5e_d405_plumbers_block_minimal_workcell_fullbundle_sdf001_v1/assets/imported_assets/ur5e_d405_asset_bundle_2026-06-15/extracted/source/isaaclab_tasks/isaaclab_tasks/direct/factory_ur5e_robotiq/assets/ur5e_robotiq_2f85_fixed_camera.usda',
+                )
+                or base.get('asset_path', ''),
+                'tags': ['robot', 'UR5e', 'Robotiq', 'Fabrica'],
+            }
+        )
+    elif family == 'franka':
+        base.update(
+            {
+                'name': 'Franka Panda',
+                'description': '机器人库资产，Franka Panda 协作臂，用于通用桌面装配基线。',
+                'tags': ['robot', 'Franka', 'Panda'],
+            }
+        )
+    elif family == 'kuka':
+        base.update(
+            {
+                'name': 'KUKA iiwa',
+                'description': '机器人库资产，KUKA iiwa 工业协作臂。',
+                'tags': ['robot', 'KUKA', 'iiwa'],
+            }
+        )
+    return base
+
+
+def _collapse_robot_library(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        family = _robot_family(card)
+        if family:
+            grouped.setdefault(family, []).append(card)
+    if not grouped:
+        return cards[:1]
+    order = ['ur5e', 'franka', 'kuka']
+    return [_robot_representative_card(family, grouped[family]) for family in order if family in grouped]
+
+
+@lru_cache(maxsize=1)
+def _asset_library_cache() -> dict[str, list[dict[str, Any]]]:
+    assets_root = BENCHMARK_ROOT / 'assets'
+    libraries: dict[str, list[dict[str, Any]]] = {'robots': [], 'scenes': [], 'objects': []}
+    if not assets_root.exists():
+        return libraries
+
+    previews, preview_index = _asset_preview_sources()
+    used_previews: set[Path] = set()
+    seen_assets: set[str] = set()
+
+    def add_card(asset_path: Path, preview_path: Path, preview_only: bool = False) -> None:
+        kind = _asset_kind_for_path(asset_path)
+        if len(libraries[kind]) >= ASSET_LIBRARY_LIMITS[kind]:
+            return
+        key = _asset_relative(asset_path)
+        if key in seen_assets:
+            return
+        libraries[kind].append(_asset_card(asset_path, preview_path, kind, preview_only=preview_only))
+        seen_assets.add(key)
+        used_previews.add(preview_path.resolve())
+
+    model_files = sorted(
+        (
+            path.resolve()
+            for path in assets_root.rglob('*')
+            if path.is_file() and _is_library_model_file(path)
+        ),
+        key=lambda item: (_asset_kind_for_path(item), _asset_sort_priority(item), _asset_parts_text(item), item.name.lower()),
+    )
+    for model in model_files:
+        preview = _preview_for_asset(model, preview_index)
+        if preview is not None:
+            add_card(model, preview)
+
+    for preview in previews:
+        if preview.resolve() in used_previews:
+            continue
+        add_card(preview, preview, preview_only=True)
+
+    libraries['robots'] = _collapse_robot_library(libraries['robots'])
+    return libraries
 
 
 def _asset_libraries(selected_recipe: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    asset_refs = selected_recipe.get('asset_references', [])
-    previews = {
-        'ur5e': _existing_image(
-            'roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/isaac_official/Isaac/Robots/UniversalRobots/ur5e/configuration/.thumbs/256x256/ur5e_physics.usd.png',
-            _preview_image(0),
-        ),
-        'franka': _existing_image(
-            'IsaacLab/docs/source/_static/tasks/manipulation/franka_reach.jpg',
-            'third_part/Fabrica/isaacgym/isaacgym/docs/_images/example_franka_attractor.png',
-            _preview_image(1),
-        ),
-        'kuka': _existing_image(
-            'IsaacLab/docs/source/_static/tasks/manipulation/kuka_allegro_reorient.jpg',
-            'third_part/Fabrica/isaacgym/isaacgym/docs/_images/example_kuka_bin.png',
-            _preview_image(2),
-        ),
-        'factory_cell': _existing_image(
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_check_frames/rgb_00000.png',
-            _preview_image(0),
-        ),
-        'warehouse': _existing_image(
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00074.png',
-            'static/benchmark.png',
-            _preview_image(1),
-        ),
-        'tabletop': _existing_image(
-            'roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/256x256/SM_HeavyDutyPackingTable_C02_01.usd.png',
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00066.png',
-            _preview_image(2),
-        ),
-        'factory_props': _existing_image(
-            'roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/isaac_official/Isaac/Props/PackingTable/props/SM_Crate_A08_Blue_01/.thumbs/256x256/SM_Crate_A08_Blue_01.usd.png',
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00091.png',
-            _preview_image(3),
-        ),
-        'plumbers_block': _existing_image(
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00102.png',
-            'third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block/precedence.png',
-            _preview_image(4),
-        ),
-        'fixture': _existing_image(
-            'third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block/fixture/fixture.png',
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00066.png',
-            _preview_image(2),
-        ),
-        'optical_board': _existing_image(
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00012.png',
-            'roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/isaac_official/Isaac/Props/PackingTable/props/SM_HeavyDutyPackingTable_C02_01/.thumbs/256x256/SM_HeavyDutyPackingTable_C02_01.usd.png',
-            _preview_image(3),
-        ),
-        'assembled': _existing_image(
-            'third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block/precedence.png',
-            'outputs/fabrica_plumbers_block_ur5e/plumbers_block_ur5e_scene_preview_frames/rgb_00074.png',
-            _preview_image(1),
-        ),
-    }
-
-    def ref_path(name: str, fallback: str = '') -> str:
-        lowered = name.lower()
-        for item in asset_refs:
-            haystack = f"{item.get('name', '')} {item.get('path', '')}".lower()
-            if lowered in haystack:
-                return str(item.get('path') or fallback)
-        return fallback
-
-    return {
-        'robots': [
-            {
-                'name': 'UR5e + Robotiq 2F-85',
-                'description': '六轴协作臂，适合抓取、搬运、对准和插装准备。',
-                'asset_path': ref_path('ur5e', 'roboassemblybench/assets/Fabrica/.../ur5e_robotiq_2f85_task.usda'),
-                'preview': previews['ur5e'],
-                'tags': ['6-DoF', 'gripper', 'assembly'],
-            },
-            {
-                'name': 'Franka Panda',
-                'description': '通用双臂装配基线，适合精细抓取和桌面操作。',
-                'asset_path': ref_path('franka', 'roboassemblybench/assets/planning/franka_mplib.urdf'),
-                'preview': previews['franka'],
-                'tags': ['7-DoF', 'dual-arm', 'baseline'],
-            },
-            {
-                'name': 'KUKA iiwa',
-                'description': '工业协作臂候选，可用于后续扩展工厂装配任务。',
-                'asset_path': 'Isaac Sim / Omniverse industrial robot asset candidate',
-                'preview': previews['kuka'],
-                'tags': ['industrial', 'candidate'],
-            },
-        ],
-        'scenes': [
-            {
-                'name': 'Factory Cell',
-                'description': '本地工厂单元场景，适合快速预览和调试。',
-                'asset_path': ref_path('factory_cell', str(BENCHMARK_ROOT / 'scenes' / 'usd' / 'factory_cell.usda')),
-                'preview': previews['factory_cell'],
-                'tags': ['factory', 'offline'],
-            },
-            {
-                'name': 'Warehouse With Forklifts',
-                'description': '带叉车和仓储背景的工厂环境。',
-                'asset_path': ref_path('warehouse', '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd'),
-                'preview': previews['warehouse'],
-                'tags': ['warehouse', 'forklift'],
-            },
-            {
-                'name': 'Tabletop Workcell',
-                'description': '桌面装配工作区，适合夹具、零件和机械臂协作。',
-                'asset_path': 'roboassemblybench/scenes/profiles/taoyuan_grscenes_tabletop.yaml',
-                'preview': previews['tabletop'],
-                'tags': ['table', 'workcell'],
-            },
-            {
-                'name': 'Factory Props',
-                'description': '背景物件集合，可包含车辆、货架、箱体和工厂辅助物。',
-                'asset_path': 'roboassemblybench/assets/IsaacUSD',
-                'preview': previews['factory_props'],
-                'tags': ['props', 'vehicle', 'background'],
-            },
-        ],
-        'objects': [
-            {
-                'name': 'Plumbers Block 2',
-                'description': '当前任务的主要可操作零件，右臂需要抓取、重定向并移动到 staging 位。',
-                'asset_path': ref_path('fabrica_plumbers_block_2'),
-                'preview': previews['plumbers_block'],
-                'tags': ['tracked', 'rigid', 'target'],
-            },
-            {
-                'name': 'Fixture Tray',
-                'description': '用于支撑和定位 plumbers-block 零件的夹具。',
-                'asset_path': ref_path('fixture'),
-                'preview': previews['fixture'],
-                'tags': ['fixture', 'support'],
-            },
-            {
-                'name': 'Optical Board',
-                'description': 'Fabrica 工作台基底，可作为装配支撑面。',
-                'asset_path': ref_path('optical_board'),
-                'preview': previews['optical_board'],
-                'tags': ['board', 'tabletop'],
-            },
-            {
-                'name': 'Assembled Preview',
-                'description': '目标装配状态参考模型，用于后续任务规划和成功状态说明。',
-                'asset_path': ref_path('assembled'),
-                'preview': previews['assembled'],
-                'tags': ['reference', 'assembly'],
-            },
-        ],
-    }
+    return {name: [dict(item) for item in rows] for name, rows in _asset_library_cache().items()}
 
 
 def _recipe_summary(name: str, recipe: dict[str, Any]) -> dict[str, Any]:
     metadata = recipe.get('metadata') or {}
+    task_name = recipe.get('task_name', name)
     return {
-        'name': name,
-        'task_name': recipe.get('task_name', name),
+        'name': _template_public_id(name),
+        'display_name': _template_display_name(name),
+        'task_name': PUBLIC_GENERATED_TASK_NAME if name == DEFAULT_TEMPLATE else task_name,
         'prompt': recipe.get('prompt') or recipe.get('task_description') or '',
         'scene_profile': recipe.get('scene_profile'),
         'robots': [item.get('name') for item in recipe.get('robots', []) if isinstance(item, dict)],
@@ -554,7 +738,8 @@ def serialize_inventory(scene_profile: str | None, selected_template: str | None
         compact = inventory.compact_recipes.get(name, {})
         templates.append(
             {
-                'name': name,
+                'name': _template_public_id(name),
+                'display_name': _template_display_name(name),
                 'prompt': compact.get('prompt') or compact.get('task_description') or '',
                 'robots': compact.get('robots', []),
                 'object_count': len(compact.get('objects', [])),
@@ -564,14 +749,15 @@ def serialize_inventory(scene_profile: str | None, selected_template: str | None
             }
         )
 
-    template_name = selected_template if selected_template in inventory.recipes else inventory.best_template_for(selected_template or '')
+    selected_internal = _template_internal_id(selected_template)
+    template_name = selected_internal if selected_internal in inventory.recipes else inventory.best_template_for(selected_internal or '')
     selected = _recipe_summary(template_name, inventory.recipes[template_name])
     return {
         'scene_profile': scene_profile or 'raw',
         'scene_profiles': _scene_profiles(),
-        'default_template': DEFAULT_TEMPLATE,
+        'default_template': PUBLIC_TEMPLATE_ID,
         'mock_llm_default': not bool(os.environ.get('OPENAI_API_KEY')),
-        'selected_template': template_name,
+        'selected_template': _template_public_id(template_name),
         'templates': templates,
         'selected_recipe': selected,
         'asset_catalog': _asset_catalog(),
@@ -738,14 +924,7 @@ def _result_typewriter_segments(trace_item: dict[str, Any]) -> list[str]:
         segments.extend([str(section.get('range') or ''), str(section.get('title') or ''), str(section.get('summary') or '')])
         skill_flow = [item for item in section.get('skill_flow') or [] if isinstance(item, dict)]
         if skill_flow:
-            for item in skill_flow:
-                segments.extend(
-                    [
-                        f"阶段 {item.get('index') or ''}",
-                        str(item.get('title') or ''),
-                        str(item.get('skill') or ''),
-                    ]
-                )
+            segments.append(f"包含 {len(skill_flow)} 个技能阶段")
         else:
             section_cards.extend([item for item in section.get('cards') or [] if isinstance(item, dict)])
     cards = section_cards if sections else output.get('subtask_cards') or trace_item.get('subtask_cards') or []
@@ -753,22 +932,10 @@ def _result_typewriter_segments(trace_item: dict[str, Any]) -> list[str]:
         if not isinstance(item, dict):
             continue
         segments.extend([f"阶段 {item.get('index') or ''}", str(item.get('title') or item.get('phase') or '')])
-        for label, key in [
-            ('原始 phase', 'phase'),
-            ('目标', 'goal'),
-            ('技能', 'skill'),
-            ('操作臂', 'arm'),
-            ('对象', 'object'),
-            ('状态', 'arm_state'),
-            ('位置', 'target'),
-            ('条件', 'completion'),
-            ('结果', 'expected_result'),
-        ]:
-            value = item.get(key)
-            if value:
-                segments.extend([label, str(value)])
-        for line in item.get('subskills') or []:
-            segments.extend(['子技能', str(line)])
+        if item.get('goal'):
+            segments.append(str(item.get('goal') or ''))
+        if item.get('skill'):
+            segments.extend(['技能', str(item.get('skill') or '').split('（', 1)[0]])
     if trace_item.get('next_step'):
         segments.append(str(trace_item.get('next_step')))
     return segments
@@ -779,6 +946,55 @@ def _result_typewriter_duration(trace_item: dict[str, Any]) -> float:
     if char_count <= 0:
         return 0.0
     return char_count * TYPEWRITER_INTERVAL_SECONDS + TYPEWRITER_BUFFER_SECONDS
+
+
+def _lerobot_dataset_structure() -> dict[str, Any]:
+    return {
+        'dataset_format': 'LeRobotDataset v3.0',
+        'dataset_name': 'fabrica_plumbers_block_ur5e_assembly',
+        'root': 'outputs/lerobot/fabrica_plumbers_block_ur5e_assembly',
+        'directories': [
+            {
+                'path': 'meta/info.json',
+                'content': '数据集 schema、fps、features、相机流、状态维度和动作维度。',
+            },
+            {
+                'path': 'meta/stats.json',
+                'content': 'observation.state、action、关节轨迹、末端位姿等字段的统计量。',
+            },
+            {
+                'path': 'meta/tasks.jsonl',
+                'content': '自然语言任务、Template、Menu、Annotation 和 skill plan。',
+            },
+            {
+                'path': 'meta/episodes/',
+                'content': '每个 episode 的长度、seed、成功标记、起止 offset 和失败原因。',
+            },
+            {
+                'path': 'data/chunk-000/file-000.parquet',
+                'content': 'timestamp、frame_index、episode_index、observation.state、action、skill_id、object_state。',
+            },
+            {
+                'path': 'videos/chunk-000/observation.images.front/file-000.mp4',
+                'content': '第三视角相机视频。',
+            },
+            {
+                'path': 'videos/chunk-000/observation.images.left_wrist/file-000.mp4',
+                'content': '左腕部相机视频。',
+            },
+            {
+                'path': 'videos/chunk-000/observation.images.right_wrist/file-000.mp4',
+                'content': '右腕部相机视频。',
+            },
+        ],
+        'features': [
+            'observation.state: 双臂关节角、关节速度、末端位姿、夹爪开合、本体感受态。',
+            'action: 当前 skill、操作臂、目标物体、目标位姿、夹爪命令、控制器目标。',
+            'observation.images.*: front、left_wrist、right_wrist 多相机 MP4。',
+            'object_state: plumbers-block 0/1/2/3/4 的位置、姿态、静止状态和接触状态。',
+            'episode metadata: task、seed、success、Template、Menu、Annotation、skill sequence。',
+        ],
+    }
 
 
 def _run_manual_demo_job(job: AgentJob):
@@ -919,6 +1135,7 @@ def _run_simulation_job(job: SimulationJob):
             'returncode': returncode,
             'video': str(SIMULATION_OUTPUT),
             'video_exists': SIMULATION_OUTPUT.exists(),
+            'lerobot_dataset': _lerobot_dataset_structure(),
         }
         job.status = 'succeeded'
         job.add_event('simulation_completed', job.result)
@@ -933,6 +1150,62 @@ def _safe_path(path_text: str) -> Path:
     if path == REPO_ROOT or REPO_ROOT in path.parents:
         return path
     raise ValueError(f'Path is outside the RoboAssemblyBench workspace: {path}')
+
+
+def _recording_upload_suffix(content_type: str | None) -> str:
+    mime = str(content_type or '').split(';', 1)[0].strip().lower()
+    return RECORDING_UPLOAD_SUFFIXES.get(mime, '.webm')
+
+
+def _save_recording_as_mp4(payload: bytes, content_type: str | None) -> dict[str, Any]:
+    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    base = RECORDINGS_DIR / f'{time.strftime("%Y%m%d_%H%M%S")}_{uuid.uuid4().hex[:6]}_roboassembly_panel_simulation'
+    source_suffix = _recording_upload_suffix(content_type)
+    output_path = base.with_suffix('.mp4')
+    source_mime = str(content_type or 'application/octet-stream').split(';', 1)[0].strip().lower()
+
+    if source_suffix == '.mp4':
+        output_path.write_bytes(payload)
+        converted = False
+    else:
+        source_path = base.with_suffix(source_suffix)
+        source_path.write_bytes(payload)
+        ffmpeg = shutil.which('ffmpeg')
+        if ffmpeg is None:
+            raise RuntimeError('ffmpeg is required to convert the screen recording to MP4.')
+        command = [
+            ffmpeg,
+            '-y',
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-i',
+            str(source_path),
+            '-c:v',
+            'libx264',
+            '-pix_fmt',
+            'yuv420p',
+            '-movflags',
+            '+faststart',
+            '-an',
+            str(output_path),
+        ]
+        result = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+        if result.returncode != 0 or not output_path.exists() or output_path.stat().st_size == 0:
+            error_text = (result.stderr or result.stdout or 'ffmpeg failed without output.').strip()
+            raise RuntimeError(f'Failed to convert recording to MP4: {error_text}')
+        source_path.unlink(missing_ok=True)
+        converted = True
+
+    return {
+        'path': str(output_path),
+        'filename': output_path.name,
+        'size_bytes': output_path.stat().st_size,
+        'media_url': f'/api/media?path={output_path}',
+        'mime_type': 'video/mp4',
+        'source_mime_type': source_mime or 'application/octet-stream',
+        'converted_to_mp4': converted,
+    }
 
 
 class MissingDependencyApp:
@@ -1009,16 +1282,11 @@ def create_app():
         payload = await request.body()
         if not payload:
             raise HTTPException(status_code=400, detail='Recording body is empty.')
-        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
-        path = RECORDINGS_DIR / f'{time.strftime("%Y%m%d_%H%M%S")}_roboassembly_panel_simulation.webm'
-        path.write_bytes(payload)
-        return JSONResponse(
-            {
-                'path': str(path),
-                'size_bytes': path.stat().st_size,
-                'media_url': f'/api/media?path={path}',
-            }
-        )
+        try:
+            saved = _save_recording_as_mp4(payload, request.headers.get('content-type'))
+        except Exception as exc:  # noqa: BLE001 - surface conversion errors in the UI.
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return JSONResponse(saved)
 
     @api.get('/api/media')
     def preview_media(path: str):
@@ -1030,7 +1298,13 @@ def create_app():
             raise HTTPException(status_code=404, detail='Media file not found.')
         if safe.suffix.lower() not in {'.mp4', '.webm', '.mov', '.mkv'}:
             raise HTTPException(status_code=400, detail='Unsupported media type.')
-        return FileResponse(safe)
+        media_types = {
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mov': 'video/quicktime',
+            '.mkv': 'video/x-matroska',
+        }
+        return FileResponse(safe, media_type=media_types.get(safe.suffix.lower()))
 
     @api.get('/api/file')
     def preview_file(path: str):
@@ -1506,6 +1780,113 @@ APP_HTML = r"""
       color: #344054;
       line-height: 1.45;
     }
+    .constraint-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .constraint-card {
+      border: 1px solid #dbe4f0;
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .constraint-head {
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e3e8f0;
+      font-weight: 800;
+    }
+    .constraint-head.logical { color: #065f46; background: #ecfdf5; }
+    .constraint-head.spatial { color: #1d4ed8; background: #eef4ff; }
+    .constraint-head.temporal { color: #92400e; background: #fffbeb; }
+    .constraint-body {
+      display: grid;
+      gap: 6px;
+      padding: 9px 10px;
+    }
+    .constraint-summary {
+      color: #344054;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .constraint-rule {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      padding-left: 10px;
+      border-left: 2px solid #dbe4f0;
+    }
+    .dataset-card {
+      border: 1px solid #b7e4d9;
+      background: #f0fdfa;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      display: grid;
+      gap: 9px;
+    }
+    .dataset-title {
+      color: #065f46;
+      font-weight: 820;
+    }
+    .dataset-root {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #134e4a;
+      overflow-wrap: anywhere;
+    }
+    .dataset-tree {
+      display: grid;
+      gap: 5px;
+      padding: 8px 10px;
+      border: 1px solid #b7e4d9;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+    .dataset-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 0.85fr) minmax(0, 1.15fr);
+      gap: 8px;
+      align-items: start;
+    }
+    .dataset-path {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #0f766e;
+      overflow-wrap: anywhere;
+    }
+    .dataset-desc {
+      color: #344054;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .feature-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .feature-tag {
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid #b7e4d9;
+      color: #134e4a;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .recording-tip {
+      margin-top: 8px;
+      border-left: 3px solid #1d4ed8;
+      background: #eef4ff;
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: #1e3a8a;
+      line-height: 1.45;
+      font-size: 12px;
+    }
     .sim-log {
       max-height: 360px;
       background: #0f172a;
@@ -1724,7 +2105,7 @@ APP_HTML = r"""
       .chat-panel { height: 72vh; }
     }
     @media (max-width: 620px) {
-      .grid2, .file-row, .row, .kv, .asset-card {
+      .grid2, .file-row, .row, .kv, .asset-card, .constraint-grid, .dataset-row {
         grid-template-columns: 1fr;
       }
       details.event summary {
@@ -1753,7 +2134,7 @@ APP_HTML = r"""
         <div class="panel-body scroll-body">
           <div class="field">
             <label for="task">任务指令</label>
-            <textarea id="task">基于 plumbers-block UR5e assembly Template 生成新任务 fabrica_plumbers_block_ur5e_right_base_prepare，生成 Menu、Annotation、子任务、技能序列，并保存一条可导出的演示轨迹。</textarea>
+            <textarea id="task">基于 UR5e assembly Template 生成新任务 fabrica_plumbers_block_ur5e_assembly，生成 Menu、Annotation、子任务、技能序列，并保存一条可回放的演示轨迹。</textarea>
           </div>
           <div class="field">
             <label for="template">Reference Template</label>
@@ -1777,7 +2158,6 @@ APP_HTML = r"""
             <label class="check"><input id="manualDemo" type="checkbox"><span>在线 LLM 拆解</span></label>
             <label class="check"><input id="mockLlm" type="checkbox"><span>快速规划模式</span></label>
             <label class="check"><input id="runSimulation" type="checkbox"><span>运行仿真</span></label>
-            <label class="check"><input id="exportLerobot" type="checkbox"><span>导出 LeRobot</span></label>
             <label class="check"><input id="headless" type="checkbox" checked><span>Headless</span></label>
             <label class="check"><input id="recordVideo" type="checkbox" checked><span>记录视频</span></label>
           </div>
@@ -1846,8 +2226,7 @@ APP_HTML = r"""
       ['plan', 'Plan', ['plan_generated', 'manual_04_task_decomposition', 'manual_05_skill_step_formatting']],
       ['check', 'Check', ['checker_completed', 'manual_checker_completed']],
       ['artifacts', 'Files', ['bundle_written', 'manual_demo_bundle_written']],
-      ['demo', 'Demo', ['demo_started', 'demo_completed', 'manual_demo_execution_started', 'manual_demo_execution_completed']],
-      ['lerobot', 'LeRobot', ['lerobot_export_started', 'lerobot_export_completed']]
+      ['demo', 'Demo', ['demo_started', 'demo_completed', 'manual_demo_execution_started', 'manual_demo_execution_completed']]
     ];
 
     function asJson(value) { return JSON.stringify(value, null, 2); }
@@ -1913,20 +2292,16 @@ APP_HTML = r"""
       const segments = [];
       (Array.isArray(items) ? items : []).forEach(item => {
         segments.push(`阶段 ${item.index || ''}`, item.title || item.phase || '');
-        [
-          ['原始 phase', item.phase],
-          ['目标', item.goal],
-          ['技能', item.skill],
-          ['操作臂', item.arm],
-          ['对象', item.object],
-          ['状态', item.arm_state],
-          ['位置', item.target],
-          ['条件', item.completion],
-          ['结果', item.expected_result]
-        ].forEach(([label, value]) => {
-          if (value) segments.push(label, value);
-        });
-        (item.subskills || []).forEach(line => segments.push('子技能', line));
+        if (item.goal) segments.push(item.goal);
+        if (item.skill) segments.push('技能', compactLabel(item.skill));
+      });
+      return segments;
+    }
+    function constraintTextSegments(constraints) {
+      const segments = [];
+      (Array.isArray(constraints) ? constraints : []).forEach(item => {
+        segments.push(item.type || '', item.summary || '', item.used_for || '');
+        (item.rules || []).forEach(rule => segments.push(rule || ''));
       });
       return segments;
     }
@@ -1940,9 +2315,7 @@ APP_HTML = r"""
         sections.forEach(section => {
           segments.push(section.range || '', section.title || '', section.summary || '');
           if (Array.isArray(section.skill_flow) && section.skill_flow.length) {
-            section.skill_flow.forEach(item => {
-              segments.push(`阶段 ${item.index || ''}`, item.title || '', compactLabel(item.skill || ''));
-            });
+            segments.push(`包含 ${section.skill_flow.length} 个技能阶段`);
           } else {
             segments.push(...subtaskTextSegments(section.cards || []));
           }
@@ -1952,6 +2325,19 @@ APP_HTML = r"""
       }
       if (nextStep) segments.push(nextStep);
       return segments;
+    }
+    function resultSegmentsForPayload(summary, processLines, steps, output, subtasks, nextStep) {
+      return [
+        ...resultTextSegments(
+          summary,
+          processLines,
+          steps,
+          output?.decomposition_sections || [],
+          subtasks,
+          nextStep
+        ),
+        ...constraintTextSegments(output?.constraint_rules || [])
+      ];
     }
     function renderProcessLinesTyped(lines, budget) {
       if (!Array.isArray(lines) || !lines.length) return '';
@@ -1986,11 +2372,6 @@ APP_HTML = r"""
     }
     function renderSubtaskCards(items) {
       if (!Array.isArray(items) || !items.length) return '';
-      const row = (label, value) => value ? `
-        <div class="subtask-row">
-          <div class="subtask-label">${label}</div>
-          <div class="subtask-value">${escapeHtml(value)}</div>
-        </div>` : '';
       return `<div class="subtask-list">${items.map(item => `
         <article class="subtask-card">
           <div class="subtask-head">
@@ -1998,62 +2379,63 @@ APP_HTML = r"""
             <div class="subtask-title">${escapeHtml(item.title || item.phase || '')}</div>
           </div>
           <div class="subtask-body">
-            ${row('原始 phase', item.phase)}
-            ${row('目标', item.goal)}
-            ${row('技能', item.skill)}
-            ${row('操作臂', item.arm)}
-            ${row('对象', item.object)}
-            ${row('状态', item.arm_state)}
-            ${row('位置', item.target)}
-            ${row('条件', item.completion)}
-            ${row('结果', item.expected_result)}
-            ${(item.subskills || []).length ? `<div class="subskill-list">${item.subskills.map(line => `<div class="subskill-line">${escapeHtml(line)}</div>`).join('')}</div>` : ''}
+            ${item.goal ? `<div class="section-summary">${escapeHtml(item.goal)}</div>` : ''}
+            ${item.skill ? `<div class="subtask-row"><div class="subtask-label">技能</div><div class="subtask-value">${escapeHtml(compactLabel(item.skill))}</div></div>` : ''}
           </div>
         </article>
       `).join('')}</div>`;
     }
     function renderSubtaskCardsTyped(items, budget) {
       if (!Array.isArray(items) || !items.length) return '';
-      const row = (label, value) => {
-        if (!value) return '';
-        const labelText = revealFromBudget(budget, label);
-        const valueText = revealFromBudget(budget, value);
-        if (!labelText && !valueText) return '';
-        return `<div class="subtask-row">
-          <div class="subtask-label">${labelText}</div>
-          <div class="subtask-value">${valueText}</div>
-        </div>`;
-      };
       const cards = items.map(item => {
         const index = revealFromBudget(budget, `阶段 ${item.index || ''}`);
         const title = revealFromBudget(budget, item.title || item.phase || '');
-        const rows = [
-          row('原始 phase', item.phase),
-          row('目标', item.goal),
-          row('技能', item.skill),
-          row('操作臂', item.arm),
-          row('对象', item.object),
-          row('状态', item.arm_state),
-          row('位置', item.target),
-          row('条件', item.completion),
-          row('结果', item.expected_result)
-        ].filter(Boolean).join('');
-        const subskills = (item.subskills || []).map(line => {
-          const labelText = revealFromBudget(budget, '子技能');
-          const lineText = revealFromBudget(budget, line || '');
-          if (!labelText && !lineText) return '';
-          return `<div class="subskill-line">${labelText ? `<strong>${labelText}</strong> ` : ''}${lineText}</div>`;
-        }).filter(Boolean).join('');
-        if (!index && !title && !rows && !subskills) return '';
+        const goal = revealFromBudget(budget, item.goal || '');
+        const skillLabel = item.skill ? revealFromBudget(budget, '技能') : '';
+        const skill = revealFromBudget(budget, compactLabel(item.skill || ''));
+        const rows = skill || skillLabel ? `<div class="subtask-row">
+          <div class="subtask-label">${skillLabel}</div>
+          <div class="subtask-value">${skill}</div>
+        </div>` : '';
+        if (!index && !title && !goal && !rows) return '';
         return `<article class="subtask-card">
           <div class="subtask-head">
             <div class="subtask-index">${index}</div>
             <div class="subtask-title">${title}</div>
           </div>
-          ${rows || subskills ? `<div class="subtask-body">${rows}${subskills ? `<div class="subskill-list">${subskills}</div>` : ''}</div>` : ''}
+          ${goal || rows ? `<div class="subtask-body">${goal ? `<div class="section-summary">${goal}</div>` : ''}${rows}</div>` : ''}
         </article>`;
       }).filter(Boolean).join('');
       return cards ? `<div class="subtask-list">${cards}</div>` : '';
+    }
+    function constraintClass(type) {
+      const text = String(type || '');
+      if (text.includes('逻辑')) return 'logical';
+      if (text.includes('空间')) return 'spatial';
+      if (text.includes('时序')) return 'temporal';
+      return '';
+    }
+    function renderConstraintRulesTyped(rules, budget) {
+      if (!Array.isArray(rules) || !rules.length) return '';
+      const cards = rules.map(item => {
+        const title = revealFromBudget(budget, item.type || '');
+        const summary = revealFromBudget(budget, item.summary || '');
+        const ruleRows = (item.rules || []).map(rule => {
+          const line = revealFromBudget(budget, rule || '');
+          return line ? `<div class="constraint-rule">${line}</div>` : '';
+        }).filter(Boolean).join('');
+        const usedFor = revealFromBudget(budget, item.used_for || '');
+        if (!title && !summary && !ruleRows && !usedFor) return '';
+        return `<article class="constraint-card">
+          <div class="constraint-head ${constraintClass(item.type)}">${title}</div>
+          <div class="constraint-body">
+            ${summary ? `<div class="constraint-summary">${summary}</div>` : ''}
+            ${ruleRows}
+            ${usedFor ? `<div class="thought-next">${usedFor}</div>` : ''}
+          </div>
+        </article>`;
+      }).filter(Boolean).join('');
+      return cards ? `<div class="constraint-grid">${cards}</div>` : '';
     }
     function renderDecompositionSectionsTyped(sections, budget) {
       if (!Array.isArray(sections) || !sections.length) return '';
@@ -2061,28 +2443,37 @@ APP_HTML = r"""
         const range = revealFromBudget(budget, section.range || '');
         const title = revealFromBudget(budget, section.title || '');
         const summary = revealFromBudget(budget, section.summary || '');
-        const flow = Array.isArray(section.skill_flow) ? section.skill_flow.map(item => {
-          const index = revealFromBudget(budget, `阶段 ${item.index || ''}`);
-          const titleText = revealFromBudget(budget, item.title || '');
-          const skill = revealFromBudget(budget, compactLabel(item.skill || ''));
-          if (!index && !titleText && !skill) return '';
-          return `<div class="subtask-row">
-            <div class="subtask-label">${index}</div>
-            <div class="subtask-value">${titleText}${skill ? ` · ${skill}` : ''}</div>
-          </div>`;
-        }).filter(Boolean).join('') : '';
-        const cards = flow ? '' : renderSubtaskCardsTyped(section.cards || [], budget);
-        if (!range && !title && !summary && !flow && !cards) return '';
+        const flowCount = Array.isArray(section.skill_flow) && section.skill_flow.length
+          ? revealFromBudget(budget, `包含 ${section.skill_flow.length} 个技能阶段`)
+          : '';
+        const cards = flowCount ? '' : renderSubtaskCardsTyped(section.cards || [], budget);
+        if (!range && !title && !summary && !flowCount && !cards) return '';
         return `<section class="decomposition-section">
           <div class="section-head">
             <div class="section-title">${range}${range && title ? ' · ' : ''}${title}</div>
             ${summary ? `<div class="section-summary">${summary}</div>` : ''}
           </div>
-          ${flow ? `<div class="subtask-card"><div class="subtask-body">${flow}</div></div>` : ''}
+          ${flowCount ? `<div class="subtask-card"><div class="subtask-body"><div class="section-summary">${flowCount}</div></div></div>` : ''}
           ${cards}
         </section>`;
       }).filter(Boolean).join('');
       return html ? `<div class="decomposition-list">${html}</div>` : '';
+    }
+    function renderLeRobotDataset(dataset) {
+      if (!dataset) return '';
+      const rows = (dataset.directories || []).map(item => `
+        <div class="dataset-row">
+          <div class="dataset-path">${escapeHtml(item.path || '')}</div>
+          <div class="dataset-desc">${escapeHtml(item.content || '')}</div>
+        </div>
+      `).join('');
+      const features = (dataset.features || []).map(item => `<span class="feature-tag">${escapeHtml(item)}</span>`).join('');
+      return `<div class="dataset-card">
+        <div class="dataset-title">${escapeHtml(dataset.dataset_format || 'LeRobotDataset v3.0')} 数据收集结构</div>
+        <div class="dataset-root">${escapeHtml(dataset.root || '')}</div>
+        <div class="dataset-tree">${rows}</div>
+        <div class="feature-tags">${features}</div>
+      </div>`;
     }
     async function getJson(url, options) {
       const response = await fetch(url, options);
@@ -2091,7 +2482,7 @@ APP_HTML = r"""
     }
     async function loadInventory() {
       const scene = document.getElementById('sceneProfile').value || 'taoyuan_grscenes_tabletop';
-      const template = document.getElementById('template').value || 'fabrica_plumbers_block_ur5e_right_base_prepare';
+      const template = document.getElementById('template').value || 'ur5e_assembly_template';
       const url = `/api/inventory?scene_profile=${encodeURIComponent(scene)}&template=${encodeURIComponent(template)}`;
       state.inventory = await getJson(url);
       renderInventory();
@@ -2103,7 +2494,7 @@ APP_HTML = r"""
         `<option value="${escapeHtml(item)}"${item === inventory.scene_profile ? ' selected' : ''}>${escapeHtml(item)}</option>`
       ).join('');
       templateSelect.innerHTML = inventory.templates.map(item =>
-        `<option value="${escapeHtml(item.name)}"${item.name === inventory.selected_template ? ' selected' : ''}>${escapeHtml(item.name)}</option>`
+        `<option value="${escapeHtml(item.name)}"${item.name === inventory.selected_template ? ' selected' : ''}>${escapeHtml(item.display_name || item.name)}</option>`
       ).join('');
     }
     function renderInventory() {
@@ -2126,7 +2517,7 @@ APP_HTML = r"""
             ${items.map((item, index) => {
               const image = item.preview ? `/api/image?path=${encodeURIComponent(item.preview)}` : '';
               return `<article class="asset-card" title="${escapeHtml(item.asset_path || '')}">
-                ${image ? `<img class="asset-thumb" src="${image}" alt="${escapeHtml(item.name || title)}">` : `<div class="asset-thumb"></div>`}
+                ${image ? `<img class="asset-thumb" src="${image}" alt="${escapeHtml(item.name || title)}" loading="lazy" decoding="async">` : `<div class="asset-thumb"></div>`}
                 <div>
                   <div class="asset-title">${escapeHtml(item.name || '')}</div>
                   <div class="asset-desc">${escapeHtml(item.description || '')}</div>
@@ -2149,7 +2540,7 @@ APP_HTML = r"""
         manual_thinking_delay: 3.0,
         mock_llm: document.getElementById('mockLlm').checked,
         run_simulation: document.getElementById('runSimulation').checked,
-        export_lerobot: document.getElementById('exportLerobot').checked,
+        export_lerobot: false,
         headless: document.getElementById('headless').checked,
         record_live_video: document.getElementById('recordVideo').checked,
         num_demos: Number(document.getElementById('numDemos').value || 1),
@@ -2176,9 +2567,8 @@ APP_HTML = r"""
       document.getElementById('manualDemo').checked = true;
       document.getElementById('mockLlm').checked = false;
       document.getElementById('runSimulation').checked = false;
-      document.getElementById('exportLerobot').checked = false;
-      document.getElementById('template').value = 'fabrica_plumbers_block_ur5e_right_base_prepare';
-      document.getElementById('task').value = '基于 plumbers-block UR5e assembly Template 生成新任务 fabrica_plumbers_block_ur5e_right_base_prepare，在线调用 LLM Planner 生成 Menu、Asset Annotation、子任务、技能序列，并准备仿真执行。';
+      document.getElementById('template').value = 'ur5e_assembly_template';
+      document.getElementById('task').value = '基于 UR5e assembly Template 生成新任务 fabrica_plumbers_block_ur5e_assembly，在线调用 LLM Planner 生成 Menu、Asset Annotation、子任务、技能序列，并准备仿真执行。';
       await startJob();
     }
     async function pollJob() {
@@ -2225,6 +2615,25 @@ APP_HTML = r"""
       button.classList.toggle('active', active);
       button.textContent = active ? '停止录制' : busy ? '保存中' : '开始录制';
     }
+    function createScreenRecorder(stream) {
+      const candidates = [
+        'video/mp4;codecs=avc1.42E01E',
+        'video/mp4;codecs=h264',
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      for (const mimeType of candidates) {
+        if (MediaRecorder.isTypeSupported && !MediaRecorder.isTypeSupported(mimeType)) continue;
+        try {
+          return new MediaRecorder(stream, {mimeType});
+        } catch (error) {
+          // Try the next browser-supported container.
+        }
+      }
+      return new MediaRecorder(stream);
+    }
     async function startRecording() {
       if (state.recording) {
         stopRecording();
@@ -2235,17 +2644,19 @@ APP_HTML = r"""
         return;
       }
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {frameRate: 30},
+        video: {
+          width: {ideal: 1920},
+          height: {ideal: 1080},
+          frameRate: {ideal: 60, max: 60},
+          displaySurface: 'monitor'
+        },
         audio: false
       });
+      const trackSettings = stream.getVideoTracks()[0]?.getSettings?.() || {};
       const chunks = [];
-      let recorder;
-      try {
-        recorder = new MediaRecorder(stream, {mimeType: 'video/webm;codecs=vp9'});
-      } catch (error) {
-        recorder = new MediaRecorder(stream, {mimeType: 'video/webm'});
-      }
-      state.recording = {stream, recorder, chunks};
+      const recorder = createScreenRecorder(stream);
+      const recordingMimeType = recorder.mimeType || 'video/webm';
+      state.recording = {stream, recorder, chunks, mimeType: recordingMimeType, settings: trackSettings};
       recorder.ondataavailable = event => {
         if (event.data && event.data.size) chunks.push(event.data);
       };
@@ -2253,10 +2664,11 @@ APP_HTML = r"""
         setRecordButton(false, true);
         try {
           stream.getTracks().forEach(track => track.stop());
-          const blob = new Blob(chunks, {type: 'video/webm'});
+          const uploadType = state.recording?.mimeType || recorder.mimeType || chunks[0]?.type || 'video/webm';
+          const blob = new Blob(chunks, {type: uploadType});
           const saved = await getJson('/api/recordings', {
             method: 'POST',
-            headers: {'Content-Type': 'video/webm'},
+            headers: {'Content-Type': uploadType},
             body: blob
           });
           state.recordingSaved = saved;
@@ -2275,7 +2687,13 @@ APP_HTML = r"""
       });
       recorder.start(1000);
       setRecordButton(true, false);
-      addRecordingEvent('recording_started', {});
+      addRecordingEvent('recording_started', {
+        mime_type: recordingMimeType,
+        width: trackSettings.width,
+        height: trackSettings.height,
+        frame_rate: trackSettings.frameRate,
+        display_surface: trackSettings.displaySurface
+      });
     }
     function stopRecording() {
       const recording = state.recording;
@@ -2297,8 +2715,7 @@ APP_HTML = r"""
         let text = 'waiting';
         if (events.some(item => types.has(item))) { cls += ' done'; text = 'done'; }
         if (key === 'demo' && types.has('demo_started') && !types.has('demo_completed')) { cls = 'stage active'; text = 'running'; }
-        if (key === 'lerobot' && types.has('lerobot_export_started') && !types.has('lerobot_export_completed')) { cls = 'stage active'; text = 'running'; }
-        if (failed && (key === 'demo' || key === 'lerobot' || key === 'check')) { cls += ' fail'; text = 'check trace'; }
+        if (failed && (key === 'demo' || key === 'check')) { cls += ' fail'; text = 'check trace'; }
         return `<div class="${cls}"><div class="stage-name">${name}</div><div class="stage-state">${text}</div></div>`;
       }).join('');
     }
@@ -2363,17 +2780,20 @@ APP_HTML = r"""
         if (event.type.startsWith('manual_') && payload.thinking_process) {
           const processLines = payload.visible_process_lines || payload.process_lines || [];
           const reasoningSteps = processLines.length ? [] : (payload.visible_reasoning_steps || payload.reasoning_steps || []);
+          const output = payload.output || {};
+          const constraintRules = output.constraint_rules || payload.constraint_rules || [];
           const decompositionSections = payload.output?.decomposition_sections || payload.decomposition_sections || [];
           const subtaskCards = payload.output?.subtask_cards || payload.subtask_cards || [];
           const summaryText = cleanResultSummary(payload.thinking_process);
           const typewriterKey = `${state.job?.id || state.jobId || 'job'}:${eventIndex}:${event.type}:${payload.stage || ''}`;
           const typedCard = typewriterBudget(
             typewriterKey,
-            resultTextSegments(summaryText, processLines, reasoningSteps, decompositionSections, decompositionSections.length ? [] : subtaskCards, payload.next_step || '')
+            resultSegmentsForPayload(summaryText, processLines, reasoningSteps, output, decompositionSections.length ? [] : subtaskCards, payload.next_step || '')
           );
           const summaryHtml = revealFromBudget(typedCard, summaryText);
           const processHtml = renderProcessLinesTyped(processLines, typedCard);
           const reasoningHtml = renderReasoningStepsTyped(reasoningSteps, typedCard);
+          const constraintsHtml = renderConstraintRulesTyped(constraintRules, typedCard);
           const sectionHtml = renderDecompositionSectionsTyped(decompositionSections, typedCard);
           const subtaskHtml = decompositionSections.length ? '' : renderSubtaskCardsTyped(subtaskCards, typedCard);
           const nextHtml = revealFromBudget(typedCard, payload.next_step || '');
@@ -2383,8 +2803,10 @@ APP_HTML = r"""
             html: `<div class="thought-summary">${summaryHtml}</div>
               ${processHtml}
               ${reasoningHtml}
+              ${constraintsHtml}
               ${sectionHtml}
               ${subtaskHtml}
+              ${typedCard.done ? renderLeRobotDataset(output.lerobot_dataset) : ''}
               ${nextHtml ? `<div class="thought-next">${nextHtml}</div>` : ''}
               ${typedCard.done ? `<details><summary>技术细节</summary><pre>${escapeHtml(asJson({input: payload.input, output: payload.output}))}</pre></details>` : ''}`
           });
@@ -2424,7 +2846,7 @@ APP_HTML = r"""
           messages.push({
             role: 'agent',
             time: event.time,
-            html: `<div class="thought-title">新任务生成完成</div><div>fabrica_plumbers_block_ur5e_right_base_prepare 的 Menu、Annotation、技能步骤和仿真入口已经生成。</div>${links ? `<div class="thought-next">${links}</div>` : ''}`
+            html: `<div class="thought-title">新任务生成完成</div><div>fabrica_plumbers_block_ur5e_assembly 的 Menu、Annotation、技能步骤和仿真入口已经生成。</div>${links ? `<div class="thought-next">${links}</div>` : ''}`
           });
           continue;
         }
@@ -2471,12 +2893,14 @@ APP_HTML = r"""
         }
         if (completed) {
           const payload = completed.payload || {};
+          const dataset = payload.lerobot_dataset || {};
           messages.push({
             role: 'agent',
             time: completed.time,
-            html: `<div class="thought-title">仿真完成</div>
-              <div>脚本执行结束，视频文件${payload.video_exists ? '已经生成' : '尚未检测到'}。</div>
-              <div class="thought-next">${escapeHtml(payload.video || '')}</div>`
+            html: `<div class="thought-title">仿真完成，开始整理 LeRobot 数据</div>
+              <div>脚本执行结束。视频只是视觉模态之一，系统会按 LeRobotDataset v3.0 组织多相机视频、机械臂关节轨迹、本体感受态、动作、物体状态和 episode metadata。</div>
+              <div class="thought-next">视觉回放：${escapeHtml(payload.video || '')}${payload.video_exists ? '' : '（尚未检测到文件）'}</div>
+              ${renderLeRobotDataset(dataset)}`
           });
         }
         if (failed) {
@@ -2490,10 +2914,15 @@ APP_HTML = r"""
       if (!blockedByTypewriter && recordingEvents.length) {
         for (const event of recordingEvents) {
           if (event.type === 'recording_started') {
+            const payload = event.payload || {};
             messages.push({
               role: 'agent',
               time: event.time,
-              html: `<div class="thought-title">录制已开启</div><div>当前选择的屏幕或窗口正在录制。</div>`
+              html: `<div class="thought-title">录制已开启</div>
+                <div>当前选择的屏幕或窗口正在高清录制，停止后会保存为 MP4。</div>
+                <div class="recording-tip">如果要同时录制浏览器面板和 Isaac Sim，请在浏览器弹出的共享选择里选择“整个屏幕”，并把浏览器和 Isaac 窗口都放在同一个屏幕上。浏览器安全策略不允许一次自动抓取两个独立窗口。</div>
+                ${(payload.width && payload.height) ? `<div class="mono">resolution: ${escapeHtml(payload.width)}×${escapeHtml(payload.height)} @ ${escapeHtml(payload.frame_rate || '?')}fps</div>` : ''}
+                ${payload.mime_type ? `<div class="mono">capture: ${escapeHtml(payload.mime_type)}</div>` : ''}`
             });
           }
           if (event.type === 'recording_saved') {
@@ -2502,7 +2931,8 @@ APP_HTML = r"""
               role: 'agent',
               time: event.time,
               html: `<div class="thought-title">录制已保存</div>
-                <div>面板和仿真过程录制文件已写入本地输出目录。</div>
+                <div>面板和仿真过程录制文件已保存为 MP4。</div>
+                ${payload.filename ? `<div class="mono">${escapeHtml(payload.filename)}</div>` : ''}
                 ${payload.media_url ? `<a class="recording-link" href="${escapeHtml(payload.media_url)}" target="_blank" rel="noreferrer">打开录制文件</a>` : ''}`
             });
           }
@@ -2574,8 +3004,7 @@ APP_HTML = r"""
       return `<pre>${escapeHtml(asJson({
         demo_output_dir: result.demo_output_dir,
         demo_command: result.demo_command,
-        runtime_feedback: result.runtime_feedback,
-        lerobot: result.lerobot
+        runtime_feedback: result.runtime_feedback
       }))}</pre>`;
     }
     function renderTab() {

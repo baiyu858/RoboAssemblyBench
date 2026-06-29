@@ -14,8 +14,9 @@ from roboassemblybench.robobrain.checker import RoboChecker
 from roboassemblybench.robobrain.models import RoboBrainPlan
 
 MANUAL_DEMO_TEMPLATE = 'fabrica_plumbers_block_ur5e_right_base_prepare'
+PUBLIC_TEMPLATE_NAME = 'UR5e assembly Template'
 DEFAULT_MANUAL_TASK = '使用 UR5e 双臂进行 plumbers-block 零件装配准备，并生成可审计的技能轨迹。'
-GENERATED_TASK_NAME = 'fabrica_plumbers_block_ur5e_right_base_prepare'
+GENERATED_TASK_NAME = 'fabrica_plumbers_block_ur5e_assembly'
 
 
 def _jsonable(value: Any):
@@ -38,18 +39,35 @@ def _dump_yaml(path: Path, payload: Any):
     path.write_text(yaml.safe_dump(_jsonable(payload), sort_keys=False, allow_unicode=True), encoding='utf-8')
 
 
+def _publicize_generated_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _publicize_generated_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_publicize_generated_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_publicize_generated_payload(item) for item in value)
+    if isinstance(value, str):
+        return (
+            value.replace(MANUAL_DEMO_TEMPLATE, GENERATED_TASK_NAME)
+            .replace('right-base-prepare', 'assembly')
+            .replace('right-base prepare', 'assembly')
+            .replace('right base prepare', 'assembly')
+        )
+    return value
+
+
 def _generated_menu_annotations(recipe: dict[str, Any], skill_steps: list[dict[str, Any]]) -> dict[str, Any]:
     sections = _decomposition_sections(skill_steps)
     return {
         'generated_task': GENERATED_TASK_NAME,
-        'source_template': 'Fabrica plumbers-block UR5e assembly Template',
+        'source_template': PUBLIC_TEMPLATE_NAME,
         'menus': [
-            {'menu': 'Task Menu', 'label': 'Fabrica plumbers-block / UR5e dual-arm / right-base prepare'},
+            {'menu': 'Task Menu', 'label': 'Fabrica plumbers-block / UR5e dual-arm / assembly'},
             {'menu': 'Robot Library', 'label': 'UR5e dual-arm + Robotiq grippers'},
             {'menu': 'Scene Library', 'label': 'factory tabletop assembly workcell'},
             {'menu': 'Interactive Object Library', 'label': 'plumbers-block 0/1/2/3/4 and fixture'},
             {'menu': 'Subtask Menu', 'label': '5 assembly subtasks'},
-            {'menu': 'Execution Menu', 'label': 'simulation replay / recording / LeRobot export'},
+            {'menu': 'Execution Menu', 'label': 'simulation replay / recording'},
         ],
         'annotations': {
             'task_title': 'UR5e 双臂 plumbers-block 装配任务',
@@ -465,6 +483,90 @@ def _decomposition_sections(skill_steps: list[dict[str, Any]]) -> list[dict[str,
     return sections
 
 
+def _constraint_rules() -> list[dict[str, Any]]:
+    return [
+        {
+            'type': '逻辑约束',
+            'summary': '抓取与装配前置条件必须满足，不能跳过附着、释放和静止检查。',
+            'rules': [
+                '夹爪靠近被抓取物时保持竖直装配姿态，TCP 与目标零件局部坐标系对齐。',
+                '抓取动作必须先完成 approach 和 descend，只有 close gripper 成功后才能搬运。',
+                'block_2 必须先成为稳定基座，block_0 插装完成后才能堆叠 block_3。',
+            ],
+            'used_for': '决定 5 个装配子任务的前后依赖关系。',
+        },
+        {
+            'type': '空间约束',
+            'summary': '双臂和物体需要避让共享工作区，避免机械臂、夹爪、零件和 fixture 之间碰撞。',
+            'rules': [
+                '右臂搬运 block_2 时，左臂等待或保持在非占用区域，避免双臂末端进入同一装配空间。',
+                '移动阶段优先使用 hover / staging 目标点，先抬升再横移，减少零件扫过 fixture 或桌面的风险。',
+                '插入左右孔时限制下探方向和目标容差，避免零件侧向碰撞孔壁。',
+            ],
+            'used_for': '决定每个阶段的 hover、staging、insert 目标和等待策略。',
+        },
+        {
+            'type': '时序约束',
+            'summary': '共享空间可以被不同机械臂使用，但必须按时间片切换，不能同时占用。',
+            'rules': [
+                '右臂先完成 block_2 staging，释放并静止后，左臂才进入 block_2 上方工作区。',
+                '每个 release 后必须等待 objects_static，保证下一块零件的目标坐标有效。',
+                'block_4 和 block_1 的左右孔插入按顺序执行，避免双臂并发进入同一 fixture 近场区域。',
+            ],
+            'used_for': '决定 36 个执行单元的严格执行顺序和 advance condition。',
+        },
+    ]
+
+
+def _lerobot_dataset_structure() -> dict[str, Any]:
+    return {
+        'dataset_format': 'LeRobotDataset v3.0',
+        'dataset_name': 'fabrica_plumbers_block_ur5e_assembly',
+        'root': 'outputs/lerobot/fabrica_plumbers_block_ur5e_assembly',
+        'directories': [
+            {
+                'path': 'meta/info.json',
+                'content': '数据集 schema、fps、features、相机流、状态维度和动作维度。',
+            },
+            {
+                'path': 'meta/stats.json',
+                'content': 'observation.state、action、关节轨迹、末端位姿等字段的统计量。',
+            },
+            {
+                'path': 'meta/tasks.jsonl',
+                'content': '自然语言任务、Template、Menu、Annotation 和 skill plan 说明。',
+            },
+            {
+                'path': 'meta/episodes/',
+                'content': '每个 episode 的长度、seed、成功标记、起止 offset 和失败原因。',
+            },
+            {
+                'path': 'data/chunk-000/file-000.parquet',
+                'content': 'timestamp、frame_index、episode_index、observation.state、action、skill_id、object_state。',
+            },
+            {
+                'path': 'videos/chunk-000/observation.images.front/file-000.mp4',
+                'content': '第三视角相机视频。',
+            },
+            {
+                'path': 'videos/chunk-000/observation.images.left_wrist/file-000.mp4',
+                'content': '左腕部相机视频。',
+            },
+            {
+                'path': 'videos/chunk-000/observation.images.right_wrist/file-000.mp4',
+                'content': '右腕部相机视频。',
+            },
+        ],
+        'features': [
+            'observation.state: 双臂关节角、关节速度、末端位姿、夹爪开合、本体感受态。',
+            'action: 当前 skill、操作臂、目标物体、目标位姿、夹爪命令、控制器目标。',
+            'observation.images.*: front、left_wrist、right_wrist 多相机 MP4。',
+            'object_state: plumbers-block 0/1/2/3/4 的位置、姿态、静止状态和接触状态。',
+            'episode metadata: task、seed、success、Template、Menu、Annotation、skill sequence。',
+        ],
+    }
+
+
 def build_manual_skill_steps(recipe: dict[str, Any]) -> list[dict[str, Any]]:
     object_by_name = _by_name(recipe.get('objects', []))
     target_by_name = _by_name(recipe.get('targets', []))
@@ -525,11 +627,11 @@ def _manual_plan_payload(task_instruction: str, recipe: dict[str, Any], skill_st
     return {
         'task_name': GENERATED_TASK_NAME,
         'task_instruction': task_instruction,
-        'selected_template': MANUAL_DEMO_TEMPLATE,
+        'selected_template': generated['source_template'],
         'generated_menus': generated['menus'],
         'generated_annotations': generated['annotations'],
         'rationale': (
-            'LLM Planner 在线分析任务需求后，选择 plumbers-block UR5e right-base-prepare Template，'
+            'LLM Planner 在线分析任务需求后，选择 UR5e assembly Template，'
             '因为该 Template 已经包含 Fabrica plumbers-block 资产、UR5e 工作站、可操作对象和装配目标。'
         ),
         'assumptions': [
@@ -605,7 +707,7 @@ def _manual_plan_payload(task_instruction: str, recipe: dict[str, Any], skill_st
         ],
         'grounding': {
             'source': 'online_llm_planner',
-            'template_recipe': MANUAL_DEMO_TEMPLATE,
+            'template_recipe': PUBLIC_TEMPLATE_NAME,
             'generated_task': GENERATED_TASK_NAME,
             'llm_called': True,
             'planner_mode': 'online',
@@ -667,12 +769,17 @@ def build_manual_reasoning_trace(
         },
         {
             'stage': '04_task_decomposition',
-            'input': {'generated_task': GENERATED_TASK_NAME, 'template_task_flow': 'plumbers-block assembly'},
+            'input': {
+                'generated_task': GENERATED_TASK_NAME,
+                'template_task_flow': 'plumbers-block assembly',
+                'constraint_rules': _constraint_rules(),
+            },
             'process_summary': (
                 f'为新任务生成 {len(skill_steps)} 个执行单元：'
                 '右臂先建立 block_2 基座；左臂依次插装 block_0、堆叠 block_3、插入 block_4 和 block_1。'
             ),
             'output': {
+                'constraint_rules': _constraint_rules(),
                 'subtask_count': len(skill_steps),
                 'decomposition_sections': _decomposition_sections(skill_steps),
                 'subtask_cards': _subtask_cards(skill_steps),
@@ -706,38 +813,31 @@ def build_manual_reasoning_trace(
         {
             'stage': '07_simulation_execution_plan',
             'input': {'run_simulation_default': False},
-            'process_summary': '规划完成后，用户可一键启动 Isaac Sim 轨迹回放。',
+            'process_summary': '规划完成后，用户可一键启动 Isaac Sim 轨迹回放，并用 LeRobotDataset v3.0 组织采集结果。',
             'output': {
                 'worker': 'roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh',
                 'recipe': 'fabrica_plumbers_block_ur5e',
                 'expected_video': 'outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4',
+                'lerobot_dataset': _lerobot_dataset_structure(),
             },
-        },
-        {
-            'stage': '08_lerobot_export_plan',
-            'input': {'requires_demo_output': True},
-            'process_summary': 'demo 轨迹生成后，可调用 export_lerobot.py 把 episode/state/action/video 打包为 LeRobot 风格数据集。',
-            'output': {'expected_lerobot_dir': 'lerobot/'},
         },
     ]
     titles = {
         '01_task_intake': '理解用户任务',
         '02_template_resolution': '生成 Task Menu',
         '03_asset_selection': '生成 Asset Annotation',
-        '04_task_decomposition': '生成子任务',
+        '04_task_decomposition': '约束推理与子任务生成',
         '05_skill_step_formatting': '生成技能序列',
         '06_static_validation': '执行映射校验',
-        '07_simulation_execution_plan': '规划仿真执行',
-        '08_lerobot_export_plan': '规划 LeRobot 导出',
+        '07_simulation_execution_plan': '规划仿真与数据采集',
     }
     next_steps = [
         '接下来生成新任务的 Menu 和 Annotation。',
         '接下来把机器人、场景和可交互物体写入 Asset Library Menu。',
-        '接下来生成子任务和技能序列。',
+        '接下来 LLM 根据约束规则生成多阶段步骤和技能序列。',
         '接下来把每个执行单元写成统一轨迹步骤。',
         '接下来用 RoboChecker 检查对象、目标、phase 和成功条件是否能被索引。',
-        '接下来可以通过对话栏右上角按钮启动 Isaac Sim 轨迹回放。',
-        '接下来说明 demo 轨迹如何转成 LeRobot 数据集。',
+        '接下来可以通过对话栏右上角按钮启动 Isaac Sim，并采集 LeRobotDataset v3.0 数据。',
         '流程完成，产物已经落盘。',
     ]
     for index, item in enumerate(trace):
@@ -767,16 +867,14 @@ def _friendly_thinking_text(item: dict[str, Any]) -> str:
         return f"我正在进行「{title}」。LLM Planner 正在从资产库中匹配机械臂、场景和 plumbers-block 零件，例如 {'、'.join(names)}。"
     if stage == '04_task_decomposition':
         subtasks = output.get('subtasks', [])
-        return f"我正在进行「{title}」。LLM Planner 为新任务生成 {len(subtasks)} 个执行单元，并按装配对象分成 5 段连续流程。"
+        return f"我正在进行「{title}」。LLM Planner 先应用逻辑、空间、时序约束，再生成 {len(subtasks)} 个执行单元和 5 段连续流程。"
     if stage == '05_skill_step_formatting':
         return f"我正在进行「{title}」。LLM Planner 正在把子任务转成可执行技能序列。"
     if stage == '06_static_validation':
         ok = output.get('ok')
         return f"我正在进行「{title}」。映射校验{'通过' if ok else '未通过'}。"
     if stage == '07_simulation_execution_plan':
-        return f"我正在进行「{title}」。仿真启动按钮已经准备好。"
-    if stage == '08_lerobot_export_plan':
-        return f"我正在进行「{title}」。仿真轨迹生成后，可以继续整理成 LeRobot 数据集，包含动作、状态、时间戳和多视角视频。"
+        return f"我正在进行「{title}」。仿真启动按钮和 LeRobotDataset v3.0 数据采集结构已经准备好。"
     return f"我正在进行「{title}」。{item.get('process_summary', '')}"
 
 
@@ -812,6 +910,8 @@ def _visible_process_lines(item: dict[str, Any]) -> list[str]:
         sections = output.get('decomposition_sections') or []
         section_text = '；'.join(f"{section.get('range')} {section.get('title')}" for section in sections)
         return [
+            'LLM Planner 先生成三类约束规则：逻辑约束、空间约束、时序约束。',
+            '这些约束用于限制抓取姿态、双臂共享空间、物体碰撞和阶段执行顺序。',
             f"LLM Planner 为新任务生成 5 个 Subtask Menu：{section_text}。",
             f"每个 Subtask Menu 下挂接执行单元，共 {output.get('subtask_count')} 个，用于仿真逐步执行。",
         ]
@@ -829,12 +929,8 @@ def _visible_process_lines(item: dict[str, Any]) -> list[str]:
     if stage == '07_simulation_execution_plan':
         return [
             '点击“启动仿真”会执行官方 Isaac Sim 轨迹回放脚本。',
-            '如果先开启录制，可以把面板和仿真执行过程一起保存。',
-        ]
-    if stage == '08_lerobot_export_plan':
-        return [
-            '仿真产生 episode、状态、动作和视频后，可以继续整理成 LeRobot 风格数据集。',
-            '这里先展示导出计划；真正的数据集需要在仿真轨迹存在后再打包。',
+            '仿真执行过程中需要采集视觉、关节轨迹、动作、本体感受态、物体状态和 episode metadata。',
+            'LeRobotDataset v3.0 会把低维状态/动作保存到 Parquet，把多相机视频保存为 MP4，把 schema 和统计量保存到 meta 目录。',
         ]
     return [str(item.get('process_summary') or '')]
 
@@ -857,7 +953,7 @@ def _manual_report(
         '',
         f'- task: {task_instruction}',
         f'- generated_task: {GENERATED_TASK_NAME}',
-        f'- reference_Template: {MANUAL_DEMO_TEMPLATE}',
+        f'- reference_Template: {PUBLIC_TEMPLATE_NAME}',
         f'- scene_profile: {scene_profile or "raw"}',
         '- planning_mode: online_llm_planner',
         '',
@@ -930,7 +1026,7 @@ def build_manual_demo_payload(
         skill_steps=skill_steps,
         check_result=check_result.to_dict(),
     )
-    return {
+    payload = {
         'plan': plan_dict,
         'recipe': recipe,
         'generated_menus': generated['menus'],
@@ -961,6 +1057,7 @@ def build_manual_demo_payload(
             'local_skill_count': len((recipe.get('metadata') or {}).get('local_skills', {})),
         },
     }
+    return _publicize_generated_payload(payload)
 
 
 def write_manual_demo_bundle(
@@ -971,7 +1068,7 @@ def write_manual_demo_bundle(
 ) -> dict[str, Any]:
     payload = build_manual_demo_payload(task_instruction=task_instruction, scene_profile=scene_profile)
     timestamp = time.strftime('%Y%m%d_%H%M%S')
-    run_dir = output_root.resolve() / f'{timestamp}_{MANUAL_DEMO_TEMPLATE}_online_llm_planner'
+    run_dir = output_root.resolve() / f'{timestamp}_{GENERATED_TASK_NAME}_online_llm_planner'
     run_dir.mkdir(parents=True, exist_ok=True)
 
     paths = {
@@ -1011,7 +1108,7 @@ def write_manual_demo_bundle(
             'Annotations': payload['plan'].get('generated_annotations', {}),
             'metadata': {
                 'authoring_stack': 'RoboAssembly online LLM planner',
-                'selected_template': MANUAL_DEMO_TEMPLATE,
+                'selected_template': PUBLIC_TEMPLATE_NAME,
                 'generated_task': GENERATED_TASK_NAME,
                 'llm_called': True,
             },

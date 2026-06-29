@@ -641,7 +641,12 @@ class FabricaOnlinePickupTransportAdapter:
         from utils.common import TimeStamp
 
         log_dir = self._resolve_path(spec.get("log_dir", "roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block"))
-        assembly_dir = self._resolve_path(spec.get("assembly_dir", "third_part/Fabrica/assets/fabrica/plumbers_block"))
+        assembly_dir = self._resolve_path(
+            spec.get(
+                "assembly_dir",
+                "roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block",
+            )
+        )
         motion = pickle.load(open(log_dir / "motion.pkl", "rb"))
         pickup_payload = json.load(open(log_dir / "fixture/pickup.json", encoding="utf-8"))
         traj = np.load(log_dir / "traj.npy", allow_pickle=True)
