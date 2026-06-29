@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from huggingface_hub import HfApi
@@ -48,6 +49,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-id", default=DEFAULT_REPO_ID)
     parser.add_argument("--repo-type", default="dataset")
+    parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("HF_ENDPOINT"),
+        help="Optional Hugging Face endpoint, for example https://hf-mirror.com.",
+    )
     parser.add_argument("--private", action="store_true")
     parser.add_argument(
         "--asset",
@@ -62,11 +68,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     selected = args.asset or list(DEFAULT_ASSETS)
-    api = HfApi()
+    api = HfApi(endpoint=args.endpoint)
 
     manifest = {
         "repo_id": args.repo_id,
         "repo_type": args.repo_type,
+        "endpoint": args.endpoint,
         "assets": {},
         "ignore_patterns": IGNORE_PATTERNS,
     }

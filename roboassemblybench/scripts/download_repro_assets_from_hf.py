@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
@@ -18,6 +19,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-id", default=DEFAULT_REPO_ID)
     parser.add_argument("--repo-type", default="dataset")
     parser.add_argument("--revision", default=None)
+    parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("HF_ENDPOINT"),
+        help="Optional Hugging Face endpoint, for example https://hf-mirror.com.",
+    )
     parser.add_argument("--local-dir", type=Path, default=REPO_ROOT)
     parser.add_argument(
         "--include",
@@ -43,6 +49,7 @@ def main() -> None:
         revision=args.revision,
         local_dir=args.local_dir,
         allow_patterns=include_patterns,
+        endpoint=args.endpoint,
         local_dir_use_symlinks=False,
     )
     print(f"Downloaded {args.repo_id} into {args.local_dir}")

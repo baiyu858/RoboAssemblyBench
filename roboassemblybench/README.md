@@ -122,6 +122,14 @@ python roboassemblybench/scripts/download_repro_assets_from_hf.py \
   --repo-id baiyu858/InternUtopia-repro-assets
 ```
 
+国内网络建议使用 HF 镜像端点：
+
+```bash
+HF_ENDPOINT=https://hf-mirror.com \
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets
+```
+
 默认会把 HF dataset repo 中的这些路径下载回仓库根目录：
 
 ```text
@@ -146,7 +154,8 @@ python roboassemblybench/scripts/upload_repro_assets_to_hf.py \
   --repo-id baiyu858/InternUtopia-repro-assets
 ```
 
-上传需要先提供 Hugging Face token，例如设置 `HF_TOKEN` 或运行 `huggingface-cli login`。
+上传需要先提供 Hugging Face token，例如设置 `HF_TOKEN` 或运行 `huggingface-cli login`。如果需要尝试镜像端点，
+同样可以设置 `HF_ENDPOINT=https://hf-mirror.com`；如果镜像写入失败，切回默认 Hugging Face endpoint 后重试。
 
 ## 渲染 Fabrica 官方 plumbers_block UR5e 轨迹
 
