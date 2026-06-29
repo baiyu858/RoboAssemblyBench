@@ -43,7 +43,7 @@ source Isaac Sim 的 `setup_conda_env.sh`，这样 `isaacsim`、`omni.*`、`pxr`
 推荐安装方式是直接运行仓库根目录下的安装脚本：
 
 ```bash
-cd /home/baiyu24/model/InternUtopia
+cd /path/to/RoboAssemblyBench
 bash setup_conda.sh
 ```
 
@@ -110,6 +110,212 @@ echo "$PYTHONPATH"
 
 `env_vars.sh` 里应该 source 当前 Isaac Sim 目录下的 `setup_conda_env.sh`。如果路径不对，重新运行
 `bash setup_conda.sh`，或手动修正该文件后重新打开 shell/重新激活环境。
+
+## 从零完整复现 plumbers_block UR5e 渲染
+
+本节给出从干净机器拉仓库到生成视频的完整流程。目标是复现：
+
+```bash
+bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
+```
+
+最终产物默认写到：
+
+```text
+outputs/fabrica_official_isaacsim/
+  plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4
+  plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.json
+  plumbers_block_ur5e_official_traj_taoyuan_task_env_replay_frames/
+```
+
+### 1. 拉取代码分支
+
+使用包含 RoboAssemblyBench 复现脚本和资产下载脚本的分支：
+
+```bash
+git clone -b codex/add-scene-lights https://github.com/baiyu858/RoboAssemblyBench.git
+cd RoboAssemblyBench
+```
+
+如果已经 clone 过仓库，切换并更新同一个分支：
+
+```bash
+git fetch origin codex/add-scene-lights
+git checkout codex/add-scene-lights
+git pull origin codex/add-scene-lights
+```
+
+### 2. 创建并激活 conda 环境
+
+先确认本机 Isaac Sim 目录存在这些文件：
+
+```bash
+ls /path/to/isaac-sim/isaac-sim.sh
+ls /path/to/isaac-sim/python.sh
+ls /path/to/isaac-sim/setup_conda_env.sh
+```
+
+然后运行安装脚本。脚本询问环境名时输入 `internutopia311`：
+
+```bash
+bash setup_conda.sh
+conda activate internutopia311
+```
+
+补齐下载和渲染脚本使用到的 Python 包：
+
+```bash
+python -m pip install -e .
+python -m pip install huggingface_hub requests tqdm numpy pyyaml imageio imageio-ffmpeg trimesh scipy
+which ffmpeg
+which ffprobe
+```
+
+基础导入检查：
+
+```bash
+conda run -n internutopia311 env PYTHONNOUSERSITE=1 python -c \
+  "import numpy, imageio, trimesh, scipy, yaml, huggingface_hub, requests, tqdm, internutopia, internutopia_extension; print('python deps ok')"
+```
+
+Isaac Sim headless 检查：
+
+```bash
+conda run -n internutopia311 env PYTHONNOUSERSITE=1 python -c \
+  "from isaacsim import SimulationApp; app = SimulationApp({'headless': True}); import omni.replicator.core as rep; from pxr import UsdGeom; print('isaac sim ok'); app.close()"
+```
+
+### 3. 下载 Hugging Face 大资产
+
+大目录不进 GitHub，按原目录结构放在 Hugging Face dataset：
+
+```text
+https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets
+```
+
+国内网络推荐使用镜像站：
+
+```bash
+HF_ENDPOINT=https://hf-mirror.com \
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets
+```
+
+如果需要代理，先设置代理再下载：
+
+```bash
+# 按本机代理端口调整；不需要代理时不要设置这两行。
+export HTTPS_PROXY=http://127.0.0.1:7897
+export HTTP_PROXY=http://127.0.0.1:7897
+export HF_ENDPOINT=https://hf-mirror.com
+
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets
+```
+
+脚本会把 HF 上的资产直接下载回仓库根目录，不需要解压 zip。默认同步这些路径：
+
+```text
+third_part/Fabrica/
+third_part/factory_dual_franka_peg_transfer/
+IsaacLab/
+recordings/
+manifest.json
+```
+
+如果只想先验证 Fabrica 相关资产，可以只下载对应路径：
+
+```bash
+HF_ENDPOINT=https://hf-mirror.com \
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets \
+  --include 'third_part/Fabrica/**' \
+  --include 'manifest.json'
+```
+
+### 4. 验证资产是否齐全
+
+先检查 GitHub 仓库内随代码分发的默认渲染资产。这些是
+`render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh` 默认读取的路径：
+
+```bash
+test -f roboassemblybench/tasks/fabrica_plumbers_block_ur5e/recipe.yaml
+test -f roboassemblybench/scenes/profiles/taoyuan_grscenes_tabletop.yaml
+test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/traj.npy
+test -f roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block/fixture/fixture.obj
+test -d roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block
+test -f roboassemblybench/assets/Fabrica/official_replay_assets/optical_board.obj
+test -d roboassemblybench/assets/Fabrica/official_replay_assets/ur5e/visual
+test -d roboassemblybench/assets/Fabrica/official_replay_assets/robotiq_85/visual
+```
+
+再检查 HF 下载的大资产。下面这些文件用于和本机完整目录保持一致，也能覆盖其他 Fabrica/IsaacGym
+脚本的复现需求：
+
+```bash
+test -f manifest.json
+test -f third_part/Fabrica/logs/codex_plumbers_block_ur5e_official/plumbers_block/traj.npy
+test -f third_part/Fabrica/isaacgym/IsaacGym_Preview_4_Package.tar.gz
+test -f third_part/Fabrica/isaacgym/isaacgym/python/isaacgym/_bindings/linux-x86_64/gym_38.so
+test -f third_part/Fabrica/simulation/build/lib.linux-x86_64-cpython-39/redmax_py.cpython-39-x86_64-linux-gnu.so
+test -d third_part/factory_dual_franka_peg_transfer
+test -d IsaacLab
+test -d recordings
+```
+
+如果某条 `test` 命令失败，说明代码分支或 HF 资产没有同步完整。先重新拉分支，再重新执行资产下载命令。
+
+### 5. 先做小样本 smoke test
+
+无显示器或远程服务器建议显式设置 `HEADLESS=1`。先渲染 10 帧，确认环境、资产路径和 mp4 编码都正常：
+
+```bash
+HEADLESS=1 MAX_FRAMES=10 WIDTH=640 HEIGHT=360 STRIDE=24 \
+  bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
+```
+
+检查输出：
+
+```bash
+ls -lh outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4
+python -m json.tool outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.json | head -80
+find outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay_frames -name '*.png' | wc -l
+```
+
+### 6. 运行完整渲染
+
+smoke test 正常后运行完整命令：
+
+```bash
+HEADLESS=1 \
+  bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
+```
+
+有本地图形界面并希望打开 Isaac Sim GUI 时可以去掉 `HEADLESS=1`，脚本默认是 GUI 模式：
+
+```bash
+bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
+```
+
+完整渲染结束后用 `ffprobe` 检查视频流：
+
+```bash
+ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate,nb_frames \
+  -of default=nokey=1:noprint_wrappers=1 \
+  outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4
+```
+
+### 7. 复现一致性注意事项
+
+- 不要把 `LOG_DIR` 改到不匹配的 Fabrica 日志目录。默认脚本使用
+  `roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block`。
+- 不要手动打开 `KEEP_TASK_REPLAY_OVERLAPS=1` 做复现对比。默认值 `0` 会隐藏 task env 里和回放 mesh
+  重叠的机器人、fixture 和零件，避免视觉上出现两套机器人或两套组件。
+- 默认 `WORLD_OFFSET=0.47,0,1.012` 是当前 plumbers_block UR5e replay 对齐到 task env 的偏移。
+  改动它会直接导致轨迹和桌面/夹具/零件错位。
+- 这个脚本是 kinematic visual replay，不是 PhysX 接触仿真，也不是控制器重定向执行。不要把“机械臂乱飞”
+  当成控制器策略问题优先排查，先确认代码分支、默认资产路径、`KEEP_TASK_REPLAY_OVERLAPS` 和
+  `WORLD_OFFSET` 是否和上面一致。
 
 ## 下载 Hugging Face 大资产
 
@@ -184,7 +390,7 @@ test -d roboassemblybench/assets/Fabrica/official_replay_assets/robotiq_85/visua
 默认完整渲染命令：
 
 ```bash
-cd /home/baiyu24/model/InternUtopia
+cd /path/to/RoboAssemblyBench
 bash roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh
 ```
 
