@@ -28,6 +28,9 @@ IGNORE_PATTERNS = [
     ".pytest_cache",
     ".pytest_cache/*",
     "**/.pytest_cache/**",
+    ".cache",
+    ".cache/*",
+    "**/.cache/**",
 ]
 
 
