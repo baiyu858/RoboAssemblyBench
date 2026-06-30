@@ -15,13 +15,8 @@ import trimesh
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOG_DIR = REPO_ROOT / "roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block"
-DEFAULT_ASSET_DIR = (
-    REPO_ROOT
-    / "roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets"
-)
-DEFAULT_ASSEMBLY_DIR = (
-    DEFAULT_ASSET_DIR / "fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts"
-)
+DEFAULT_ASSEMBLY_DIR = REPO_ROOT / "roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block"
+DEFAULT_ASSET_DIR = REPO_ROOT / "roboassemblybench/assets/Fabrica/official_replay_assets"
 DEFAULT_OUTPUT = REPO_ROOT / "outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_replay.mp4"
 
 UNIT_SCALE = 0.01

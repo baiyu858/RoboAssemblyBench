@@ -46,3 +46,15 @@ def test_isaac_shell_entrypoints_accept_webrtc_env():
     for script in scripts:
         text = (REPO_ROOT / script).read_text(encoding="utf-8")
         assert "WEBRTC" in text, script
+
+
+def test_task_env_replay_uses_repo_replay_assets_and_keeps_webrtc():
+    text = (
+        REPO_ROOT
+        / "roboassemblybench/scripts/render_fabrica_official_plumbers_block_ur5e_traj_task_env_isaacsim.sh"
+    ).read_text(encoding="utf-8")
+
+    assert 'WEBRTC="${WEBRTC:-0}"' in text
+    assert "args+=(--webrtc)" in text
+    assert "roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block" in text
+    assert "roboassemblybench/assets/Fabrica/official_replay_assets" in text

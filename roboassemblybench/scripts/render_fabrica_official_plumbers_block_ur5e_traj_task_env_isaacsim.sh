@@ -21,8 +21,8 @@ HEADLESS="${HEADLESS:-1}"
 WEBRTC="${WEBRTC:-0}"
 
 LOG_DIR="${LOG_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block}"
-ASSET_DIR="${ASSET_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/assets}"
-ASSEMBLY_DIR="${ASSEMBLY_DIR:-$ASSET_DIR/fabrica_original_usd_sdf_margin_001/aligned/plumbers_block/parts}"
+ASSEMBLY_DIR="${ASSEMBLY_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block}"
+ASSET_DIR="${ASSET_DIR:-$REPO_ROOT/roboassemblybench/assets/Fabrica/official_replay_assets}"
 OUTPUT="${OUTPUT:-$REPO_ROOT/outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay.mp4}"
 FRAMES_DIR="${FRAMES_DIR:-$REPO_ROOT/outputs/fabrica_official_isaacsim/plumbers_block_ur5e_official_traj_taoyuan_task_env_replay_frames}"
 
@@ -58,6 +58,9 @@ if [[ "$HEADLESS" == "1" || "$HEADLESS" == "true" ]]; then
   args+=(--headless)
 else
   args+=(--no-headless)
+  if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    echo "Warning: DISPLAY/WAYLAND_DISPLAY is empty, so Isaac Sim may still be unable to open a GUI window." >&2
+  fi
 fi
 
 if [[ "$WEBRTC" == "1" || "$WEBRTC" == "true" ]]; then

@@ -40,7 +40,7 @@ metadata:
       adapter: toolkits.factory_dual_franka_assembly.fabrica_online_planner_adapter:FabricaOnlinePickupTransportAdapter
       fabrica_root: third_part/Fabrica
       log_dir: roboassemblybench/assets/Fabrica/official_logs/codex_plumbers_block_ur5e_official/plumbers_block
-      assembly_dir: third_part/Fabrica/assets/fabrica/plumbers_block
+      assembly_dir: roboassemblybench/assets/Fabrica/official_replay_assets/fabrica/plumbers_block
       arm_type: ur5e
       gripper_type: robotiq-85
       pickup_motion_indices:
