@@ -27,7 +27,7 @@ This checkpoint is meant to be reproduced locally with NVIDIA Isaac Sim and Cond
 Required:
 
 - Ubuntu 20.04/22.04 with an NVIDIA GPU and working driver
-- NVIDIA Isaac Sim 4.5.x
+- NVIDIA Isaac Sim 5.1.0
 - Conda
 - Git LFS, for the external asset bundle
 
