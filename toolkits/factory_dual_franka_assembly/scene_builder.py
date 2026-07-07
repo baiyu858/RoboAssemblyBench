@@ -98,6 +98,11 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
                 'gripper_mount_local_pos1',
                 'gripper_mount_local_rot0',
                 'gripper_mount_local_rot1',
+                'configure_gripper_mount_joint',
+                'gripper_base_link_path',
+                'gripper_container_path',
+                'gripper_container_orient',
+                'author_gripper_collision_pads',
             ):
                 if field_name in robot_spec:
                     ur5e_kwargs[field_name] = copy.deepcopy(robot_spec[field_name])
@@ -359,6 +364,17 @@ def build_dual_franka_assembly_episode(
         else int(recipe_spec.get('phase_timeout_steps')),
         phase_timeout_action=str(recipe_spec.get('phase_timeout_action', 'fail')),
         phase_timeout_recovery_phase=recipe_spec.get('phase_timeout_recovery_phase'),
+        object_state_sanity_enabled=bool(recipe_spec.get('object_state_sanity_enabled', True)),
+        object_state_sanity_action=str(recipe_spec.get('object_state_sanity_action', 'fail')),
+        object_state_sanity_max_position_norm=recipe_spec.get('object_state_sanity_max_position_norm', 50.0),
+        object_state_sanity_max_reference_distance=recipe_spec.get('object_state_sanity_max_reference_distance', 10.0),
+        object_state_sanity_max_linear_speed=recipe_spec.get('object_state_sanity_max_linear_speed', 50.0),
+        object_state_sanity_max_angular_speed=recipe_spec.get('object_state_sanity_max_angular_speed', 500.0),
+        object_state_sanity_recovery_attempts=int(
+            3
+            if recipe_spec.get('object_state_sanity_recovery_attempts') is None
+            else recipe_spec.get('object_state_sanity_recovery_attempts')
+        ),
         scene_asset_path=recipe_spec['scene_asset_path'],
         scene_asset_fallback_path=recipe_spec.get('scene_asset_fallback_path'),
         scene_scale=tuple(float(value) for value in recipe_spec.get('scene_scale', [1.0, 1.0, 1.0])),

@@ -255,7 +255,10 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             )
 
         ik_target_pose = self._ik_target_pose(target_pose=command_target_pose, spec=spec)
-        if bool(spec.get("use_arm_ik_controller", False)):
+        use_arm_ik_controller = bool(spec.get("use_arm_ik_controller", False))
+        # Raw Cartesian IK can choose a different UR5e branch between frames.  Keep it
+        # opt-in and otherwise route through the joint-limited IK path below.
+        if use_arm_ik_controller and bool(spec.get("allow_direct_arm_ik_controller", False)):
             current_q = self._current_arm_q(task, robot_name)
             action = OrderedDict()
             action[_ARM_IK_CONTROLLER] = [
@@ -390,6 +393,11 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         }
 
         action = OrderedDict()
+        if use_arm_ik_controller:
+            action[_ARM_IK_CONTROLLER] = [
+                np.asarray(ik_target_pose["position"], dtype=float).tolist(),
+                np.asarray(ik_target_pose["orientation"], dtype=float).tolist(),
+            ]
         action[_ARM_JOINT_CONTROLLER] = [command_q.tolist()]
         self._remember_arm_command(task, robot_name, command_q)
         gripper_command = spec.get("gripper_command")
@@ -1376,7 +1384,13 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         values = values[: len(_UR5E_ARM_JOINT_NAMES)]
         if not np.all(np.isfinite(values)):
             return None
-        return values.copy()
+        return UR5ePlumbersBlockAtomicSkillAdapter._bounded_revolute_joint_values(values)
+
+    @staticmethod
+    def _bounded_revolute_joint_values(values) -> np.ndarray:
+        values = np.asarray(values, dtype=float).copy()
+        wrapped = (values + np.pi) % (2.0 * np.pi) - np.pi
+        return np.where(np.abs(values) > np.pi + 0.25, wrapped, values)
 
     def _remember_arm_command(self, task, robot_name: str, command_q: np.ndarray) -> None:
         joint_positions = self._coerce_arm_q(command_q)
@@ -1464,8 +1478,17 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             )
             used_warm_start = warm_start is not None and bool(spec.get("use_command_warm_start", True))
             if used_warm_start:
-                raw_solver = getattr(ik_controller._kinematics_solver, "_kinematics_solver", None)  # noqa: SLF001
-                ee_frame = getattr(ik_controller._kinematics_solver, "_ee_frame", None)  # noqa: SLF001
+                solver_wrapper = ik_controller._kinematics_solver  # noqa: SLF001
+                raw_solver = None
+                get_raw_solver = getattr(solver_wrapper, "get_kinematics_solver", None)
+                if callable(get_raw_solver):
+                    raw_solver = get_raw_solver()
+                if raw_solver is None:
+                    raw_solver = getattr(solver_wrapper, "_kinematics_solver", None)
+                if raw_solver is None:
+                    raw_solver = getattr(solver_wrapper, "_kinematics", None)
+                get_ee_frame = getattr(solver_wrapper, "get_end_effector_frame", None)
+                ee_frame = get_ee_frame() if callable(get_ee_frame) else getattr(solver_wrapper, "_ee_frame", None)
                 if raw_solver is not None and ee_frame is not None:
                     ik_result, success = raw_solver.compute_inverse_kinematics(
                         ee_frame,
@@ -1692,28 +1715,48 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         if object_pose is None:
             return None
 
-        current_relative = np.asarray(object_pose["position"], dtype=float) - np.asarray(
+        current_relative_world = np.asarray(object_pose["position"], dtype=float) - np.asarray(
             current_pose["position"], dtype=float
         )
+        current_relative_tcp = quat_rotate(
+            self._quat_conjugate(current_pose["orientation"]),
+            current_relative_world,
+        )
+        if current_relative_tcp.shape != (3,) or not np.all(np.isfinite(current_relative_tcp)):
+            return None
         state = self._grasp_slip_state.setdefault(phase_key, {})
-        if "initial_relative_position" not in state:
-            state["initial_relative_position"] = current_relative.copy()
+        if "initial_relative_tcp_position" not in state:
+            state["initial_relative_tcp_position"] = current_relative_tcp.copy()
+            state["initial_relative_world_position"] = current_relative_world.copy()
             state["initial_object_position"] = np.asarray(object_pose["position"], dtype=float).copy()
             state["initial_tcp_position"] = np.asarray(current_pose["position"], dtype=float).copy()
+            state["initial_tcp_orientation"] = normalize_quat(current_pose["orientation"]).copy()
             return None
 
-        initial_relative = np.asarray(state["initial_relative_position"], dtype=float)
-        slip = float(np.linalg.norm(current_relative - initial_relative))
+        initial_relative_tcp = np.asarray(state["initial_relative_tcp_position"], dtype=float)
+        slip = float(np.linalg.norm(current_relative_tcp - initial_relative_tcp))
         threshold = float(max_slip)
         if slip <= threshold:
             return None
+        initial_relative_world = np.asarray(
+            state.get("initial_relative_world_position", current_relative_world),
+            dtype=float,
+        )
         return {
             "object": object_name,
             "robot": robot_name,
             "slip": slip,
+            "slip_frame": "tcp",
             "max_object_tcp_slip": threshold,
-            "initial_relative_position": initial_relative.tolist(),
-            "current_relative_position": current_relative.tolist(),
+            "initial_relative_position": initial_relative_tcp.tolist(),
+            "current_relative_position": current_relative_tcp.tolist(),
+            "initial_relative_tcp_position": initial_relative_tcp.tolist(),
+            "current_relative_tcp_position": current_relative_tcp.tolist(),
+            "initial_relative_world_position": initial_relative_world.tolist(),
+            "current_relative_world_position": current_relative_world.tolist(),
+            "world_relative_delta": float(np.linalg.norm(current_relative_world - initial_relative_world)),
+            "initial_tcp_orientation": np.asarray(state.get("initial_tcp_orientation"), dtype=float).tolist(),
+            "current_tcp_orientation": normalize_quat(current_pose["orientation"]).tolist(),
             "initial_object_position": np.asarray(state.get("initial_object_position"), dtype=float).tolist(),
             "initial_tcp_position": np.asarray(state.get("initial_tcp_position"), dtype=float).tolist(),
             "current_object_position": np.asarray(object_pose["position"], dtype=float).tolist(),

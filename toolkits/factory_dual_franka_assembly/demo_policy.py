@@ -104,6 +104,9 @@ class DualFrankaAssemblyDemoPolicy:
     _GRASP_CLOSE_DEFAULT_OPENNESS = 1.0
     _JOINT_WRAP_ABS_LIMIT = np.pi + 0.25
     _JOINT_CANDIDATE_ABS_LIMIT = 2.0 * np.pi
+    _IDLE_CLEARANCE_Y_MARGIN = 0.10
+    _IDLE_CLEARANCE_CENTER_Y_MARGIN = 0.16
+    _IDLE_CLEARANCE_MIN_X = 0.24
 
     @classmethod
     def _wrap_revolute_joints(cls, joint_positions) -> np.ndarray | None:
@@ -137,6 +140,19 @@ class DualFrankaAssemblyDemoPolicy:
             costs = np.abs(candidates - reference_values[index])
             unwrapped[index] = candidates[int(np.argmin(costs))]
         return unwrapped
+
+    @classmethod
+    def _normalized_joint_action(cls, joint_action, reference=None) -> list[list[float]] | None:
+        if joint_action is None:
+            return None
+        try:
+            joint_positions = joint_action[0] if isinstance(joint_action, (list, tuple)) else joint_action
+        except Exception:
+            return None
+        values = cls._unwrap_joints_to_reference(joint_positions, reference=reference)
+        if values is None:
+            return None
+        return [values.tolist()]
 
     @staticmethod
     def _gripper_controller_action(command):
@@ -491,8 +507,67 @@ class DualFrankaAssemblyDemoPolicy:
         )
 
     @staticmethod
-    def _side_sign(robot_name: str) -> float:
-        return -1.0 if robot_name == 'franka_left' else 1.0
+    def _sign_from_y(value, *, deadband: float = 1e-3) -> float | None:
+        try:
+            y_value = float(value)
+        except Exception:
+            return None
+        if not np.isfinite(y_value) or abs(y_value) <= deadband:
+            return None
+        return 1.0 if y_value > 0.0 else -1.0
+
+    def _side_sign(self, task=None, robot_name: str | None = None, tracked_robots: dict | None = None) -> float:
+        if robot_name is None and isinstance(task, str):
+            robot_name = task
+            task = None
+        cfg = getattr(task, 'config', getattr(task, 'cfg', None)) if task is not None else None
+        for metadata in getattr(cfg, 'robot_metadata', []) or []:
+            if not isinstance(metadata, dict) or metadata.get('name') != robot_name:
+                continue
+            position = metadata.get('position')
+            if position is not None and len(position) >= 2:
+                sign = self._sign_from_y(position[1])
+                if sign is not None:
+                    return sign
+
+        robot = None if task is None or robot_name is None else getattr(task, 'robots', {}).get(robot_name)
+        robot_config = getattr(robot, 'config', None) or getattr(robot, '_config', None)
+        position = getattr(robot_config, 'position', None)
+        if position is not None and len(position) >= 2:
+            sign = self._sign_from_y(position[1])
+            if sign is not None:
+                return sign
+
+        if tracked_robots is not None and robot_name is not None:
+            position = tracked_robots.get(robot_name, {}).get('position')
+            if position is not None and len(position) >= 2:
+                sign = self._sign_from_y(position[1], deadband=0.03)
+                if sign is not None:
+                    return sign
+
+        if robot_name is not None and 'left' in robot_name:
+            return -1.0
+        return 1.0
+
+    def _robot_base_y_abs(self, task=None, robot_name: str | None = None) -> float | None:
+        cfg = getattr(task, 'config', getattr(task, 'cfg', None)) if task is not None else None
+        for metadata in getattr(cfg, 'robot_metadata', []) or []:
+            if not isinstance(metadata, dict) or metadata.get('name') != robot_name:
+                continue
+            position = metadata.get('position')
+            if position is not None and len(position) >= 2:
+                sign = self._sign_from_y(position[1])
+                if sign is not None:
+                    return abs(float(position[1]))
+
+        robot = None if task is None or robot_name is None else getattr(task, 'robots', {}).get(robot_name)
+        robot_config = getattr(robot, 'config', None) or getattr(robot, '_config', None)
+        position = getattr(robot_config, 'position', None)
+        if position is not None and len(position) >= 2:
+            sign = self._sign_from_y(position[1])
+            if sign is not None:
+                return abs(float(position[1]))
+        return None
 
     @staticmethod
     def _descriptor(target_name: str, phase_spec: dict) -> str:
@@ -510,6 +585,74 @@ class DualFrankaAssemblyDemoPolicy:
             if object_state.get('attached_to') == robot_name:
                 return object_name, object_state
         return None, None
+
+    @staticmethod
+    def _robot_names(task) -> list[str]:
+        cfg = getattr(task, 'config', getattr(task, 'cfg', None))
+        names = list(getattr(cfg, 'robot_names', []) or [])
+        if names:
+            return [str(name) for name in names]
+        return [str(name) for name in getattr(task, 'robots', {}).keys()]
+
+    def _other_robot_name(self, task, robot_name: str) -> str | None:
+        for candidate in self._robot_names(task):
+            if candidate != robot_name:
+                return candidate
+        return None
+
+    @staticmethod
+    def _phase_local_skill_spec_for_robot(phase_spec: dict, robot_name: str) -> dict | None:
+        local_skills = phase_spec.get('local_skills')
+        raw_spec = None
+        if isinstance(local_skills, dict):
+            raw_spec = local_skills.get(robot_name)
+        elif isinstance(local_skills, list):
+            for item in local_skills:
+                if isinstance(item, dict) and item.get('robot') == robot_name:
+                    raw_spec = item
+                    break
+        if raw_spec is None:
+            candidate = phase_spec.get('local_skill') or phase_spec.get('skill')
+            if isinstance(candidate, dict):
+                candidate_robot = candidate.get('robot') or candidate.get('robot_name')
+                if candidate_robot is None or str(candidate_robot) == robot_name:
+                    raw_spec = candidate
+            elif candidate is not None:
+                raw_spec = {'name': candidate, 'robot': robot_name}
+        if raw_spec is None:
+            return None
+        if isinstance(raw_spec, str):
+            return {'name': raw_spec, 'robot': robot_name}
+        if not isinstance(raw_spec, dict):
+            return None
+        spec_robot = raw_spec.get('robot') or raw_spec.get('robot_name')
+        if spec_robot is not None and str(spec_robot) != robot_name:
+            return None
+        spec = dict(raw_spec)
+        spec.setdefault('robot', robot_name)
+        spec.setdefault('name', spec.get('type'))
+        return spec if spec.get('name') else None
+
+    def _robot_has_active_phase_work(
+        self,
+        *,
+        task,
+        phase_spec: dict,
+        robot_name: str,
+        tracked_robots: dict,
+    ) -> bool:
+        if phase_spec.get('robot_targets', {}).get(robot_name) is not None:
+            return True
+        skill_spec = self._phase_local_skill_spec_for_robot(phase_spec, robot_name)
+        if skill_spec is None:
+            return False
+        if hasattr(task, 'is_local_skill_complete'):
+            try:
+                if task.is_local_skill_complete(robot_name, str(skill_spec.get('name'))):
+                    return False
+            except Exception:
+                pass
+        return True
 
     def _robot_release_targets(self, phase_spec: dict, robot_name: str) -> set[str]:
         release_targets = set()
@@ -624,17 +767,31 @@ class DualFrankaAssemblyDemoPolicy:
             return 0.0
         return self._ATTACHED_OBJECT_CLEARANCE_BONUS
 
-    def _wait_pose(self, task, robot_name: str, target_orientation):
+    def _wait_pose(self, task, robot_name: str, target_orientation, tracked_robots: dict | None = None):
         wait_target_name = 'left_wait' if robot_name == 'franka_left' else 'right_wait'
-        if wait_target_name in task.target_poses:
+        target_poses = getattr(task, 'target_poses', {}) or {}
+        if wait_target_name in target_poses:
             wait_pose = task.get_target_pose(wait_target_name)
-            return {
-                'position': np.asarray(wait_pose['position'], dtype=float),
-                'orientation': np.asarray(wait_pose['orientation'], dtype=float),
-            }
-        side = -1.0 if robot_name == 'franka_left' else 1.0
+            wait_position = np.asarray(wait_pose['position'], dtype=float)
+            side = self._side_sign(task, robot_name, tracked_robots)
+            if self._sign_from_y(wait_position[1], deadband=0.03) in {None, side}:
+                return {
+                    'position': wait_position,
+                    'orientation': np.asarray(wait_pose['orientation'], dtype=float),
+                }
+        side = self._side_sign(task, robot_name, tracked_robots)
+        base_y_abs = self._robot_base_y_abs(task, robot_name)
+        wait_y_abs = 0.34 if base_y_abs is None else max(0.34, min(0.60, base_y_abs * 0.65))
+        wait_z = self._HIGH_TRANSIT_Z
+        if tracked_robots is not None:
+            current_position = tracked_robots.get(robot_name, {}).get('position')
+            if current_position is not None and len(current_position) >= 3:
+                try:
+                    wait_z = max(wait_z, float(current_position[2]))
+                except Exception:
+                    pass
         return {
-            'position': np.array([0.30, 0.34 * side, self._HIGH_TRANSIT_Z], dtype=float),
+            'position': np.array([0.30, wait_y_abs * side, wait_z], dtype=float),
             'orientation': np.asarray(target_orientation, dtype=float),
         }
 
@@ -643,15 +800,20 @@ class DualFrankaAssemblyDemoPolicy:
         *,
         target_position,
         target_orientation,
+        task=None,
         robot_name: str,
         safe_z: float,
         near_center: bool,
+        tracked_robots: dict | None = None,
         tracked_objects: dict,
     ):
         target_position = np.asarray(target_position, dtype=float)
         conflict_position = target_position.copy()
         if near_center or abs(float(conflict_position[1])) < self._CENTER_APPROACH_Y:
-            conflict_position[1] = self._side_sign(robot_name) * max(abs(float(conflict_position[1])), self._CENTER_APPROACH_Y)
+            conflict_position[1] = self._side_sign(task, robot_name, tracked_robots) * max(
+                abs(float(conflict_position[1])),
+                self._CENTER_APPROACH_Y,
+            )
         conflict_position[2] = max(float(conflict_position[2]), self._HIGH_TRANSIT_Z if near_center else safe_z)
         min_payload_height = self._payload_floor_height(tracked_objects, robot_name)
         if min_payload_height is not None:
@@ -676,11 +838,11 @@ class DualFrankaAssemblyDemoPolicy:
             score += 1
         return score
 
-    def _lane_pose(self, target_position, *, robot_name: str, safe_z: float, orientation):
+    def _lane_pose(self, target_position, *, task=None, robot_name: str, safe_z: float, orientation, tracked_robots: dict | None = None):
         target_position = np.asarray(target_position, dtype=float)
         lane_y = target_position[1]
         if abs(lane_y) < self._CENTER_Y_THRESHOLD:
-            lane_y = self._side_sign(robot_name) * self._CENTER_Y_THRESHOLD
+            lane_y = self._side_sign(task, robot_name, tracked_robots) * self._CENTER_Y_THRESHOLD
         return {
             'position': np.array([target_position[0], lane_y, safe_z], dtype=float),
             'orientation': np.asarray(orientation, dtype=float),
@@ -694,12 +856,12 @@ class DualFrankaAssemblyDemoPolicy:
             and mode in {'pick', 'insert', 'hold', 'move'}
         )
 
-    def _approach_position(self, target_position, *, robot_name: str, mode: str):
+    def _approach_position(self, target_position, *, task=None, robot_name: str, mode: str, tracked_robots: dict | None = None):
         target_position = np.asarray(target_position, dtype=float)
         approach_position = target_position.copy()
         if self._requires_center_lane(target_position, mode) and mode in {'hold', 'insert', 'move'}:
             if abs(approach_position[1]) < self._CENTER_APPROACH_Y:
-                approach_position[1] = self._side_sign(robot_name) * self._CENTER_APPROACH_Y
+                approach_position[1] = self._side_sign(task, robot_name, tracked_robots) * self._CENTER_APPROACH_Y
         return approach_position
 
     def _payload_floor_height(self, tracked_objects: dict, robot_name: str) -> float | None:
@@ -1059,7 +1221,12 @@ class DualFrankaAssemblyDemoPolicy:
         target_orientation = self._normalize_quat(target_pose['orientation'])
         near_center = target_position[0] > self._CENTER_X_THRESHOLD and abs(target_position[1]) < self._CENTER_Y_THRESHOLD
         safe_z = self._safe_transit_height(start_position, target_position, mode=mode, near_center=near_center)
-        approach_position = self._approach_position(target_position, robot_name=robot_name, mode=mode)
+        approach_position = self._approach_position(
+            target_position,
+            task=task,
+            robot_name=robot_name,
+            mode=mode,
+        )
         min_payload_height = self._payload_floor_height(tracked_objects, robot_name)
         transit_orientation = (
             start_orientation.copy()
@@ -1128,6 +1295,7 @@ class DualFrankaAssemblyDemoPolicy:
         if requires_center_lane:
             lane_pose = self._lane_pose(
                 target_position,
+                task=task,
                 robot_name=robot_name,
                 safe_z=safe_z,
                 orientation=transit_orientation,
@@ -1560,6 +1728,82 @@ class DualFrankaAssemblyDemoPolicy:
             limited_delta *= max_step / limited_norm
         return current_position + limited_delta
 
+    def _idle_clearance_pose(
+        self,
+        *,
+        task,
+        robot_name: str,
+        phase_spec: dict,
+        tracked_robots: dict,
+        tracked_objects: dict,
+    ) -> dict | None:
+        if self._attached_object_names(tracked_objects, robot_name):
+            return None
+        robot_tracking = tracked_robots.get(robot_name, {})
+        current_position = robot_tracking.get('position')
+        current_orientation = robot_tracking.get('orientation')
+        if current_position is None or current_orientation is None:
+            return None
+
+        current_position = np.asarray(current_position, dtype=float)
+        current_orientation = self._normalize_quat(current_orientation)
+        if not np.all(np.isfinite(current_position)):
+            return None
+
+        gripper_command = str(phase_spec.get('gripper_commands', {}).get(robot_name, '')).lower()
+        gripper_opening = robot_tracking.get('gripper_opening')
+        if gripper_command == 'close':
+            return None
+        if gripper_command not in {'', 'none', 'open'}:
+            return None
+        if gripper_command == '' and gripper_opening is not None:
+            try:
+                if float(gripper_opening) < 0.2:
+                    return None
+            except Exception:
+                pass
+
+        other_robot_name = self._other_robot_name(task, robot_name)
+        if other_robot_name is None:
+            return None
+        if not self._robot_has_active_phase_work(
+            task=task,
+            phase_spec=phase_spec,
+            robot_name=other_robot_name,
+            tracked_robots=tracked_robots,
+        ):
+            return None
+
+        center_y_limit = self._CENTER_Y_THRESHOLD + self._IDLE_CLEARANCE_CENTER_Y_MARGIN
+        in_shared_workspace = (
+            current_position[0] > self._IDLE_CLEARANCE_MIN_X
+            and abs(float(current_position[1])) < center_y_limit
+        )
+        if not in_shared_workspace:
+            return None
+
+        side = self._side_sign(task, robot_name, tracked_robots)
+        base_y_abs = self._robot_base_y_abs(task, robot_name)
+        clearance_y_abs = self._CENTER_Y_THRESHOLD + self._IDLE_CLEARANCE_Y_MARGIN
+        if base_y_abs is not None:
+            clearance_y_abs = max(clearance_y_abs, min(0.60, base_y_abs * 0.65))
+        clearance_y = side * max(
+            abs(float(current_position[1])),
+            clearance_y_abs,
+        )
+        target_position = np.array(
+            [
+                max(float(current_position[0]) - 0.04, self._IDLE_CLEARANCE_MIN_X),
+                clearance_y,
+                max(float(current_position[2]), self._HIGH_TRANSIT_Z),
+            ],
+            dtype=float,
+        )
+        return {
+            'position': self._rate_limit_position(current_position, target_position, mode='retreat'),
+            'orientation': current_orientation,
+        }
+
     def _blend_orientation(self, current_orientation, target_orientation, *, mode: str):
         current = self._normalize_quat(current_orientation)
         target = self._normalize_quat(target_orientation)
@@ -1676,7 +1920,7 @@ class DualFrankaAssemblyDemoPolicy:
                     tracked_objects,
                 )
                 if own_priority < other_priority:
-                    return self._wait_pose(task, robot_name, target_orientation)
+                    return self._wait_pose(task, robot_name, target_orientation, tracked_robots)
             max_step = None
             max_vertical = None
             if isinstance(raw_target_spec, dict) and bool(raw_target_spec.get('direct_payload_motion', False)):
@@ -1702,7 +1946,13 @@ class DualFrankaAssemblyDemoPolicy:
             }
 
         safe_z = self._safe_transit_height(current_position, target_position, mode=mode, near_center=near_center)
-        approach_position = self._approach_position(target_position, robot_name=robot_name, mode=mode)
+        approach_position = self._approach_position(
+            target_position,
+            task=task,
+            robot_name=robot_name,
+            mode=mode,
+            tracked_robots=tracked_robots,
+        )
         if mode in {'hold', 'move'}:
             transit_orientation = self._normalize_quat(current_orientation)
         else:
@@ -1713,7 +1963,7 @@ class DualFrankaAssemblyDemoPolicy:
             )
         lane_y = float(target_position[1])
         if abs(lane_y) < self._CENTER_Y_THRESHOLD:
-            lane_y = self._side_sign(robot_name) * self._CENTER_Y_THRESHOLD
+            lane_y = self._side_sign(task, robot_name, tracked_robots) * self._CENTER_Y_THRESHOLD
         lane_position = np.array([target_position[0], lane_y, safe_z], dtype=float)
 
         if not disable_interarm_gating and self._should_wait_for_other_robot(
@@ -1726,7 +1976,7 @@ class DualFrankaAssemblyDemoPolicy:
             tracked_robots=tracked_robots,
             tracked_objects=tracked_objects,
         ):
-            return self._wait_pose(task, robot_name, target_orientation)
+            return self._wait_pose(task, robot_name, target_orientation, tracked_robots)
 
         stage = 'final'
         xy_error = self._xy_distance(current_position, target_position)
@@ -1760,9 +2010,11 @@ class DualFrankaAssemblyDemoPolicy:
         }
         lane_pose = self._lane_pose(
             target_position,
+            task=task,
             robot_name=robot_name,
             safe_z=safe_z,
             orientation=transit_orientation,
+            tracked_robots=tracked_robots,
         )
         hover_pose = {
             'position': np.array([approach_position[0], approach_position[1], safe_z], dtype=float),
@@ -1806,7 +2058,7 @@ class DualFrankaAssemblyDemoPolicy:
             and float(np.asarray(other_position, dtype=float)[2]) < safe_z
             and stage in {'lane', 'hover', 'descend'}
         ):
-            return self._wait_pose(task, robot_name, target_orientation)
+            return self._wait_pose(task, robot_name, target_orientation, tracked_robots)
 
         if not disable_interarm_gating and self._interarm_conflict_with_clearance(
             planned_pose['position'],
@@ -1822,13 +2074,15 @@ class DualFrankaAssemblyDemoPolicy:
                 tracked_objects,
             )
             if own_priority < other_priority:
-                return self._wait_pose(task, robot_name, target_orientation)
+                return self._wait_pose(task, robot_name, target_orientation, tracked_robots)
             planned_pose = self._conflict_escape_pose(
                 target_position=planned_pose['position'],
                 target_orientation=planned_pose['orientation'],
+                task=task,
                 robot_name=robot_name,
                 safe_z=safe_z,
                 near_center=near_center,
+                tracked_robots=tracked_robots,
                 tracked_objects=tracked_objects,
             )
 
@@ -1864,7 +2118,7 @@ class DualFrankaAssemblyDemoPolicy:
         def _joint_hold_action():
             if current_joint_positions is None:
                 return None
-            return [current_joint_positions.tolist()]
+            return self._normalized_joint_action(current_joint_positions, reference=current_joint_positions)
 
         def _resolved_gripper_command(current_position=None, target_entry: dict | None = None):
             phase_gripper_command = phase_spec.get('gripper_commands', {}).get(robot_name)
@@ -2019,10 +2273,55 @@ class DualFrankaAssemblyDemoPolicy:
             return gripper_openness
 
         if trajectory_target is None:
-            action[arm_ik_cfg.name] = self._hold_pose()
-            joint_hold = _joint_hold_action()
-            if joint_hold is not None:
-                action[arm_joint_cfg.name] = joint_hold
+            clearance_pose = self._idle_clearance_pose(
+                task=task,
+                robot_name=robot_name,
+                phase_spec=phase_spec,
+                tracked_robots=tracked_robots,
+                tracked_objects=tracked_objects,
+            )
+            if (
+                clearance_pose is not None
+                and state.get('active_target_name') == 'idle_clearance'
+                and state.get('last_action') is not None
+                and self._policy_step - int(state['last_update_step']) < self._ACTION_UPDATE_INTERVAL_STEPS
+            ):
+                action[arm_ik_cfg.name] = state['last_action']
+                cached_joint_action = self._normalized_joint_action(
+                    state.get('last_joint_action'),
+                    reference=current_joint_positions,
+                )
+                if cached_joint_action is not None:
+                    action[arm_joint_cfg.name] = cached_joint_action
+                gripper_command = _resolved_gripper_command(current_position=clearance_pose['position'], target_entry=None)
+                if gripper_command is not None:
+                    action[gripper_cfg.name] = [self._gripper_controller_action(gripper_command)]
+                return action
+            if clearance_pose is None:
+                action[arm_ik_cfg.name] = self._hold_pose()
+                joint_hold = _joint_hold_action()
+                if joint_hold is not None:
+                    action[arm_joint_cfg.name] = joint_hold
+            else:
+                arm_action = [clearance_pose['position'].tolist(), clearance_pose['orientation'].tolist()]
+                action[arm_ik_cfg.name] = arm_action
+                joint_action = self._joint_trajectory_action_for_pose(
+                    task,
+                    robot_name,
+                    clearance_pose,
+                    mode='retreat',
+                )
+                joint_action = self._normalized_joint_action(joint_action, reference=current_joint_positions)
+                if joint_action is not None:
+                    action[arm_joint_cfg.name] = joint_action
+                state['last_action'] = arm_action
+                state['last_joint_action'] = joint_action
+                state['last_update_step'] = self._policy_step
+                state['active_command_pose'] = {
+                    'position': np.asarray(clearance_pose['position'], dtype=float),
+                    'orientation': np.asarray(clearance_pose['orientation'], dtype=float),
+                }
+                state['active_target_name'] = 'idle_clearance'
         else:
             robot_tracking = tracked_robots.get(robot_name, {})
             current_position = self._as_array(robot_tracking.get('position'), default=trajectory_target['pose']['position'])
@@ -2091,8 +2390,14 @@ class DualFrankaAssemblyDemoPolicy:
                     and self._policy_step - int(state['last_update_step']) < self._ACTION_UPDATE_INTERVAL_STEPS
                 ):
                     action[arm_ik_cfg.name] = state['last_action']
-                    action[arm_joint_cfg.name] = state['last_joint_action']
+                    cached_joint_action = self._normalized_joint_action(
+                        state['last_joint_action'],
+                        reference=current_joint_positions,
+                    )
+                    if cached_joint_action is not None:
+                        action[arm_joint_cfg.name] = cached_joint_action
                 else:
+                    joint_action = self._normalized_joint_action(joint_action, reference=current_joint_positions)
                     action[arm_ik_cfg.name] = arm_action
                     action[arm_joint_cfg.name] = joint_action
                     state['last_action'] = arm_action
@@ -2118,10 +2423,55 @@ class DualFrankaAssemblyDemoPolicy:
             )
             trajectory_target = self._trajectory_target(state)
             if trajectory_target is None:
-                action[arm_ik_cfg.name] = self._hold_pose()
-                joint_hold = _joint_hold_action()
-                if joint_hold is not None:
-                    action[arm_joint_cfg.name] = joint_hold
+                clearance_pose = self._idle_clearance_pose(
+                    task=task,
+                    robot_name=robot_name,
+                    phase_spec=phase_spec,
+                    tracked_robots=tracked_robots,
+                    tracked_objects=tracked_objects,
+                )
+                if (
+                    clearance_pose is not None
+                    and state.get('active_target_name') == 'idle_clearance'
+                    and state.get('last_action') is not None
+                    and self._policy_step - int(state['last_update_step']) < self._ACTION_UPDATE_INTERVAL_STEPS
+                ):
+                    action[arm_ik_cfg.name] = state['last_action']
+                    cached_joint_action = self._normalized_joint_action(
+                        state.get('last_joint_action'),
+                        reference=current_joint_positions,
+                    )
+                    if cached_joint_action is not None:
+                        action[arm_joint_cfg.name] = cached_joint_action
+                    gripper_command = _resolved_gripper_command(current_position=current_position, target_entry=None)
+                    if gripper_command is not None:
+                        action[gripper_cfg.name] = [self._gripper_controller_action(gripper_command)]
+                    return action
+                if clearance_pose is None:
+                    action[arm_ik_cfg.name] = self._hold_pose()
+                    joint_hold = _joint_hold_action()
+                    if joint_hold is not None:
+                        action[arm_joint_cfg.name] = joint_hold
+                else:
+                    arm_action = [clearance_pose['position'].tolist(), clearance_pose['orientation'].tolist()]
+                    action[arm_ik_cfg.name] = arm_action
+                    joint_action = self._joint_trajectory_action_for_pose(
+                        task,
+                        robot_name,
+                        clearance_pose,
+                        mode='retreat',
+                    )
+                    joint_action = self._normalized_joint_action(joint_action, reference=current_joint_positions)
+                    if joint_action is not None:
+                        action[arm_joint_cfg.name] = joint_action
+                    state['last_action'] = arm_action
+                    state['last_joint_action'] = joint_action
+                    state['last_update_step'] = self._policy_step
+                    state['active_command_pose'] = {
+                        'position': np.asarray(clearance_pose['position'], dtype=float),
+                        'orientation': np.asarray(clearance_pose['orientation'], dtype=float),
+                    }
+                    state['active_target_name'] = 'idle_clearance'
                 gripper_command = _resolved_gripper_command(current_position=current_position, target_entry=None)
                 if gripper_command is not None:
                     action[gripper_cfg.name] = [self._gripper_controller_action(gripper_command)]
@@ -2132,8 +2482,12 @@ class DualFrankaAssemblyDemoPolicy:
                 and self._policy_step - int(state['last_update_step']) < self._ACTION_UPDATE_INTERVAL_STEPS
             ):
                 action[arm_ik_cfg.name] = state['last_action']
-                if state.get('last_joint_action') is not None:
-                    action[arm_joint_cfg.name] = state['last_joint_action']
+                cached_joint_action = self._normalized_joint_action(
+                    state.get('last_joint_action'),
+                    reference=current_joint_positions,
+                )
+                if cached_joint_action is not None:
+                    action[arm_joint_cfg.name] = cached_joint_action
                 gripper_command = _resolved_gripper_command(
                     current_position=current_position,
                     target_entry=trajectory_target,
@@ -2142,7 +2496,9 @@ class DualFrankaAssemblyDemoPolicy:
                     action[gripper_cfg.name] = [self._gripper_controller_action(gripper_command)]
                 return action
 
-            other_robot_name = 'franka_right' if robot_name == 'franka_left' else 'franka_left'
+            other_robot_name = self._other_robot_name(task, robot_name)
+            if other_robot_name is None:
+                other_robot_name = 'franka_right' if robot_name == 'franka_left' else 'franka_left'
             other_tracking = tracked_robots.get(other_robot_name, {})
             other_state = self._robot_state(other_robot_name)
             other_active_command_pose = other_state.get('active_command_pose')
@@ -2203,6 +2559,8 @@ class DualFrankaAssemblyDemoPolicy:
             ) else None
             if precision_lock_phase:
                 joint_action = None
+            else:
+                joint_action = self._normalized_joint_action(joint_action, reference=current_joint_positions)
             if joint_action is not None:
                 action[arm_joint_cfg.name] = joint_action
             state['last_action'] = arm_action

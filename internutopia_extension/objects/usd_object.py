@@ -62,7 +62,7 @@ class UsdObject(BaseObject):
             for child in prim.GetChildren():
                 set_nested_rigid_body_enabled(child, enabled)
 
-        def set_nested_colliders(prim) -> None:
+        def set_nested_colliders(prim, *, dynamic_body: bool) -> None:
             if prim is None or not prim.IsValid():
                 return
             # Preserve collision approximation authored in referenced assets.
@@ -71,11 +71,12 @@ class UsdObject(BaseObject):
             # mesh, which PhysX cannot use on a dynamic rigid body.
             if prim.IsA(UsdGeom.Gprim) and not prim.HasAPI(UsdPhysics.CollisionAPI):
                 try:
-                    utils.setCollider(prim, approximationShape=None)
+                    approximation_shape = 'convexHull' if dynamic_body else None
+                    utils.setCollider(prim, approximationShape=approximation_shape)
                 except Exception:
                     pass
             for child in prim.GetChildren():
-                set_nested_colliders(child)
+                set_nested_colliders(child, dynamic_body=dynamic_body)
 
         class RigidObject(RigidPrim):
             def __init__(
@@ -106,7 +107,7 @@ class UsdObject(BaseObject):
                 rigid_body_api = UsdPhysics.RigidBodyAPI.Apply(prim)
                 rigid_body_api.GetRigidBodyEnabledAttr().Set(True)
                 if collider and auto_collider:
-                    set_nested_colliders(prim)
+                    set_nested_colliders(prim, dynamic_body=True)
                 elif not collider:
                     set_nested_collision_enabled(prim, False)
                 RigidPrim.__init__(
@@ -177,7 +178,7 @@ class UsdObject(BaseObject):
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
                 set_nested_rigid_body_enabled(prim, False)
                 if collider and auto_collider:
-                    set_nested_colliders(prim)
+                    set_nested_colliders(prim, dynamic_body=False)
                 elif not collider:
                     set_nested_collision_enabled(prim, False)
                 self.size = size

@@ -1,4 +1,4 @@
-extends: fabrica_plumbers_block_ur5e
+extends: fabrica_plumbers_block_ur5e_wrist_mount
 
 task_name: fabrica_plumbers_block_ur5e_right_base_prepare
 prompt: Right UR5e stages plumbers-block part 2 while the left UR5e places part 0 into the staged part-2 slot, places part 3 on top, then inserts parts 4 and 1 into the remaining holes to complete the assembly.
@@ -55,31 +55,36 @@ objects:
     rigid_body: true
     tracked: true
     collider: true
-    auto_collider: true
+    auto_collider: false
   - name: fabrica_plumbers_block_2
     rigid_body: true
     tracked: true
     collider: true
-    auto_collider: true
+    auto_collider: false
   - name: fabrica_plumbers_block_3
     rigid_body: true
     tracked: true
     collider: true
-    auto_collider: true
+    auto_collider: false
   - name: fabrica_plumbers_block_4
     rigid_body: true
     tracked: true
     collider: true
-    auto_collider: true
+    auto_collider: false
   - name: fabrica_plumbers_block_1
     rigid_body: true
     tracked: true
     collider: true
-    auto_collider: true
+    auto_collider: false
 
 robots:
+  - name: franka_left
+    gripper_xform_orient: [0.707106781, -0.707106781, 0.0, 0.0]
+    author_gripper_collision_pads: false
   - name: franka_right
     position: [0.58, -0.8, 0.998]
+    gripper_xform_orient: [0.707106781, -0.707106781, 0.0, 0.0]
+    author_gripper_collision_pads: false
 
 targets:
   - name: part_2_ur5e_table_staging

@@ -63,6 +63,11 @@ class UR5eRobotCfg(RobotCfg):
     gripper_mount_local_pos1: Optional[list[float]] = None
     gripper_mount_local_rot0: Optional[list[float]] = None
     gripper_mount_local_rot1: Optional[list[float]] = None
+    configure_gripper_mount_joint: bool = True
+    gripper_base_link_path: Optional[str] = None
+    gripper_container_path: Optional[str] = None
+    gripper_container_orient: Optional[list[float]] = None
+    author_gripper_collision_pads: bool = True
 
 
 DEFAULT_UR5E_READY_JOINTS = {

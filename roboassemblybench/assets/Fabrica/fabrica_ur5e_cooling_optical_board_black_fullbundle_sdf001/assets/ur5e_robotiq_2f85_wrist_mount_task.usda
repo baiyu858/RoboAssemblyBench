@@ -14,22 +14,19 @@ def Xform "ur5e" (
     }
 )
 {
-    over Xform "Gripper" (
-        active = false
+    def Xform "Gripper" (
+        prepend references = @./isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/Robotiq_2F_85_config_physics_mimic.usda@
     )
     {
-    }
+        quatd xformOp:orient = (0.707106781, -0.707106781, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.8172, 0.2329, 0.0628)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
-    over Xform "wrist_3_link"
-    {
-        def Xform "Gripper" (
-            prepend references = @./isaac_official/Isaac/Robots/Robotiq/2F-85/configuration/Robotiq_2F_85_config_physics_mimic.usda@
+        over Xform "Robotiq_2F_85" (
+            delete apiSchemas = ["PhysicsArticulationRootAPI", "PhysxArticulationAPI"]
         )
         {
-            quatd xformOp:orient = (0.707106781, 0.707106781, 0, 0)
-            double3 xformOp:scale = (1, 1, 1)
-            double3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
     }
 
@@ -38,10 +35,11 @@ def Xform "ur5e" (
         over PhysicsFixedJoint "robot_gripper_joint"
         {
             rel physics:body0 = </ur5e/wrist_3_link>
-            rel physics:body1 = </ur5e/wrist_3_link/Gripper/Robotiq_2F_85/base_link>
-            float3 physics:localPos0 = (0, 0, 0)
+            rel physics:body1 = </ur5e/Gripper/Robotiq_2F_85/base_link>
+            bool physics:jointEnabled = true
+            float3 physics:localPos0 = (5.054474e-9, -5.078315e-9, -3.836155e-8)
             float3 physics:localPos1 = (0, 0, 0)
-            quatf physics:localRot0 = (0.707106781, 0.707106781, 0, 0)
+            quatf physics:localRot0 = (0, 0, 0, -1)
             quatf physics:localRot1 = (1, 0, 0, 0)
         }
     }

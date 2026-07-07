@@ -9,6 +9,13 @@ class FactoryDualFrankaAssemblyTaskCfg(TaskCfg):
     phase_timeout_steps: Optional[int] = None
     phase_timeout_action: str = 'fail'
     phase_timeout_recovery_phase: Optional[str] = None
+    object_state_sanity_enabled: bool = True
+    object_state_sanity_action: str = 'fail'
+    object_state_sanity_max_position_norm: Optional[float] = 50.0
+    object_state_sanity_max_reference_distance: Optional[float] = 10.0
+    object_state_sanity_max_linear_speed: Optional[float] = 50.0
+    object_state_sanity_max_angular_speed: Optional[float] = 500.0
+    object_state_sanity_recovery_attempts: int = 3
     prompt: Optional[str] = ''
     task_description: str = ''
     recipe: str = 'screw_fastening'

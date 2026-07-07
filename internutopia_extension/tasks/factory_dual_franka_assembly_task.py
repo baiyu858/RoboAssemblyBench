@@ -141,6 +141,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._handoff_history = []
         self._recovery_history = []
         self._local_skill_completions = {}
+        self._object_state_sanity_recovery_attempts = {}
         self._object_metadata_map = {
             metadata['name']: copy.deepcopy(metadata)
             for metadata in config.object_metadata
@@ -165,6 +166,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 str(skill_name),
             )
         ] = copy.deepcopy(detail or {})
+
+    def is_local_skill_complete(self, robot_name: str, skill_name: str) -> bool:
+        return (
+            self.phase_index,
+            self.phase_entry_step,
+            str(robot_name),
+            str(skill_name),
+        ) in self._local_skill_completions
 
     def get_target_pose(self, target_name: str) -> dict:
         pose = self.target_poses[target_name]
@@ -1051,6 +1060,56 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._object_prims[object_name] = get_prim_at_path(rigid_body.unwrap().prim_path)
         return rigid_body
 
+    @staticmethod
+    def _prim_has_enabled_rigid_body(prim) -> bool:
+        try:
+            from pxr import UsdPhysics
+        except Exception:
+            return False
+        cursor = prim
+        while cursor is not None and cursor.IsValid():
+            try:
+                if cursor.HasAPI(UsdPhysics.RigidBodyAPI):
+                    rigid_body_api = UsdPhysics.RigidBodyAPI(cursor)
+                    enabled_attr = rigid_body_api.GetRigidBodyEnabledAttr()
+                    enabled = enabled_attr.Get() if enabled_attr.HasAuthoredValueOpinion() else True
+                    return bool(enabled)
+            except Exception:
+                return False
+            cursor = cursor.GetParent()
+        return False
+
+    def _ensure_dynamic_mesh_colliders_are_supported(self, prim) -> None:
+        if prim is None or not prim.IsValid() or not self._prim_has_enabled_rigid_body(prim):
+            return
+        try:
+            from pxr import UsdGeom, UsdPhysics
+        except Exception:
+            return
+
+        unsupported_approximations = {'', 'none', 'meshSimplification', 'triangleMesh'}
+
+        def _walk(current_prim):
+            if current_prim is None or not current_prim.IsValid():
+                return
+            if current_prim.IsA(UsdGeom.Mesh) and current_prim.HasAPI(UsdPhysics.CollisionAPI):
+                try:
+                    mesh_collision_api = (
+                        UsdPhysics.MeshCollisionAPI(current_prim)
+                        if current_prim.HasAPI(UsdPhysics.MeshCollisionAPI)
+                        else UsdPhysics.MeshCollisionAPI.Apply(current_prim)
+                    )
+                    approximation_attr = mesh_collision_api.GetApproximationAttr()
+                    approximation = approximation_attr.Get()
+                    if approximation is None or str(approximation) in unsupported_approximations:
+                        approximation_attr.Set(getattr(UsdPhysics.Tokens, 'convexHull', 'convexHull'))
+                except Exception:
+                    pass
+            for child in current_prim.GetChildren():
+                _walk(child)
+
+        _walk(prim)
+
     def _set_object_collision(self, object_name: str, enabled: bool):
         prim = self._object_prims.get(object_name)
         if prim is None:
@@ -1061,6 +1120,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._object_collision_enabled[object_name] = bool(enabled)
         try:
             if enabled:
+                self._ensure_dynamic_mesh_colliders_are_supported(prim)
                 activate_collider(prim)
             else:
                 deactivate_collider(prim)
@@ -2043,6 +2103,363 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         rigid_body.set_pose(np.asarray(position, dtype=float), np.asarray(orientation, dtype=float))
         self._zero_object_velocity(object_name, rigid_body=rigid_body)
 
+    def _object_state_sanity_config_float(self, field_name: str) -> float | None:
+        value = getattr(self.cfg, field_name, None)
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _object_state_sanity_config_int(self, field_name: str, default: int) -> int:
+        value = getattr(self.cfg, field_name, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _object_state_sanity_record(self, object_name: str, violation: str, **detail) -> dict:
+        return {
+            'object': object_name,
+            'violation': violation,
+            'phase': self.phase,
+            'phase_index': int(self.phase_index),
+            'step_counter': int(self.step_counter),
+            'phase_step_counter': int(self.phase_step_counter),
+            **detail,
+        }
+
+    def _object_state_reference_positions(self, object_name: str) -> list[np.ndarray]:
+        reference_positions: list[np.ndarray] = []
+        metadata = self._object_metadata_map.get(object_name, {})
+        for key in ('sampled_position', 'position'):
+            if key not in metadata:
+                continue
+            try:
+                reference_position = np.asarray(metadata[key], dtype=float).reshape(-1)
+            except Exception:
+                continue
+            if reference_position.size == 3 and np.all(np.isfinite(reference_position)):
+                reference_positions.append(reference_position)
+                break
+
+        for target_pose in self.target_poses.values():
+            try:
+                target_position = np.asarray(target_pose['position'], dtype=float).reshape(-1)
+            except Exception:
+                continue
+            if target_position.size == 3 and np.all(np.isfinite(target_position)):
+                reference_positions.append(target_position)
+        return reference_positions
+
+    def _pose_state_sanity_violation(
+        self,
+        object_name: str,
+        position,
+        orientation,
+        *,
+        include_reference_bounds: bool = True,
+    ) -> dict | None:
+        try:
+            position_array = np.asarray(position, dtype=float).reshape(-1)
+            orientation_array = np.asarray(orientation, dtype=float).reshape(-1)
+        except Exception as exc:
+            return self._object_state_sanity_record(
+                object_name,
+                'pose-unreadable',
+                error=str(exc),
+            )
+
+        if position_array.size != 3:
+            return self._object_state_sanity_record(
+                object_name,
+                'invalid-position-shape',
+                position=np.asarray(position_array).tolist(),
+            )
+        if orientation_array.size != 4:
+            return self._object_state_sanity_record(
+                object_name,
+                'invalid-orientation-shape',
+                orientation=np.asarray(orientation_array).tolist(),
+            )
+        if not np.all(np.isfinite(position_array)):
+            return self._object_state_sanity_record(
+                object_name,
+                'nonfinite-position',
+                position=position_array.tolist(),
+            )
+        if not np.all(np.isfinite(orientation_array)):
+            return self._object_state_sanity_record(
+                object_name,
+                'nonfinite-orientation',
+                orientation=orientation_array.tolist(),
+            )
+
+        orientation_norm = float(np.linalg.norm(orientation_array))
+        if not np.isfinite(orientation_norm) or orientation_norm <= 1e-8 or orientation_norm > 10.0:
+            return self._object_state_sanity_record(
+                object_name,
+                'invalid-orientation-norm',
+                orientation=orientation_array.tolist(),
+                orientation_norm=orientation_norm,
+            )
+
+        position_norm = float(np.linalg.norm(position_array))
+        max_position_norm = self._object_state_sanity_config_float('object_state_sanity_max_position_norm')
+        if max_position_norm is not None and position_norm > max_position_norm:
+            return self._object_state_sanity_record(
+                object_name,
+                'position-norm-exceeded',
+                position=position_array.tolist(),
+                position_norm=position_norm,
+                max_position_norm=float(max_position_norm),
+            )
+
+        max_reference_distance = self._object_state_sanity_config_float(
+            'object_state_sanity_max_reference_distance'
+        )
+        if include_reference_bounds and max_reference_distance is not None:
+            reference_positions = self._object_state_reference_positions(object_name)
+            if reference_positions:
+                reference_distances = [
+                    float(np.linalg.norm(position_array - reference_position))
+                    for reference_position in reference_positions
+                ]
+                min_reference_distance = min(reference_distances)
+                if min_reference_distance > float(max_reference_distance):
+                    return self._object_state_sanity_record(
+                        object_name,
+                        'reference-distance-exceeded',
+                        position=position_array.tolist(),
+                        min_reference_distance=min_reference_distance,
+                        max_reference_distance=float(max_reference_distance),
+                    )
+        return None
+
+    def _object_state_sanity_violation(self, object_name: str) -> dict | None:
+        try:
+            position, orientation = self._resolve_object(object_name).get_pose()
+        except Exception as exc:
+            return self._object_state_sanity_record(
+                object_name,
+                'pose-read-failed',
+                error=str(exc),
+            )
+
+        pose_violation = self._pose_state_sanity_violation(object_name, position, orientation)
+        if pose_violation is not None:
+            return pose_violation
+
+        max_linear_speed = self._object_state_sanity_config_float('object_state_sanity_max_linear_speed')
+        max_angular_speed = self._object_state_sanity_config_float('object_state_sanity_max_angular_speed')
+        velocity_metrics = self._object_velocity_metrics(
+            object_name,
+            linear_threshold=0.0 if max_linear_speed is None else float(max_linear_speed),
+            angular_threshold=0.0 if max_angular_speed is None else float(max_angular_speed),
+        )
+        if not velocity_metrics.get('valid'):
+            return None
+
+        for velocity_key, violation_name in (
+            ('linear_velocity', 'nonfinite-linear-velocity'),
+            ('angular_velocity', 'nonfinite-angular-velocity'),
+        ):
+            velocity = velocity_metrics.get(velocity_key)
+            if velocity is None:
+                continue
+            velocity_array = np.asarray(velocity, dtype=float).reshape(-1)
+            if velocity_array.size != 3 or not np.all(np.isfinite(velocity_array)):
+                return self._object_state_sanity_record(
+                    object_name,
+                    violation_name,
+                    position=np.asarray(position, dtype=float).reshape(-1).tolist(),
+                    velocity=velocity_array.tolist(),
+                    velocity_metrics=velocity_metrics,
+                )
+
+        linear_speed = velocity_metrics.get('linear_speed')
+        if linear_speed is not None:
+            linear_speed = float(linear_speed)
+            if not np.isfinite(linear_speed):
+                return self._object_state_sanity_record(
+                    object_name,
+                    'nonfinite-linear-speed',
+                    position=np.asarray(position, dtype=float).reshape(-1).tolist(),
+                    velocity_metrics=velocity_metrics,
+                )
+            if max_linear_speed is not None and linear_speed > float(max_linear_speed):
+                return self._object_state_sanity_record(
+                    object_name,
+                    'linear-speed-exceeded',
+                    position=np.asarray(position, dtype=float).reshape(-1).tolist(),
+                    linear_speed=linear_speed,
+                    max_linear_speed=float(max_linear_speed),
+                    velocity_metrics=velocity_metrics,
+                )
+
+        angular_speed = velocity_metrics.get('angular_speed')
+        if angular_speed is not None:
+            angular_speed = float(angular_speed)
+            if not np.isfinite(angular_speed):
+                return self._object_state_sanity_record(
+                    object_name,
+                    'nonfinite-angular-speed',
+                    position=np.asarray(position, dtype=float).reshape(-1).tolist(),
+                    velocity_metrics=velocity_metrics,
+                )
+            if max_angular_speed is not None and angular_speed > float(max_angular_speed):
+                return self._object_state_sanity_record(
+                    object_name,
+                    'angular-speed-exceeded',
+                    position=np.asarray(position, dtype=float).reshape(-1).tolist(),
+                    angular_speed=angular_speed,
+                    max_angular_speed=float(max_angular_speed),
+                    velocity_metrics=velocity_metrics,
+                )
+        return None
+
+    def _pose_within_object_state_sanity_bounds(self, object_name: str, position, orientation) -> bool:
+        return self._pose_state_sanity_violation(object_name, position, orientation) is None
+
+    def _object_state_sanity_recovery_pose(
+        self,
+        object_name: str,
+        violation: dict,
+    ) -> tuple[np.ndarray, np.ndarray, str] | None:
+        try:
+            current_position, current_orientation = self._resolve_object(object_name).get_pose()
+        except Exception:
+            current_position = None
+            current_orientation = None
+
+        if (
+            violation.get('violation') in {'linear-speed-exceeded', 'angular-speed-exceeded'}
+            and current_position is not None
+            and current_orientation is not None
+            and self._pose_within_object_state_sanity_bounds(object_name, current_position, current_orientation)
+        ):
+            return (
+                np.asarray(current_position, dtype=float),
+                np.asarray(current_orientation, dtype=float),
+                'current-pose-zero-velocity',
+            )
+
+        history = self._object_pose_history.get(object_name)
+        if history:
+            for sample_step, sample_position, sample_orientation in reversed(history):
+                if int(sample_step) == int(self.step_counter):
+                    continue
+                if self._pose_within_object_state_sanity_bounds(object_name, sample_position, sample_orientation):
+                    return (
+                        np.asarray(sample_position, dtype=float),
+                        np.asarray(sample_orientation, dtype=float),
+                        'recent-valid-pose',
+                    )
+
+        metadata = self._object_metadata_map.get(object_name, {})
+        sampled_position = metadata.get('sampled_position')
+        sampled_orientation = metadata.get('sampled_orientation')
+        if sampled_position is not None:
+            if sampled_orientation is None:
+                sampled_orientation = [1.0, 0.0, 0.0, 0.0]
+            if self._pose_within_object_state_sanity_bounds(object_name, sampled_position, sampled_orientation):
+                return (
+                    np.asarray(sampled_position, dtype=float),
+                    np.asarray(sampled_orientation, dtype=float),
+                    'sampled-initial-pose',
+                )
+        return None
+
+    def _try_recover_object_state_sanity(self, object_name: str, violation: dict) -> bool:
+        action = str(getattr(self.cfg, 'object_state_sanity_action', 'fail')).lower()
+        if action not in {'recover', 'recovery', 'stabilize', 'stabilise', 'reset'}:
+            return False
+        if object_name in self._attachments:
+            return False
+
+        max_attempts = max(
+            0,
+            self._object_state_sanity_config_int('object_state_sanity_recovery_attempts', 3),
+        )
+        attempts = int(self._object_state_sanity_recovery_attempts.get(object_name, 0))
+        if attempts >= max_attempts:
+            return False
+
+        recovery_pose = self._object_state_sanity_recovery_pose(object_name, violation)
+        if recovery_pose is None:
+            return False
+
+        recovery_position, recovery_orientation, recovery_source = recovery_pose
+        self._set_object_pose(object_name, recovery_position, recovery_orientation)
+        history = self._object_pose_history.setdefault(object_name, deque(maxlen=24))
+        recovery_sample = (
+            int(self.step_counter),
+            np.asarray(recovery_position, dtype=float).copy(),
+            np.asarray(recovery_orientation, dtype=float).copy(),
+        )
+        if history and history[-1][0] == int(self.step_counter):
+            history[-1] = recovery_sample
+        else:
+            history.append(recovery_sample)
+        self._object_state_sanity_recovery_attempts[object_name] = attempts + 1
+        recovery_record = {
+            **copy.deepcopy(violation),
+            'event': 'object-state-sanity-recovery',
+            'action': action,
+            'recovery_pose_source': recovery_source,
+            'recovery_position': recovery_position.tolist(),
+            'recovery_orientation': recovery_orientation.tolist(),
+            'attempt': attempts + 1,
+            'max_attempts': max_attempts,
+        }
+        self._recovery_history.append(recovery_record)
+        self.phase_recovery_count += 1
+        self.phase_transition_history.append(
+            self._transition_details(
+                reason='object-state-sanity-recovery',
+                transition_type='recovery',
+                from_phase=self.phase,
+                to_phase=self.phase,
+                from_phase_index=self.phase_index,
+                to_phase_index=self.phase_index,
+                status=self.phase_status,
+                detail=recovery_record,
+            )
+        )
+        return True
+
+    def _fail_object_state_sanity(self, object_name: str, violation: dict):
+        failure_record = {
+            **copy.deepcopy(violation),
+            'event': 'object-state-sanity-failure',
+            'action': 'fail',
+        }
+        self._set_terminal_state(
+            'failed',
+            reason=f'object-state-invalid:{object_name}',
+            status='failed',
+            transition_type='failure',
+            detail=failure_record,
+        )
+
+    def _check_object_state_sanity(self) -> bool:
+        if not bool(getattr(self.cfg, 'object_state_sanity_enabled', True)):
+            return True
+
+        tracked_object_names = tuple(self.cfg.tracked_object_names) or tuple(self.objects.keys())
+        for object_name in tracked_object_names:
+            if object_name not in self.objects:
+                continue
+            violation = self._object_state_sanity_violation(object_name)
+            if violation is None:
+                continue
+            if self._try_recover_object_state_sanity(object_name, violation):
+                continue
+            self._fail_object_state_sanity(object_name, violation)
+            return False
+        return True
+
     def _current_gripper_command(self, phase_spec: dict, robot_name: str) -> str | None:
         gripper_command = phase_spec.get('gripper_commands', {}).get(robot_name)
         if gripper_command is None:
@@ -2922,6 +3339,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             self._set_object_pose(object_name, position, orientation)
 
         self._record_object_pose_history()
+        self._check_object_state_sanity()
 
     def _record_object_pose_history(self):
         tracked_object_names = set(self.cfg.tracked_object_names) or set(self.objects.keys())
@@ -3624,15 +4042,21 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
         self._initialize_phase()
         self._sync_object_states()
+        if self.success or self.failed:
+            return
         phase_spec = self.get_current_phase_spec()
         self._process_phase_interactions(phase_spec)
         self._sync_object_states()
+        if self.success or self.failed:
+            return
 
         if self._advance_condition_met(phase_spec):
             if self.phase_index + 1 < len(self.phase_specs):
                 self._set_phase(self.phase_index + 1, reason='advance', transition_type='advance', status='running')
                 self._initialize_phase()
                 self._sync_object_states()
+                if self.success or self.failed:
+                    return
             else:
                 self.success = self._check_success()
                 if self.success and self.phase != 'complete':
@@ -3641,6 +4065,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if not self.failed:
                 self._initialize_phase()
                 self._sync_object_states()
+                if self.success or self.failed:
+                    return
 
         self.phase_step_counter += 1
 

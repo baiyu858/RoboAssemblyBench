@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 
 from internutopia.core.config import Config, SimConfig
@@ -41,6 +42,13 @@ def _pause_timeline():
         pass
 
 
+def _kit_app_is_running(simulation_app) -> bool:
+    try:
+        return bool(simulation_app.app.is_running()) and not simulation_app.is_exiting()
+    except Exception:
+        return bool(simulation_app.is_running())
+
+
 def main():
     parser = argparse.ArgumentParser(description='Open a task scene in Isaac Sim UI without running robot actions.')
     parser.add_argument('--recipe', default='peg_insertion', choices=list_task_recipes())
@@ -74,13 +82,15 @@ def main():
     )
 
     try:
+        print('Resetting task scene...', flush=True)
         obs_list, task_cfgs = env.reset()
+        print(
+            f'Reset returned {len(obs_list)} obs entries and {len(task_cfgs)} task configs. '
+            f'Current tasks: {list(env.runner.current_tasks.keys())}',
+            flush=True,
+        )
         if not task_cfgs or task_cfgs[0] is None or not env.runner.current_tasks:
             raise RuntimeError(f'No task scene was loaded for recipe {args.recipe!r}.')
-
-        _pause_timeline()
-        env.runner.warm_up(steps=max(int(args.warmup_render_steps), 1), render=True, physics=False)
-        _pause_timeline()
 
         task_name = next(iter(env.runner.current_tasks.keys()))
         task = env.runner.current_tasks[task_name]
@@ -90,12 +100,21 @@ def main():
         print(f'Seed          : {getattr(task.config, "seed", args.seed)}')
         print(f'Scene asset   : {getattr(task.config, "scene_asset_path", "")}')
         print('No demo policy or robot actions are running. Press Ctrl+C to exit.')
+        sys.stdout.flush()
 
-        while env.simulation_app.is_running():
+        _pause_timeline()
+        env.runner.warm_up(steps=max(int(args.warmup_render_steps), 1), render=True, physics=False)
+        _pause_timeline()
+        print('Warmup complete. UI should stay open now.', flush=True)
+
+        while _kit_app_is_running(env.simulation_app):
             env.simulation_app.update()
             time.sleep(0.02)
     except KeyboardInterrupt:
         print('\nTask scene viewer interrupted by user.')
+    except BaseException as exc:
+        print(f'Task scene viewer failed: {type(exc).__name__}: {exc}', file=sys.stderr, flush=True)
+        raise
     finally:
         env.close()
 
