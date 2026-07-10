@@ -105,8 +105,13 @@ class DualFrankaAssemblyDemoPolicy:
     _JOINT_WRAP_ABS_LIMIT = np.pi + 0.25
     _JOINT_CANDIDATE_ABS_LIMIT = 2.0 * np.pi
     _IDLE_CLEARANCE_Y_MARGIN = 0.10
-    _IDLE_CLEARANCE_CENTER_Y_MARGIN = 0.16
+    # Include the wrist, gripper, and forearm envelope when deciding whether an
+    # idle arm still occupies the shared workspace. TCP-only clearance leaves a
+    # low Robotiq gripper in the path of the active arm.
+    _IDLE_CLEARANCE_CENTER_Y_MARGIN = 0.24
     _IDLE_CLEARANCE_MIN_X = 0.24
+    _IDLE_CLEARANCE_X_RETRACTION = 0.08
+    _IDLE_CLEARANCE_BASE_Z_MARGIN = 0.30
 
     @classmethod
     def _wrap_revolute_joints(cls, joint_positions) -> np.ndarray | None:
@@ -549,25 +554,32 @@ class DualFrankaAssemblyDemoPolicy:
             return -1.0
         return 1.0
 
-    def _robot_base_y_abs(self, task=None, robot_name: str | None = None) -> float | None:
+    def _robot_base_position(self, task=None, robot_name: str | None = None) -> np.ndarray | None:
         cfg = getattr(task, 'config', getattr(task, 'cfg', None)) if task is not None else None
         for metadata in getattr(cfg, 'robot_metadata', []) or []:
             if not isinstance(metadata, dict) or metadata.get('name') != robot_name:
                 continue
             position = metadata.get('position')
-            if position is not None and len(position) >= 2:
-                sign = self._sign_from_y(position[1])
-                if sign is not None:
-                    return abs(float(position[1]))
+            if position is not None and len(position) >= 3:
+                position = np.asarray(position[:3], dtype=float)
+                if np.all(np.isfinite(position)):
+                    return position
 
         robot = None if task is None or robot_name is None else getattr(task, 'robots', {}).get(robot_name)
         robot_config = getattr(robot, 'config', None) or getattr(robot, '_config', None)
         position = getattr(robot_config, 'position', None)
-        if position is not None and len(position) >= 2:
-            sign = self._sign_from_y(position[1])
-            if sign is not None:
-                return abs(float(position[1]))
+        if position is not None and len(position) >= 3:
+            position = np.asarray(position[:3], dtype=float)
+            if np.all(np.isfinite(position)):
+                return position
         return None
+
+    def _robot_base_y_abs(self, task=None, robot_name: str | None = None) -> float | None:
+        position = self._robot_base_position(task=task, robot_name=robot_name)
+        if position is None:
+            return None
+        sign = self._sign_from_y(position[1])
+        return None if sign is None else abs(float(position[1]))
 
     @staticmethod
     def _descriptor(target_name: str, phase_spec: dict) -> str:
@@ -1791,11 +1803,21 @@ class DualFrankaAssemblyDemoPolicy:
             abs(float(current_position[1])),
             clearance_y_abs,
         )
+        clearance_z = max(float(current_position[2]), self._HIGH_TRANSIT_Z)
+        base_position = self._robot_base_position(task=task, robot_name=robot_name)
+        if base_position is not None:
+            clearance_z = max(
+                clearance_z,
+                float(base_position[2]) + self._IDLE_CLEARANCE_BASE_Z_MARGIN,
+            )
         target_position = np.array(
             [
-                max(float(current_position[0]) - 0.04, self._IDLE_CLEARANCE_MIN_X),
+                max(
+                    float(current_position[0]) - self._IDLE_CLEARANCE_X_RETRACTION,
+                    self._IDLE_CLEARANCE_MIN_X,
+                ),
                 clearance_y,
-                max(float(current_position[2]), self._HIGH_TRANSIT_Z),
+                clearance_z,
             ],
             dtype=float,
         )

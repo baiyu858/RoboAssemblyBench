@@ -1,5 +1,7 @@
 import json
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from toolkits.factory_dual_franka_assembly.convert_dataset import (
@@ -8,10 +10,124 @@ from toolkits.factory_dual_franka_assembly.convert_dataset import (
     split_entries,
 )
 from toolkits.factory_dual_franka_assembly.export_lerobot import export_lerobot_dataset
+from toolkits.factory_dual_franka_assembly.demo_policy import DualFrankaAssemblyDemoPolicy
+from toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills import (
+    UR5ePlumbersBlockAtomicSkillAdapter,
+)
 from toolkits.factory_dual_franka_assembly.scene_builder import (
     build_dual_franka_assembly_episode,
 )
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes
+
+
+def test_idle_arm_clearance_accounts_for_raised_robot_base_and_gripper_envelope():
+    policy = DualFrankaAssemblyDemoPolicy()
+    task = SimpleNamespace(
+        config=SimpleNamespace(
+            robot_names=('franka_left', 'franka_right'),
+            robot_metadata=[
+                {'name': 'franka_left', 'position': [0.50, 0.30, 0.998]},
+                {'name': 'franka_right', 'position': [0.58, -0.80, 0.998]},
+            ]
+        ),
+        robots={},
+        is_local_skill_complete=lambda robot_name, skill_name: False,
+    )
+    phase_spec = {
+        'name': 'left_transport_payload',
+        'robot_targets': {},
+        'gripper_commands': {'franka_right': 'open'},
+        'local_skill': {'name': 'ur5e_move_part_to_staging', 'robot': 'franka_left'},
+    }
+    tracked_robots = {
+        'franka_left': {
+            'position': [0.60, -0.15, 1.25],
+            'orientation': [1.0, 0.0, 0.0, 0.0],
+        },
+        'franka_right': {
+            'position': [0.699, -0.397, 1.114],
+            'orientation': [1.0, 0.0, 0.0, 0.0],
+            'gripper_opening': 1.0,
+        },
+    }
+
+    clearance_pose = policy._idle_clearance_pose(
+        task=task,
+        robot_name='franka_right',
+        phase_spec=phase_spec,
+        tracked_robots=tracked_robots,
+        tracked_objects={},
+    )
+
+    assert clearance_pose is not None
+    assert clearance_pose['position'][2] > tracked_robots['franka_right']['position'][2]
+    assert np.linalg.norm(
+        clearance_pose['position'] - np.asarray(tracked_robots['franka_right']['position'], dtype=float)
+    ) <= policy._MAX_POSITION_STEP['retreat'] + 1e-9
+
+
+def test_transport_completion_requires_carried_object_pose_when_enabled():
+    completions = []
+    task = SimpleNamespace(
+        phase_step_counter=20,
+        target_poses={
+            'assembly_target': {
+                'position': np.array([0.7, -0.2, 1.1]),
+                'orientation': np.array([1.0, 0.0, 0.0, 0.0]),
+            }
+        },
+        mark_local_skill_complete=lambda **kwargs: completions.append(kwargs),
+    )
+    adapter = UR5ePlumbersBlockAtomicSkillAdapter({})
+    spec = {
+        'object': 'part',
+        'target_object_target': 'assembly_target',
+        'position_tolerance': 0.01,
+        'orientation_tolerance': 0.1,
+        'require_target_object_pose_convergence': True,
+        'target_object_position_tolerance': 0.012,
+        'target_object_orientation_tolerance': 0.12,
+    }
+    target_pose = {
+        'position': np.array([0.8, -0.2, 1.2]),
+        'orientation': np.array([1.0, 0.0, 0.0, 0.0]),
+    }
+    tracked_objects = {
+        'part': {
+            'position': [0.73, -0.2, 1.1],
+            'orientation': [1.0, 0.0, 0.0, 0.0],
+        }
+    }
+
+    adapter._maybe_mark_complete(
+        task=task,
+        robot_name='franka_left',
+        skill_name='ur5e_move_part_to_staging',
+        spec=spec,
+        target_pose=target_pose,
+        ik_target_pose=target_pose,
+        current_pose=target_pose,
+        tracked_objects=tracked_objects,
+        current_q=None,
+        target_q=None,
+    )
+    assert completions == []
+
+    tracked_objects['part']['position'] = [0.705, -0.2, 1.1]
+    adapter._maybe_mark_complete(
+        task=task,
+        robot_name='franka_left',
+        skill_name='ur5e_move_part_to_staging',
+        spec=spec,
+        target_pose=target_pose,
+        ik_target_pose=target_pose,
+        current_pose=target_pose,
+        tracked_objects=tracked_objects,
+        current_q=None,
+        target_q=None,
+    )
+    assert len(completions) == 1
+    assert completions[0]['detail']['target_object_pose_complete'] is True
 
 
 def test_task_specs_are_discoverable():
@@ -23,7 +139,9 @@ def test_task_specs_are_discoverable():
 
 
 def test_scene_builder_builds_screw_fastening_episode():
-    task_cfg = build_dual_franka_assembly_episode(recipe='screw_fastening', seed=3, episode_idx=0)
+    task_cfg = build_dual_franka_assembly_episode(
+        recipe='screw_fastening', seed=3, episode_idx=0, attach_runtime_cameras=True
+    )
     assert task_cfg.recipe == 'screw_fastening'
     assert task_cfg.robot_names == ('franka_left', 'franka_right')
     assert 'part_pick' in task_cfg.target_poses
@@ -34,7 +152,7 @@ def test_scene_builder_builds_screw_fastening_episode():
     assert {camera['video_key'] for camera in task_cfg.camera_metadata} == {
         'observation.images.left_wrist',
         'observation.images.right_wrist',
-        'observation.images.third_person',
+        'observation.images.isaac_3d',
     }
     assert len(task_cfg.robots[0].sensors) == 2
     assert len(task_cfg.robots[1].sensors) == 1
@@ -43,13 +161,13 @@ def test_scene_builder_builds_screw_fastening_episode():
 def test_scene_builder_builds_peg_insertion_episode():
     task_cfg = build_dual_franka_assembly_episode(recipe='peg_insertion', seed=7, episode_idx=1)
     assert task_cfg.recipe == 'peg_insertion'
-    assert 'housing_hold' in task_cfg.target_poses
+    assert 'peg_pick' in task_cfg.target_poses
     assert 'peg_insert' in task_cfg.target_poses
-    assert len(task_cfg.success_criteria) == 2
+    assert len(task_cfg.success_criteria) == 1
     assert len(task_cfg.camera_metadata) == 3
 
 
-def test_peg_insertion_uses_physical_grasp_and_release_success():
+def test_peg_insertion_uses_contact_gated_physical_joint_and_release_success():
     task_cfg = build_dual_franka_assembly_episode(recipe='peg_insertion', seed=7, episode_idx=1)
     attach_specs = [
         attach_spec
@@ -58,7 +176,8 @@ def test_peg_insertion_uses_physical_grasp_and_release_success():
         if isinstance(attach_spec, dict)
     ]
     assert attach_specs
-    assert {attach_spec['attachment_mode'] for attach_spec in attach_specs} == {'pure_physical_grasp'}
+    assert {attach_spec['attachment_mode'] for attach_spec in attach_specs} == {'physical_joint'}
+    assert all(attach_spec.get('require_physical_contact') for attach_spec in attach_specs)
     assert all(not phase_spec.get('lock') for phase_spec in task_cfg.phase_specs)
     assert all(success_spec.get('require_released') for success_spec in task_cfg.success_criteria)
     assert all(success_spec.get('require_static') for success_spec in task_cfg.success_criteria)

@@ -8,7 +8,13 @@ The task stages part 2 with the right arm, then uses the left arm to place part 
 
 ## Quick Preview
 
-Example rollout videos are stored with the reproduction assets:
+The linked rollout is the latest physically validated checkpoint: it completes in
+14,523 simulation steps with zero timeout or recovery events. Parts 0, 3, 4, and
+1 are held by strict force-confirmed contact on both gripper fingers; placement
+completion requires object-pose convergence and release does not snap parts to
+their targets.
+
+Videos are stored with the reproduction assets:
 
 - Front view: https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/observation_images_front.mp4
 - Left wrist: https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/observation_images_left_wrist.mp4
@@ -89,8 +95,12 @@ For a lower-resource headless run:
 
 ```bash
 HEADLESS=1 NUM_DEMOS=1 MAX_TRIALS=1 LIVE_VIDEO_FRAME_STRIDE=8 \
-  bash roboassemblybench/scripts/generate_fabrica_plumbers_block_ur5e_right_base_prepare_demo.sh
+  bash roboassemblybench/scripts/generate_fabrica_plumbers_block_ur5e_right_base_prepare_demo.sh \
+  --skip-episode-steps
 ```
+
+`--skip-episode-steps` keeps result metrics and live videos but omits the large
+per-step observation/action list from `episode_0000.json`.
 
 Outputs are written to:
 
@@ -141,7 +151,17 @@ All of them route through:
 toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:UR5ePlumbersBlockAtomicSkillAdapter
 ```
 
-Current generic safeguards include joint-space IK tracking, IK branch-jump limiting, bounded per-step joint targets, TCP-frame object slip checks, close-gripper pose gates, and mesh/collider handling needed by the Fabrica USD assets.
+Current generic safeguards include joint-space IK tracking, IK branch-jump and
+wrist-flip limiting, bounded per-step joint targets, shared-workspace arm
+clearance, TCP-frame object slip checks, strict dual-finger force-contact gates,
+and object-pose convergence before placement completion. Physical attachment
+filters only gripper/object collisions, and every release uses
+`snap_on_open: false`.
+
+The task-specific grasp poses remain recipe data rather than hard-coded policy
+branches. In particular, part 1 is grasped on its shaft with an object-local TCP
+offset while the gripper keeps a world-frame vertical orientation. This pattern
+allows new objects to adjust grasp geometry independently of placement geometry.
 
 ## Add A New Assembly Task
 
@@ -151,7 +171,7 @@ Use the current task as the template:
 2. Start its `recipe.yaml` with `extends: fabrica_plumbers_block_ur5e_wrist_mount` if it uses the same dual-UR5e + Robotiq setup.
 3. Define task objects, world targets, and ordered `phases`.
 4. Register reusable local skills in `metadata.local_skills` with the same `UR5ePlumbersBlockAtomicSkillAdapter`.
-5. Prefer YAML parameters over code changes for new pick/place variants: `object`, `target_object_target`, `target_orientation`, `offset`, `grasp_tcp_offset`, `cartesian_servo`, `cartesian_position_step`, `max_joint_step`, `position_tolerance`, `force_complete_after_steps`, `attach`, and `release`.
+5. Prefer YAML parameters over code changes for new pick/place variants: `object`, `target_object_target`, `target_orientation`, `target_orientation_frame`, `offset`, `grasp_tcp_offset`, `grasp_tcp_offset_frame`, `cartesian_servo`, `cartesian_position_step`, `max_joint_step`, `position_tolerance`, `require_target_object_pose_convergence`, `attach`, and `release`.
 6. Add a wrapper script in `roboassemblybench/scripts/` that calls `roboassemblybench/scripts/generate_demos.py` with the new recipe name.
 
 Keep direct Cartesian IK disabled unless a specific task has been validated with `allow_direct_arm_ik_controller: true`; the default joint-space guarded path is the safer reusable setting for UR5e pick/place skills.

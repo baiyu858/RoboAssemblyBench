@@ -33,16 +33,25 @@ metadata:
       requires_held_object: false
       require_success: true
       fallback: fail
+      cartesian_orientation_step: 0.030
+      default_max_command_joint_step: 0.040
+      default_max_command_wrist_joint_step: 0.020
     ur5e_move_part_to_table_hover:
       adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:UR5ePlumbersBlockAtomicSkillAdapter
       requires_held_object: false
       require_success: true
       fallback: fail
+      cartesian_orientation_step: 0.030
+      default_max_command_joint_step: 0.040
+      default_max_command_wrist_joint_step: 0.020
     ur5e_hold_part_end:
       adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:UR5ePlumbersBlockAtomicSkillAdapter
       requires_held_object: false
       require_success: true
       fallback: fail
+      cartesian_orientation_step: 0.015
+      default_max_command_joint_step: 0.015
+      default_max_command_wrist_joint_step: 0.010
 
 objects:
   - name: factory_tabletop_visual
@@ -79,6 +88,7 @@ objects:
 
 robots:
   - name: franka_left
+    position: [0.50, 0.30, 0.998]
     gripper_xform_orient: [0.707106781, -0.707106781, 0.0, 0.0]
     author_gripper_collision_pads: false
   - name: franka_right
@@ -93,7 +103,7 @@ targets:
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_0_block_2_slot
     reference: world
-    position: [0.6987342, -0.17873426, 0.079459719]
+    position: [0.6987342, -0.17873426, 0.067459719]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_0_pick_lift_hover
     reference: world
@@ -101,7 +111,7 @@ targets:
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_3_pick_lift_hover
     reference: world
-    position: [0.314511725, -0.322520116, 0.075000000]
+    position: [0.314511725, -0.322520116, 0.130000000]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_3_grasp_eef
     reference: world
@@ -109,11 +119,11 @@ targets:
     orientation: [0.0, 0.0, 1.0, 0.0]
   - name: part_3_block_0_2_top
     reference: world
-    position: [0.6987342, -0.17873426, 0.105625000]
+    position: [0.700000000, -0.17873420, 0.093624989]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_4_pick_lift_hover
     reference: world
-    position: [0.382026696, -0.378251722, 0.075000000]
+    position: [0.382026696, -0.378251722, 0.130000000]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_4_grasp_eef
     reference: world
@@ -121,19 +131,19 @@ targets:
     orientation: [0.0, 0.0, 1.0, 0.0]
   - name: part_4_left_hole
     reference: world
-    position: [0.660000000, -0.17873426, 0.097551339]
+    position: [0.700000000, -0.21873420, 0.085551339]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_1_pick_lift_hover
     reference: world
-    position: [0.382026696, -0.323606087, 0.075000000]
+    position: [0.382026696, -0.323606087, 0.130000000]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_1_grasp_eef
     reference: world
-    position: [0.382026696, -0.323606087, 0.095000000]
+    position: [0.368636618, -0.343766056, 0.190000000]
     orientation: [0.0, 0.0, 1.0, 0.0]
   - name: part_1_right_hole
     reference: world
-    position: [0.740000000, -0.17873426, 0.097551339]
+    position: [0.700000000, -0.13873420, 0.085551339]
     orientation: [0.707106781, 0.0, 0.0, 0.707106781]
   - name: part_2_table_hover
     reference: world
@@ -301,7 +311,7 @@ phases:
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
@@ -318,7 +328,7 @@ phases:
       min_steps: 80
 
   - name: right_reorient_block_2_flat_above_table
-    timeout_steps: 720
+    timeout_steps: 1200
     robot_targets: {}
     local_skill:
       name: ur5e_move_part_to_table_hover
@@ -331,7 +341,7 @@ phases:
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
@@ -362,7 +372,7 @@ phases:
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
@@ -395,7 +405,7 @@ phases:
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
@@ -405,7 +415,6 @@ phases:
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.018
       orientation_tolerance: null
-      force_complete_after_steps: 180
     advance:
       type: all_of
       conditions:
@@ -451,12 +460,10 @@ phases:
       name: ur5e_move_above_part
       robot: franka_left
       object: fabrica_plumbers_block_0
-      offset: [0.000752000, -0.031173000, 0.051261000]
-      offset_frame: object
-      target_orientation: [0.0, 0.707106781, -0.707106781, 0.0]
-      target_orientation_frame: world
-      grasp_tcp_offset: [0.0, 0.0, 0.11]
-      grasp_tcp_offset_frame: target
+      offset: [0.0, 0.0, 0.080]
+      offset_frame: world
+      grasp_relative_position: [-0.030805735, 0.000000003, 0.174926139]
+      grasp_relative_orientation: [0.191421901, 0.680703795, -0.680703798, -0.191421889]
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       prealign_steps: 120
@@ -467,7 +474,7 @@ phases:
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.04
       joint_position_tolerance: 0.04
-      orientation_tolerance: null
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -483,12 +490,10 @@ phases:
       name: ur5e_descend_to_grasp
       robot: franka_left
       object: fabrica_plumbers_block_0
-      offset: [-0.000063000, 0.002598000, -0.004272000]
-      offset_frame: object
-      target_orientation: [0.0, 0.707106781, -0.707106781, 0.0]
-      target_orientation_frame: world
-      grasp_tcp_offset: [0.0, 0.0, 0.11]
-      grasp_tcp_offset_frame: target
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      grasp_relative_position: [-0.030805735, 0.000000003, 0.174926139]
+      grasp_relative_orientation: [0.191421901, 0.680703795, -0.680703798, -0.191421889]
       lock_target_orientation: true
       lock_target_position: true
       hard_preferred_joint_abs_limit: true
@@ -497,9 +502,9 @@ phases:
       cartesian_position_step: 0.006
       max_joint_step: 0.045
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.035
+      position_tolerance: 0.010
       joint_position_tolerance: null
-      orientation_tolerance: null
+      orientation_tolerance: 0.10
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -516,20 +521,18 @@ phases:
       name: ur5e_close_gripper
       robot: franka_left
       object: fabrica_plumbers_block_0
-      offset: [-0.000063000, 0.002598000, -0.004272000]
-      offset_frame: object
-      target_orientation: [0.0, 0.707106781, -0.707106781, 0.0]
-      target_orientation_frame: world
-      grasp_tcp_offset: [0.0, 0.0, 0.11]
-      grasp_tcp_offset_frame: target
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      grasp_relative_position: [-0.030805735, 0.000000003, 0.174926139]
+      grasp_relative_orientation: [0.191421901, 0.680703795, -0.680703798, -0.191421889]
       lock_target_orientation: true
       lock_target_position: true
       hard_preferred_joint_abs_limit: true
       preferred_joint_abs_limit: 3.05
       require_close_pose_gate: true
-      preclose_openness: 1.0
-      closed_openness: 0.60
-      close_until_contact: false
+      preclose_openness: 0.695568256
+      closed_openness: 0.0
+      close_until_contact: true
       close_until_contact_min_steps: 36
       close_until_contact_timeout_steps: 180
       close_contact_stable_steps: 24
@@ -543,50 +546,52 @@ phases:
       close_contact_max_angular_speed: 3.0
       close_contact_motion_stable_steps: 12
       use_joint_stall_for_close_until_contact: false
-      allow_closed_gripper_completion: true
+      allow_closed_gripper_completion: false
       close_gripper_target_tolerance: 0.035
       close_closed_target_stable_steps: 10
       close_abort_on_object_motion: false
       close_abort_min_steps: 130
       close_abort_max_object_speed: 0.25
       close_abort_max_angular_speed: 8.0
-      close_position_tolerance: 0.035
+      close_position_tolerance: 0.008
+      close_orientation_tolerance: 0.10
       close_joint_position_tolerance: null
       close_ready_stable_steps: 4
       close_gate_max_joint_step: 0.025
       close_pose_gate_timeout_steps: 120
       close_steps: 120
       close_ramp_steps: 72
-      require_grasp_contact: false
-      require_dual_finger_contact: false
+      require_grasp_contact: true
+      require_dual_finger_contact: true
+      require_strict_physical_contact: true
+      require_force_contact: true
       finger_contact_distance: 0.006
       physical_attach_surface_gap: 0.006
-      contact_force_threshold: 0.2
+      contact_force_threshold: 0.05
     attach:
       - object: fabrica_plumbers_block_0
         robot: franka_left
-        target:
-          reference: fabrica_plumbers_block_0
-          offset: [0.001316000, -0.054552000, 0.089707000]
-          orientation: [0.195870943, -0.682723548, -0.679017298, -0.185630385]
-          ik_frame_compensation: none
         attachment_mode: fixed_joint
-        disable_collision_on_attach: true
-        require_contact: false
-        require_physical_contact: false
+        attachment_relative_pose_source: current
+        disable_collision_on_attach: false
+        require_contact: true
+        require_physical_contact: true
+        require_force_contact: true
+        require_local_skill_complete_for_attach: true
         require_target_reached_for_attach: false
-        require_dual_finger_contact: false
-        allow_enclosure_fallback: true
+        require_dual_finger_contact: true
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
         finger_contact_distance: 0.006
         physical_attach_surface_gap: 0.006
-        contact_force_threshold: 0.2
+        contact_force_threshold: 0.05
         contact_box_scale: [0.04272292, 0.079999998, 0.049500037]
         min_attach_steps: 48
         position_tolerance: 0.045
         orientation_tolerance: 0.9
         support_height_tolerance: null
         top_clearance: null
-        gripper_closed_threshold: 0.65
+        gripper_closed_threshold: 2.00
     advance:
       type: all_of
       min_steps: 72
@@ -610,24 +615,20 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_0
       target_object_target: part_0_pick_lift_hover
-      target_orientation: [0.0, 0.707106781, -0.707106781, 0.0]
-      target_orientation_frame: world
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.025
       max_joint_step: 0.20
       max_object_tcp_slip: 0.10
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 240
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -647,23 +648,24 @@ phases:
       target_object_target: part_0_block_2_slot
       target_object_offset: [0.0, 0.0, 0.06]
       target_object_offset_frame: world
-      target_orientation: [0.261545208, 0.013655831, -0.964939229, 0.017317819]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.015
       max_joint_step: 0.20
       max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.04
-      orientation_tolerance: null
+      position_tolerance: 0.035
+      orientation_tolerance: 0.12
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.040
+      target_object_orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -681,23 +683,24 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_0
       target_object_target: part_0_block_2_slot
-      target_orientation: [0.261545208, 0.013655831, -0.964939229, 0.017317819]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.008
       max_joint_step: 0.15
       max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.035
-      orientation_tolerance: null
+      position_tolerance: 0.010
+      orientation_tolerance: 0.08
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.012
+      target_object_orientation_tolerance: 0.12
     advance:
       type: all_of
       conditions:
@@ -722,10 +725,10 @@ phases:
     lock:
       - object: fabrica_plumbers_block_0
         target: part_0_block_2_slot
-        position_tolerance: 0.08
-        orientation_tolerance: 0.20
-        snap_on_open: true
-        release_snap_steps: 0
+        position_tolerance: 0.015
+        orientation_tolerance: 0.15
+        snap_on_open: false
+        freeze_current_pose: true
     advance:
       type: all_of
       conditions:
@@ -747,12 +750,10 @@ phases:
       name: ur5e_move_above_part
       robot: franka_left
       object: fabrica_plumbers_block_3
-      offset: [0.000752000, -0.031173000, 0.051261000]
-      offset_frame: object
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
-      grasp_tcp_offset: [0.0, 0.0, 0.11]
-      grasp_tcp_offset_frame: target
+      offset: [0.0, 0.0, 0.080]
+      offset_frame: world
+      grasp_relative_position: [-0.013151259, 0.0, 0.162519881]
+      grasp_relative_orientation: [0.538663785, 0.0, 0.842520817, 0.000000001]
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       prealign_steps: 80
@@ -763,8 +764,7 @@ phases:
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.05
       joint_position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 900
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -773,35 +773,38 @@ phases:
 
   - name: left_descend_to_block_3_grasp
     timeout_steps: 1200
-    robot_targets:
-      franka_left:
-        target: part_3_grasp_eef
-        blocking: true
-        position_tolerance: 0.100
-        orientation_tolerance: 3.1416
-        position_only: true
-        ignore_orientation: true
+    robot_targets: {}
     gripper_commands:
       franka_left: open
       franka_right: open
+    local_skill:
+      name: ur5e_descend_to_grasp
+      robot: franka_left
+      object: fabrica_plumbers_block_3
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      grasp_relative_position: [-0.013151259, 0.0, 0.162519881]
+      grasp_relative_orientation: [0.538663785, 0.0, 0.842520817, 0.000000001]
+      lock_target_orientation: true
+      lock_target_position: true
+      hard_preferred_joint_abs_limit: true
+      gripper_command: open
+      cartesian_servo: true
+      cartesian_position_step: 0.004
+      max_joint_step: 0.035
+      preferred_joint_abs_limit: 3.05
+      position_tolerance: 0.010
+      joint_position_tolerance: null
+      orientation_tolerance: 0.10
     advance:
-      type: all_of
-      min_steps: 48
-      conditions:
-        - type: robot_targets_reached
-          tolerance: 0.100
-          orientation_tolerance: 3.1416
+      type: local_skill_complete
+      robot: franka_left
+      skill: ur5e_descend_to_grasp
+      min_steps: 12
 
   - name: left_close_gripper_on_block_3
     timeout_steps: 900
-    robot_targets:
-      franka_left:
-        target: part_3_grasp_eef
-        blocking: true
-        position_tolerance: 0.120
-        orientation_tolerance: 3.1416
-        position_only: true
-        ignore_orientation: true
+    robot_targets: {}
     gripper_commands:
       franka_left: close
       franka_right: open
@@ -809,75 +812,76 @@ phases:
       name: ur5e_close_gripper
       robot: franka_left
       object: fabrica_plumbers_block_3
-      target_pose_target: part_3_grasp_eef
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      grasp_relative_position: [-0.013151259, 0.0, 0.162519881]
+      grasp_relative_orientation: [0.538663785, 0.0, 0.842520817, 0.000000001]
       lock_target_orientation: true
       lock_target_position: true
       hard_preferred_joint_abs_limit: true
       preferred_joint_abs_limit: 3.05
-      require_close_pose_gate: false
-      close_position_tolerance: 0.120
-      close_orientation_tolerance: null
+      require_close_pose_gate: true
+      close_position_tolerance: 0.012
+      close_orientation_tolerance: 0.10
       close_joint_position_tolerance: null
       close_ready_stable_steps: 4
-      close_gate_max_joint_step: 0.035
-      close_gate_guard_ik_branch_jump: false
+      close_gate_max_joint_step: 0.025
+      close_gate_guard_ik_branch_jump: true
       close_pose_gate_timeout_steps: 240
-      preclose_openness: 1.0
-      closed_openness: 0.60
-      close_until_contact: false
+      preclose_openness: 0.667233011
+      closed_openness: 0.0
+      close_until_contact: true
       close_until_contact_min_steps: 36
       close_until_contact_timeout_steps: 360
-      close_contact_stable_steps: 8
+      close_contact_stable_steps: 12
       close_contact_stall_joint_delta: 0.0015
       close_contact_blocked_joint_margin: 0.025
       close_contact_min_joint_closure: 0.05
-      close_contact_hold_squeeze_margin: 0.0
+      close_contact_hold_squeeze_margin: 0.04
       max_hold_gripper_openness: 1.0
-      contact_box_scale: [0.10, 0.10, 0.10]
+      contact_box_scale: [0.10000000, 0.04000000, 0.02614731]
+      caging_contact_distance: 0.006
       close_contact_max_object_speed: 0.08
       close_contact_max_angular_speed: 3.0
       close_contact_motion_stable_steps: 8
       use_joint_stall_for_close_until_contact: false
-      allow_closed_gripper_completion: true
+      allow_closed_gripper_completion: false
       close_gripper_target_tolerance: 0.04
       close_closed_target_stable_steps: 8
       close_abort_on_object_motion: false
-      close_steps: 96
-      close_ramp_steps: 72
-      require_grasp_contact: false
-      require_dual_finger_contact: false
-      finger_contact_distance: 0.008
-      physical_attach_surface_gap: 0.008
-      contact_force_threshold: 0.2
+      close_abort_min_steps: 120
+      close_abort_max_object_speed: 0.20
+      close_abort_max_angular_speed: 6.0
+      close_steps: 180
+      close_ramp_steps: 120
+      require_grasp_contact: true
+      require_dual_finger_contact: true
+      require_strict_physical_contact: true
+      require_force_contact: true
+      finger_contact_distance: 0.006
+      physical_attach_surface_gap: 0.006
+      contact_force_threshold: 0.05
     attach:
       - object: fabrica_plumbers_block_3
         robot: franka_left
-        target: part_3_grasp_eef
-        attachment_mode: symbolic
-        attachment_local_position: [-0.013282230, 0.019986443, 0.128614136]
-        attachment_local_orientation: [-0.402518363, 0.603581192, -0.668772842, 0.162516455]
-        disable_collision_on_attach: true
-        require_contact: false
-        require_physical_contact: false
+        attachment_mode: fixed_joint
+        attachment_relative_pose_source: current
+        disable_collision_on_attach: false
+        require_contact: true
+        require_physical_contact: true
+        require_force_contact: true
+        require_local_skill_complete_for_attach: true
         require_target_reached_for_attach: false
-        require_dual_finger_contact: false
-        allow_enclosure_fallback: true
-        allow_caging_contact_for_physical_grasp: true
-        allow_caging_hold_for_physical_grasp: true
-        hold_position_slip_tolerance: 0.12
-        hold_orientation_slip_tolerance: 3.1416
-        grasp_preclose_open_steps: 1
-        grasp_close_ramp_steps: 48
-        grasp_close_hold_steps: 24
-        hold_grasp_target_during_close: false
-        finger_contact_distance: 0.008
-        physical_attach_surface_gap: 0.008
-        contact_force_threshold: 0.2
-        contact_box_scale: [0.10, 0.10, 0.10]
+        require_dual_finger_contact: true
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
+        allow_caging_contact_for_physical_grasp: false
+        finger_contact_distance: 0.006
+        physical_attach_surface_gap: 0.006
+        contact_force_threshold: 0.05
+        contact_box_scale: [0.10000000, 0.04000000, 0.02614731]
+        caging_contact_distance: 0.006
         min_attach_steps: 48
-        min_gripper_opening: 0.0
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
         support_height_tolerance: null
         top_clearance: null
         gripper_closed_threshold: 2.00
@@ -904,24 +908,20 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_3
       target_object_target: part_3_pick_lift_hover
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.025
       max_joint_step: 0.20
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 240
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -941,24 +941,24 @@ phases:
       target_object_target: part_3_block_0_2_top
       target_object_offset: [0.0, 0.0, 0.06]
       target_object_offset_frame: world
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.015
       max_joint_step: 0.20
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.08
-      orientation_tolerance: null
-      force_complete_after_steps: 720
+      position_tolerance: 0.035
+      orientation_tolerance: 0.12
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.040
+      target_object_orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -976,24 +976,24 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_3
       target_object_target: part_3_block_0_2_top
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.008
       max_joint_step: 0.15
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.08
-      orientation_tolerance: null
-      force_complete_after_steps: 480
+      position_tolerance: 0.010
+      orientation_tolerance: 0.08
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.012
+      target_object_orientation_tolerance: 0.12
     advance:
       type: all_of
       conditions:
@@ -1019,10 +1019,10 @@ phases:
     lock:
       - object: fabrica_plumbers_block_3
         target: part_3_block_0_2_top
-        position_tolerance: 0.08
-        orientation_tolerance: 3.1416
-        snap_on_open: true
-        release_snap_steps: 0
+        position_tolerance: 0.015
+        orientation_tolerance: 0.15
+        snap_on_open: false
+        freeze_current_pose: true
     advance:
       type: all_of
       conditions:
@@ -1045,12 +1045,10 @@ phases:
       name: ur5e_move_above_part
       robot: franka_left
       object: fabrica_plumbers_block_4
-      offset: [0.000752000, -0.031173000, 0.051261000]
-      offset_frame: object
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
-      grasp_tcp_offset: [0.0, 0.0, 0.11]
-      grasp_tcp_offset_frame: target
+      offset: [0.0, 0.0, 0.025]
+      offset_frame: world
+      grasp_relative_position: [-0.006984272, -0.000000005, 0.188989311]
+      grasp_relative_orientation: [0.170697684, 0.489281235, 0.849589452, 0.098305325]
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       prealign_steps: 80
@@ -1061,8 +1059,7 @@ phases:
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.05
       joint_position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 900
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -1071,35 +1068,38 @@ phases:
 
   - name: left_descend_to_block_4_grasp
     timeout_steps: 1200
-    robot_targets:
-      franka_left:
-        target: part_4_grasp_eef
-        blocking: true
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
-        position_only: true
-        ignore_orientation: true
+    robot_targets: {}
     gripper_commands:
       franka_left: open
       franka_right: open
+    local_skill:
+      name: ur5e_descend_to_grasp
+      robot: franka_left
+      object: fabrica_plumbers_block_4
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      grasp_relative_position: [-0.006984272, -0.000000005, 0.188989311]
+      grasp_relative_orientation: [0.170697684, 0.489281235, 0.849589452, 0.098305325]
+      lock_target_orientation: true
+      lock_target_position: true
+      hard_preferred_joint_abs_limit: true
+      gripper_command: open
+      cartesian_servo: true
+      cartesian_position_step: 0.004
+      max_joint_step: 0.035
+      preferred_joint_abs_limit: 3.05
+      position_tolerance: 0.010
+      joint_position_tolerance: null
+      orientation_tolerance: 0.10
     advance:
-      type: all_of
-      min_steps: 48
-      conditions:
-        - type: robot_targets_reached
-          tolerance: 0.350
-          orientation_tolerance: 3.1416
+      type: local_skill_complete
+      robot: franka_left
+      skill: ur5e_descend_to_grasp
+      min_steps: 12
 
   - name: left_close_gripper_on_block_4
     timeout_steps: 720
-    robot_targets:
-      franka_left:
-        target: part_4_grasp_eef
-        blocking: true
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
-        position_only: true
-        ignore_orientation: true
+    robot_targets: {}
     gripper_commands:
       franka_left: close
       franka_right: open
@@ -1107,75 +1107,76 @@ phases:
       name: ur5e_close_gripper
       robot: franka_left
       object: fabrica_plumbers_block_4
-      target_pose_target: part_4_grasp_eef
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      grasp_relative_position: [-0.006984272, -0.000000005, 0.188989311]
+      grasp_relative_orientation: [0.170697684, 0.489281235, 0.849589452, 0.098305325]
       lock_target_orientation: true
       lock_target_position: true
       hard_preferred_joint_abs_limit: true
       preferred_joint_abs_limit: 3.05
-      require_close_pose_gate: false
-      close_position_tolerance: 0.350
-      close_orientation_tolerance: null
+      require_close_pose_gate: true
+      close_position_tolerance: 0.012
+      close_orientation_tolerance: 0.10
       close_joint_position_tolerance: null
       close_ready_stable_steps: 4
-      close_gate_max_joint_step: 0.035
-      close_gate_guard_ik_branch_jump: false
+      close_gate_max_joint_step: 0.025
+      close_gate_guard_ik_branch_jump: true
       close_pose_gate_timeout_steps: 240
-      preclose_openness: 1.0
-      closed_openness: 0.85
-      close_until_contact: false
+      preclose_openness: 0.513782281
+      closed_openness: 0.0
+      close_until_contact: true
       close_until_contact_min_steps: 36
       close_until_contact_timeout_steps: 360
-      close_contact_stable_steps: 8
+      close_contact_stable_steps: 12
       close_contact_stall_joint_delta: 0.0015
       close_contact_blocked_joint_margin: 0.025
       close_contact_min_joint_closure: 0.05
-      close_contact_hold_squeeze_margin: 0.0
+      close_contact_hold_squeeze_margin: 0.04
       max_hold_gripper_openness: 1.0
-      contact_box_scale: [0.10, 0.10, 0.10]
+      contact_box_scale: [0.02883280, 0.02500120, 0.07000000]
+      caging_contact_distance: 0.006
       close_contact_max_object_speed: 0.08
       close_contact_max_angular_speed: 3.0
       close_contact_motion_stable_steps: 8
       use_joint_stall_for_close_until_contact: false
-      allow_closed_gripper_completion: true
+      allow_closed_gripper_completion: false
       close_gripper_target_tolerance: 0.04
       close_closed_target_stable_steps: 8
       close_abort_on_object_motion: false
-      close_steps: 96
-      close_ramp_steps: 72
-      require_grasp_contact: false
-      require_dual_finger_contact: false
-      finger_contact_distance: 0.008
-      physical_attach_surface_gap: 0.008
-      contact_force_threshold: 0.2
+      close_abort_min_steps: 120
+      close_abort_max_object_speed: 0.20
+      close_abort_max_angular_speed: 6.0
+      close_steps: 180
+      close_ramp_steps: 120
+      require_grasp_contact: true
+      require_dual_finger_contact: true
+      require_strict_physical_contact: true
+      require_force_contact: true
+      finger_contact_distance: 0.006
+      physical_attach_surface_gap: 0.006
+      contact_force_threshold: 0.05
     attach:
       - object: fabrica_plumbers_block_4
         robot: franka_left
-        target: part_4_grasp_eef
-        attachment_mode: symbolic
-        attachment_local_position: [-0.013282230, 0.019986443, 0.128614136]
-        attachment_local_orientation: [-0.402518363, 0.603581192, -0.668772842, 0.162516455]
-        disable_collision_on_attach: true
-        require_contact: false
-        require_physical_contact: false
+        attachment_mode: fixed_joint
+        attachment_relative_pose_source: current
+        disable_collision_on_attach: false
+        require_contact: true
+        require_physical_contact: true
+        require_force_contact: true
+        require_local_skill_complete_for_attach: true
         require_target_reached_for_attach: false
-        require_dual_finger_contact: false
-        allow_enclosure_fallback: true
-        allow_caging_contact_for_physical_grasp: true
-        allow_caging_hold_for_physical_grasp: true
-        hold_position_slip_tolerance: 0.12
-        hold_orientation_slip_tolerance: 3.1416
-        grasp_preclose_open_steps: 1
-        grasp_close_ramp_steps: 48
-        grasp_close_hold_steps: 24
-        hold_grasp_target_during_close: false
-        finger_contact_distance: 0.008
-        physical_attach_surface_gap: 0.008
-        contact_force_threshold: 0.2
-        contact_box_scale: [0.10, 0.10, 0.10]
+        require_dual_finger_contact: true
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
+        allow_caging_contact_for_physical_grasp: false
+        finger_contact_distance: 0.006
+        physical_attach_surface_gap: 0.006
+        contact_force_threshold: 0.05
+        contact_box_scale: [0.02883280, 0.02500120, 0.07000000]
+        caging_contact_distance: 0.006
         min_attach_steps: 60
-        min_gripper_opening: 0.0
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
         support_height_tolerance: null
         top_clearance: null
         gripper_closed_threshold: 2.00
@@ -1202,24 +1203,20 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_4
       target_object_target: part_4_pick_lift_hover
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.025
       max_joint_step: 0.20
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 240
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -1239,24 +1236,24 @@ phases:
       target_object_target: part_4_left_hole
       target_object_offset: [0.0, 0.0, 0.06]
       target_object_offset_frame: world
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.015
       max_joint_step: 0.20
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.08
-      orientation_tolerance: null
-      force_complete_after_steps: 720
+      position_tolerance: 0.035
+      orientation_tolerance: 0.12
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.040
+      target_object_orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -1274,24 +1271,24 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_4
       target_object_target: part_4_left_hole
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.008
       max_joint_step: 0.15
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.08
-      orientation_tolerance: null
-      force_complete_after_steps: 480
+      position_tolerance: 0.010
+      orientation_tolerance: 0.08
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.012
+      target_object_orientation_tolerance: 0.12
     advance:
       type: all_of
       conditions:
@@ -1318,10 +1315,10 @@ phases:
     lock:
       - object: fabrica_plumbers_block_4
         target: part_4_left_hole
-        position_tolerance: 0.08
-        orientation_tolerance: 3.1416
-        snap_on_open: true
-        release_snap_steps: 0
+        position_tolerance: 0.015
+        orientation_tolerance: 0.15
+        snap_on_open: false
+        freeze_current_pose: true
     advance:
       type: all_of
       conditions:
@@ -1345,11 +1342,11 @@ phases:
       name: ur5e_move_above_part
       robot: franka_left
       object: fabrica_plumbers_block_1
-      offset: [0.000752000, -0.031173000, 0.051261000]
-      offset_frame: object
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
+      offset: [0.0, 0.0, 0.025]
+      offset_frame: world
+      target_orientation: [0.0, 1.0, 0.0, 0.0]
       target_orientation_frame: world
-      grasp_tcp_offset: [0.0, 0.0, 0.11]
+      grasp_tcp_offset: [0.0, 0.0, 0.168]
       grasp_tcp_offset_frame: target
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
@@ -1360,9 +1357,8 @@ phases:
       max_joint_step: 0.16
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.05
-      joint_position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 900
+      joint_position_tolerance: null
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -1371,35 +1367,40 @@ phases:
 
   - name: left_descend_to_block_1_grasp
     timeout_steps: 1200
-    robot_targets:
-      franka_left:
-        target: part_1_grasp_eef
-        blocking: true
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
-        position_only: true
-        ignore_orientation: true
+    robot_targets: {}
     gripper_commands:
       franka_left: open
       franka_right: open
+    local_skill:
+      name: ur5e_descend_to_grasp
+      robot: franka_left
+      object: fabrica_plumbers_block_1
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      target_orientation: [0.0, 1.0, 0.0, 0.0]
+      target_orientation_frame: world
+      grasp_tcp_offset: [0.0, 0.0, 0.168]
+      grasp_tcp_offset_frame: target
+      lock_target_orientation: true
+      lock_target_position: true
+      hard_preferred_joint_abs_limit: true
+      gripper_command: open
+      cartesian_servo: true
+      cartesian_position_step: 0.002
+      max_joint_step: 0.025
+      preferred_joint_abs_limit: 3.05
+      position_tolerance: 0.010
+      joint_position_tolerance: null
+      orientation_tolerance: 0.10
     advance:
-      type: all_of
-      min_steps: 48
-      conditions:
-        - type: robot_targets_reached
-          tolerance: 0.350
-          orientation_tolerance: 3.1416
+      type: local_skill_complete
+      robot: franka_left
+      skill: ur5e_descend_to_grasp
+      min_steps: 12
 
   - name: left_close_gripper_on_block_1
     timeout_steps: 720
-    robot_targets:
-      franka_left:
-        target: part_1_grasp_eef
-        blocking: true
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
-        position_only: true
-        ignore_orientation: true
+    robot_targets: {}
     gripper_commands:
       franka_left: close
       franka_right: open
@@ -1407,75 +1408,78 @@ phases:
       name: ur5e_close_gripper
       robot: franka_left
       object: fabrica_plumbers_block_1
-      target_pose_target: part_1_grasp_eef
+      offset: [0.0, 0.0, 0.0]
+      offset_frame: world
+      target_orientation: [0.0, 1.0, 0.0, 0.0]
+      target_orientation_frame: world
+      grasp_tcp_offset: [0.0, 0.0, 0.168]
+      grasp_tcp_offset_frame: target
       lock_target_orientation: true
       lock_target_position: true
       hard_preferred_joint_abs_limit: true
       preferred_joint_abs_limit: 3.05
-      require_close_pose_gate: false
-      close_position_tolerance: 0.350
-      close_orientation_tolerance: null
+      require_close_pose_gate: true
+      close_position_tolerance: 0.012
+      close_orientation_tolerance: 0.10
       close_joint_position_tolerance: null
       close_ready_stable_steps: 4
-      close_gate_max_joint_step: 0.035
-      close_gate_guard_ik_branch_jump: false
+      close_gate_max_joint_step: 0.015
+      close_gate_guard_ik_branch_jump: true
       close_pose_gate_timeout_steps: 240
-      preclose_openness: 1.0
-      closed_openness: 0.85
-      close_until_contact: false
+      preclose_openness: 0.513781888
+      closed_openness: 0.0
+      close_until_contact: true
       close_until_contact_min_steps: 36
       close_until_contact_timeout_steps: 360
-      close_contact_stable_steps: 8
+      close_contact_stable_steps: 12
       close_contact_stall_joint_delta: 0.0015
       close_contact_blocked_joint_margin: 0.025
       close_contact_min_joint_closure: 0.05
-      close_contact_hold_squeeze_margin: 0.0
+      close_contact_hold_squeeze_margin: 0.005
       max_hold_gripper_openness: 1.0
-      contact_box_scale: [0.10, 0.10, 0.10]
+      contact_box_scale: [0.02883280, 0.02500120, 0.07000000]
+      caging_contact_distance: 0.006
       close_contact_max_object_speed: 0.08
       close_contact_max_angular_speed: 3.0
       close_contact_motion_stable_steps: 8
       use_joint_stall_for_close_until_contact: false
-      allow_closed_gripper_completion: true
+      allow_closed_gripper_completion: false
       close_gripper_target_tolerance: 0.04
       close_closed_target_stable_steps: 8
       close_abort_on_object_motion: false
-      close_steps: 96
-      close_ramp_steps: 72
-      require_grasp_contact: false
-      require_dual_finger_contact: false
-      finger_contact_distance: 0.008
-      physical_attach_surface_gap: 0.008
-      contact_force_threshold: 0.2
+      close_abort_min_steps: 120
+      close_abort_max_object_speed: 0.20
+      close_abort_max_angular_speed: 6.0
+      close_steps: 180
+      close_ramp_steps: 120
+      require_grasp_contact: true
+      require_dual_finger_contact: true
+      require_strict_physical_contact: true
+      require_force_contact: true
+      finger_contact_distance: 0.006
+      physical_attach_surface_gap: 0.006
+      contact_force_threshold: 0.05
     attach:
       - object: fabrica_plumbers_block_1
         robot: franka_left
-        target: part_1_grasp_eef
-        attachment_mode: symbolic
-        attachment_local_position: [-0.013282230, 0.019986443, 0.128614136]
-        attachment_local_orientation: [-0.402518363, 0.603581192, -0.668772842, 0.162516455]
-        disable_collision_on_attach: true
-        require_contact: false
-        require_physical_contact: false
+        attachment_mode: fixed_joint
+        attachment_relative_pose_source: current
+        disable_collision_on_attach: false
+        require_contact: true
+        require_physical_contact: true
+        require_force_contact: true
+        require_local_skill_complete_for_attach: true
         require_target_reached_for_attach: false
-        require_dual_finger_contact: false
-        allow_enclosure_fallback: true
-        allow_caging_contact_for_physical_grasp: true
-        allow_caging_hold_for_physical_grasp: true
-        hold_position_slip_tolerance: 0.12
-        hold_orientation_slip_tolerance: 3.1416
-        grasp_preclose_open_steps: 1
-        grasp_close_ramp_steps: 48
-        grasp_close_hold_steps: 24
-        hold_grasp_target_during_close: false
-        finger_contact_distance: 0.008
-        physical_attach_surface_gap: 0.008
-        contact_force_threshold: 0.2
-        contact_box_scale: [0.10, 0.10, 0.10]
+        require_dual_finger_contact: true
+        allow_top_contact_fallback: false
+        allow_enclosure_fallback: false
+        allow_caging_contact_for_physical_grasp: false
+        finger_contact_distance: 0.006
+        physical_attach_surface_gap: 0.006
+        contact_force_threshold: 0.05
+        contact_box_scale: [0.02883280, 0.02500120, 0.07000000]
+        caging_contact_distance: 0.006
         min_attach_steps: 60
-        min_gripper_opening: 0.0
-        position_tolerance: 0.350
-        orientation_tolerance: 3.1416
         support_height_tolerance: null
         top_clearance: null
         gripper_closed_threshold: 2.00
@@ -1502,24 +1506,20 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_1
       target_object_target: part_1_pick_lift_hover
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.025
       max_joint_step: 0.20
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
       position_tolerance: 0.04
-      orientation_tolerance: null
-      force_complete_after_steps: 240
+      orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -1539,24 +1539,24 @@ phases:
       target_object_target: part_1_right_hole
       target_object_offset: [0.0, 0.0, 0.06]
       target_object_offset_frame: world
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.015
       max_joint_step: 0.20
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.08
-      orientation_tolerance: null
-      force_complete_after_steps: 720
+      position_tolerance: 0.035
+      orientation_tolerance: 0.12
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.040
+      target_object_orientation_tolerance: 0.15
     advance:
       type: local_skill_complete
       robot: franka_left
@@ -1574,24 +1574,24 @@ phases:
       robot: franka_left
       object: fabrica_plumbers_block_1
       target_object_target: part_1_right_hole
-      target_orientation: [0.0, 0.0, 1.0, 0.0]
-      target_orientation_frame: world
+      derive_tcp_orientation_from_target_object: true
       lock_target_orientation: true
       hard_preferred_joint_abs_limit: true
       gripper_command: contact_hold
       cartesian_servo: true
-      guard_ik_branch_jump: false
+      guard_ik_branch_jump: true
       ik_reference_mode: current
       use_command_warm_start: true
       require_warm_start_ik: true
-      use_arm_ik_controller: true
       cartesian_position_step: 0.008
       max_joint_step: 0.15
-      max_object_tcp_slip: null
+      max_object_tcp_slip: 0.12
       preferred_joint_abs_limit: 3.05
-      position_tolerance: 0.08
-      orientation_tolerance: null
-      force_complete_after_steps: 480
+      position_tolerance: 0.010
+      orientation_tolerance: 0.08
+      require_target_object_pose_convergence: true
+      target_object_position_tolerance: 0.012
+      target_object_orientation_tolerance: 0.12
     advance:
       type: all_of
       conditions:
@@ -1619,10 +1619,10 @@ phases:
     lock:
       - object: fabrica_plumbers_block_1
         target: part_1_right_hole
-        position_tolerance: 0.08
-        orientation_tolerance: 3.1416
-        snap_on_open: true
-        release_snap_steps: 0
+        position_tolerance: 0.015
+        orientation_tolerance: 0.15
+        snap_on_open: false
+        freeze_current_pose: true
     advance:
       type: all_of
       conditions:
@@ -1648,32 +1648,32 @@ success:
     angular_velocity_threshold: 5.0
   - object: fabrica_plumbers_block_0
     target: part_0_block_2_slot
-    position_tolerance: 0.08
-    orientation_tolerance: 0.20
+    position_tolerance: 0.015
+    orientation_tolerance: 0.15
     require_released: true
     require_static: true
     linear_velocity_threshold: 0.08
     angular_velocity_threshold: 5.0
   - object: fabrica_plumbers_block_3
     target: part_3_block_0_2_top
-    position_tolerance: 0.08
-    orientation_tolerance: 3.1416
+    position_tolerance: 0.015
+    orientation_tolerance: 0.15
     require_released: true
     require_static: true
     linear_velocity_threshold: 0.08
     angular_velocity_threshold: 5.0
   - object: fabrica_plumbers_block_4
     target: part_4_left_hole
-    position_tolerance: 0.08
-    orientation_tolerance: 3.1416
+    position_tolerance: 0.015
+    orientation_tolerance: 0.15
     require_released: true
     require_static: true
     linear_velocity_threshold: 0.08
     angular_velocity_threshold: 5.0
   - object: fabrica_plumbers_block_1
     target: part_1_right_hole
-    position_tolerance: 0.08
-    orientation_tolerance: 3.1416
+    position_tolerance: 0.015
+    orientation_tolerance: 0.15
     require_released: true
     require_static: true
     linear_velocity_threshold: 0.08

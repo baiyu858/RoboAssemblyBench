@@ -100,12 +100,15 @@ def _attach_policy_diagnostics(metrics: dict, policy: DualFrankaAssemblyDemoPoli
 
 
 class EpisodeRecorder:
-    def __init__(self, output_dir: Path):
+    def __init__(self, output_dir: Path, *, record_steps: bool = True):
         self.output_dir = output_dir.resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.record_steps = bool(record_steps)
         self.steps = []
 
     def record(self, task, obs: dict, actions: dict):
+        if not self.record_steps:
+            return
         self.steps.append(
             {
                 'phase': task.phase,
@@ -359,6 +362,7 @@ def _run_task_sequence(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    record_episode_steps: bool = True,
 ):
     env = _build_env(task_configs=task_configs, headless=headless)
     policy = DualFrankaAssemblyDemoPolicy()
@@ -393,7 +397,10 @@ def _run_task_sequence(
             task = env.runner.current_tasks[task_name]
             last_task = task
             if output_dir is not None and recorder is None:
-                recorder = EpisodeRecorder(output_dir=output_dir)
+                recorder = EpisodeRecorder(
+                    output_dir=output_dir,
+                    record_steps=record_episode_steps,
+                )
             if record_live_video and video_recorder is None:
                 video_recorder = LiveRolloutVideoRecorder(
                     output_dir=output_dir or Path.cwd(),
@@ -614,6 +621,7 @@ def _worker_mode(args, *, headless: bool):
             runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
             runtime_capture_rgb=bool(args.runtime_capture_rgb),
             runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+            record_episode_steps=not bool(args.skip_episode_steps),
         )
         return
 
@@ -646,6 +654,7 @@ def _worker_mode(args, *, headless: bool):
         runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
         runtime_capture_rgb=bool(args.runtime_capture_rgb),
         runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+        record_episode_steps=not bool(args.skip_episode_steps),
     )
 
 
@@ -671,6 +680,7 @@ def _invoke_worker(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    skip_episode_steps: bool = False,
 ):
     command = [
         sys.executable,
@@ -696,6 +706,8 @@ def _invoke_worker(
         command.extend(['--live-video-frame-stride', str(int(live_video_frame_stride))])
     if keep_video_frames:
         command.append('--keep-video-frames')
+    if skip_episode_steps:
+        command.append('--skip-episode-steps')
     if runtime_robochecker:
         command.append('--runtime-robochecker')
         command.extend(['--runtime-checker-stride', str(int(runtime_checker_stride))])
@@ -737,6 +749,7 @@ def _results_from_worker(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    skip_episode_steps: bool = False,
 ) -> list[dict]:
     worker_dir.mkdir(parents=True, exist_ok=True)
     results_path = worker_dir / (
@@ -766,6 +779,7 @@ def _results_from_worker(
         runtime_stop_on_violation=runtime_stop_on_violation,
         runtime_capture_rgb=runtime_capture_rgb,
         runtime_rgb_frame_stride=runtime_rgb_frame_stride,
+        skip_episode_steps=skip_episode_steps,
     )
     if not results_path.exists():
         raise RuntimeError(
@@ -821,6 +835,11 @@ def main():
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)
     parser.add_argument('--keep-video-frames', action='store_true')
+    parser.add_argument(
+        '--skip-episode-steps',
+        action='store_true',
+        help='Write metrics without retaining per-step observations; useful for low-memory debug runs.',
+    )
     parser.add_argument('--runtime-robochecker', action='store_true')
     parser.add_argument('--runtime-feedback-path', type=str, default=None)
     parser.add_argument('--runtime-observation-dir', type=str, default=None)
@@ -893,6 +912,7 @@ def main():
                 runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+                skip_episode_steps=bool(args.skip_episode_steps),
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
             if not successful_seeds:
@@ -927,6 +947,7 @@ def main():
                 runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+                skip_episode_steps=bool(args.skip_episode_steps),
             )
             runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
             if runtime_failed_results:

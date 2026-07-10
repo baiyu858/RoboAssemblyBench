@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+import math
 import os
 from typing import Any
 
@@ -252,6 +253,7 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
                 current_pose=current_pose,
                 target_pose=target_pose,
                 max_position_step=float(spec.get("cartesian_position_step", 0.01)),
+                max_orientation_step=float(spec.get("cartesian_orientation_step", 0.01)),
             )
 
         ik_target_pose = self._ik_target_pose(target_pose=command_target_pose, spec=spec)
@@ -297,6 +299,7 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
                 target_pose=target_pose,
                 ik_target_pose=ik_target_pose,
                 current_pose=current_pose,
+                tracked_objects=tracked_objects,
                 current_q=current_q,
                 target_q=None,
             )
@@ -366,10 +369,22 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
                     "target_q": target_q.tolist(),
                 },
             )
+        joint_step_limits = self._command_joint_step_limits(
+            spec=spec,
+            joint_count=reference_q.shape[0],
+        )
+        if joint_step_limits is None:
+            joint_step_limits = float(spec.get("max_joint_step", 0.035))
         command_q = self._limited_joint_target(
             current_q=reference_q,
             target_q=target_q,
-            max_joint_step=float(spec.get("max_joint_step", 0.035)),
+            max_joint_step=joint_step_limits,
+        )
+        command_q = self._continuous_command_q(
+            task=task,
+            robot_name=robot_name,
+            command_q=command_q,
+            spec=spec,
         )
         self._debug_joint_step(
             task=task,
@@ -415,6 +430,7 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             target_pose=target_pose,
             ik_target_pose=ik_target_pose,
             current_pose=current_pose,
+            tracked_objects=tracked_objects,
             current_q=current_q,
             target_q=target_q,
         )
@@ -430,6 +446,7 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         target_pose: dict,
         ik_target_pose: dict,
         current_pose: dict | None,
+        tracked_objects: dict,
         current_q,
         target_q,
     ) -> None:
@@ -468,6 +485,80 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
                 or orientation_error is None
                 or orientation_error <= orientation_tolerance
             )
+
+        if bool(spec.get("require_target_object_pose_convergence", False)):
+            object_name = self._object_name_from_spec(spec)
+            object_pose = None
+            target_object_pose = None
+            if object_name is not None:
+                object_pose = self._object_pose(
+                    task=task,
+                    object_name=object_name,
+                    tracked_objects=tracked_objects,
+                )
+                target_object_pose = self._target_object_pose(task=task, spec=spec)
+
+            object_position_tolerance = float(
+                spec.get("target_object_position_tolerance", position_tolerance)
+            )
+            object_orientation_tolerance = spec.get(
+                "target_object_orientation_tolerance",
+                orientation_tolerance,
+            )
+            object_orientation_tolerance = (
+                None
+                if object_orientation_tolerance is None
+                else float(object_orientation_tolerance)
+            )
+            object_pose_complete = False
+            object_position_error = None
+            object_orientation_error = None
+            if object_pose is not None and target_object_pose is not None:
+                target_object_orientation = target_object_pose.get("orientation")
+                if target_object_orientation is None:
+                    object_position_error = float(
+                        np.linalg.norm(
+                            np.asarray(object_pose["position"], dtype=float)
+                            - np.asarray(target_object_pose["position"], dtype=float)
+                        )
+                    )
+                else:
+                    object_position_error, object_orientation_error = pose_error(
+                        current_position=object_pose["position"],
+                        current_orientation=object_pose["orientation"],
+                        target_position=target_object_pose["position"],
+                        target_orientation=target_object_orientation,
+                    )
+                object_pose_complete = bool(
+                    object_position_error <= object_position_tolerance
+                    and (
+                        object_orientation_tolerance is None
+                        or object_orientation_error is None
+                        or object_orientation_error <= object_orientation_tolerance
+                    )
+                )
+            completion_detail.update(
+                {
+                    "target_object_pose_required": True,
+                    "target_object_name": object_name,
+                    "target_object_position": (
+                        None
+                        if target_object_pose is None
+                        else np.asarray(target_object_pose["position"], dtype=float).tolist()
+                    ),
+                    "target_object_orientation": (
+                        None
+                        if target_object_pose is None or target_object_pose.get("orientation") is None
+                        else np.asarray(target_object_pose["orientation"], dtype=float).tolist()
+                    ),
+                    "object_position_error": object_position_error,
+                    "object_orientation_error": object_orientation_error,
+                    "target_object_position_tolerance": object_position_tolerance,
+                    "target_object_orientation_tolerance": object_orientation_tolerance,
+                    "target_object_pose_complete": object_pose_complete,
+                }
+            )
+            complete = bool(complete and object_pose_complete)
 
         joint_position_tolerance = spec.get("joint_position_tolerance")
         if joint_position_tolerance is not None and current_q is not None and target_q is not None:
@@ -739,7 +830,13 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         )
 
     @staticmethod
-    def _cartesian_servo_target_pose(*, current_pose: dict, target_pose: dict, max_position_step: float) -> dict:
+    def _cartesian_servo_target_pose(
+        *,
+        current_pose: dict,
+        target_pose: dict,
+        max_position_step: float,
+        max_orientation_step: float,
+    ) -> dict:
         current_position = np.asarray(current_pose["position"], dtype=float)
         target_position = np.asarray(target_pose["position"], dtype=float)
         delta = target_position - current_position
@@ -748,9 +845,36 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             command_position = current_position + delta * (max_position_step / distance)
         else:
             command_position = target_position
+
+        current_orientation = normalize_quat(current_pose["orientation"])
+        target_orientation = normalize_quat(target_pose["orientation"])
+        dot = float(np.dot(current_orientation, target_orientation))
+        if dot < 0.0:
+            target_orientation = -target_orientation
+            dot = -dot
+        dot = float(np.clip(dot, -1.0, 1.0))
+        orientation_angle = float(2.0 * math.acos(dot))
+        if max_orientation_step > 0.0 and orientation_angle > max_orientation_step:
+            ratio = max_orientation_step / orientation_angle
+            if dot > 0.9995:
+                command_orientation = normalize_quat(
+                    (1.0 - ratio) * current_orientation + ratio * target_orientation
+                )
+            else:
+                half_angle = math.acos(dot)
+                sin_half_angle = math.sin(half_angle)
+                if abs(sin_half_angle) < 1e-8:
+                    command_orientation = current_orientation
+                else:
+                    command_orientation = normalize_quat(
+                        (math.sin((1.0 - ratio) * half_angle) / sin_half_angle) * current_orientation
+                        + (math.sin(ratio * half_angle) / sin_half_angle) * target_orientation
+                    )
+        else:
+            command_orientation = target_orientation
         return {
             "position": command_position,
-            "orientation": normalize_quat(target_pose["orientation"]),
+            "orientation": command_orientation,
         }
 
     def _target_pose(
@@ -763,9 +887,44 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         tracked_robots: dict,
         tracked_objects: dict,
     ):
+        grasp_relative_pose = self._configured_grasp_relative_pose(spec)
+        if grasp_relative_pose is not None:
+            object_name = str(spec.get("object", spec.get("object_name", "fabrica_plumbers_block_2")))
+            object_pose = self._object_pose(
+                task=task,
+                object_name=object_name,
+                tracked_objects=tracked_objects,
+            )
+            if object_pose is None:
+                return None
+            relative_position, relative_orientation = grasp_relative_pose
+            orientation = normalize_quat(
+                quat_multiply(
+                    object_pose["orientation"],
+                    self._quat_conjugate(relative_orientation),
+                )
+            )
+            position = np.asarray(object_pose["position"], dtype=float) - quat_rotate(
+                orientation,
+                relative_position,
+            )
+            approach_offset = np.asarray(spec.get("offset", [0.0, 0.0, 0.0]), dtype=float)
+            offset_frame = str(spec.get("offset_frame", "world")).lower()
+            if offset_frame in {"object", "local", "part"}:
+                position = position + quat_rotate(object_pose["orientation"], approach_offset)
+            elif offset_frame in {"target", "eef", "tcp", "gripper"}:
+                position = position + quat_rotate(orientation, approach_offset)
+            else:
+                position = position + approach_offset
+            return {
+                "position": np.asarray(position, dtype=float),
+                "orientation": orientation,
+            }
+
         object_pose = None
         direct_target_pose = None
-        target_object_position = self._target_object_position(task=task, spec=spec)
+        target_object_pose = self._target_object_pose(task=task, spec=spec)
+        target_object_position = None if target_object_pose is None else target_object_pose["position"]
         if target_object_position is not None:
             object_name = str(spec.get("object", spec.get("object_name", "fabrica_plumbers_block_2")))
             object_pose = self._object_pose(
@@ -810,7 +969,31 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             spec.get(name) is not None
             for name in ("target_orientation", "orientation", "orientation_euler")
         )
-        if direct_target_pose is not None and not has_explicit_orientation:
+        derive_tcp_orientation = bool(
+            target_object_position is not None
+            and self._derive_tcp_orientation_from_target_object(spec=spec)
+        )
+        relative_pose = None
+        if derive_tcp_orientation:
+            relative_pose = self._object_tcp_relative_pose(
+                phase_key=phase_key,
+                task=task,
+                robot_name=robot_name,
+                object_name=object_name,
+                spec=spec,
+                tracked_robots=tracked_robots,
+                object_pose=object_pose,
+            )
+            if relative_pose is None or target_object_pose.get("orientation") is None:
+                return None
+            _, relative_orientation = relative_pose
+            orientation = normalize_quat(
+                quat_multiply(
+                    target_object_pose["orientation"],
+                    self._quat_conjugate(relative_orientation),
+                )
+            )
+        elif direct_target_pose is not None and not has_explicit_orientation:
             orientation = direct_target_pose["orientation"]
         else:
             orientation = self._target_orientation(
@@ -823,17 +1006,19 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         if orientation is None:
             return None
         if target_object_position is not None:
-            relative_position = self._object_tcp_relative_position(
-                phase_key=phase_key,
-                task=task,
-                robot_name=robot_name,
-                object_name=object_name,
-                spec=spec,
-                tracked_robots=tracked_robots,
-                object_pose=object_pose,
-            )
-            if relative_position is None:
+            if relative_pose is None:
+                relative_pose = self._object_tcp_relative_pose(
+                    phase_key=phase_key,
+                    task=task,
+                    robot_name=robot_name,
+                    object_name=object_name,
+                    spec=spec,
+                    tracked_robots=tracked_robots,
+                    object_pose=object_pose,
+                )
+            if relative_pose is None:
                 return None
+            relative_position, _ = relative_pose
             position = np.asarray(target_object_position, dtype=float) - quat_rotate(
                 normalize_quat(orientation),
                 relative_position,
@@ -842,6 +1027,28 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             "position": np.asarray(position, dtype=float),
             "orientation": normalize_quat(orientation),
         }
+
+    @staticmethod
+    def _configured_grasp_relative_pose(spec: dict) -> tuple[np.ndarray, np.ndarray] | None:
+        position = spec.get(
+            "grasp_relative_position",
+            spec.get("object_in_tcp_position", spec.get("object_in_gripper_position")),
+        )
+        orientation = spec.get(
+            "grasp_relative_orientation",
+            spec.get("object_in_tcp_orientation", spec.get("object_in_gripper_orientation")),
+        )
+        if position is None and orientation is None:
+            return None
+        if position is None or orientation is None:
+            return None
+        relative_position = np.asarray(position, dtype=float)
+        relative_orientation = normalize_quat(orientation)
+        if relative_position.shape != (3,) or not np.all(np.isfinite(relative_position)):
+            return None
+        if relative_orientation.shape != (4,) or not np.all(np.isfinite(relative_orientation)):
+            return None
+        return relative_position, relative_orientation
 
     @staticmethod
     def _quat_conjugate(quat) -> np.ndarray:
@@ -863,9 +1070,10 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             "orientation": normalize_quat(target_pose.get("orientation", [1.0, 0.0, 0.0, 0.0])),
         }
 
-    def _target_object_position(self, *, task, spec: dict) -> np.ndarray | None:
+    def _target_object_pose(self, *, task, spec: dict) -> dict | None:
         if spec.get("target_object_position") is not None:
             position = np.asarray(spec["target_object_position"], dtype=float)
+            orientation = self._target_object_orientation_from_spec(task=task, spec=spec)
         else:
             target_name = spec.get("target_object_target") or spec.get("target_object") or spec.get("object_target")
             target_pose = self._target_pose_by_name(
@@ -875,22 +1083,47 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             if target_pose is None:
                 return None
             position = target_pose["position"]
+            orientation = target_pose["orientation"]
+            override_orientation = self._target_object_orientation_from_spec(task=task, spec=spec)
+            if override_orientation is not None:
+                orientation = override_orientation
         offset = spec.get("target_object_offset")
         if offset is not None:
             offset = np.asarray(offset, dtype=float)
             offset_frame = str(spec.get("target_object_offset_frame", "world")).lower()
             if offset_frame in {"target", "local", "object_target"}:
-                target_name = spec.get("target_object_target") or spec.get("target_object") or spec.get("object_target")
-                target_pose = self._target_pose_by_name(
-                    task=task,
-                    target_name=None if target_name is None else str(target_name),
-                )
-                if target_pose is None:
+                if orientation is None:
                     return None
-                position = position + quat_rotate(target_pose["orientation"], offset)
+                position = position + quat_rotate(orientation, offset)
             else:
                 position = position + offset
-        return np.asarray(position, dtype=float)
+        return {
+            "position": np.asarray(position, dtype=float),
+            "orientation": None if orientation is None else normalize_quat(orientation),
+        }
+
+    @staticmethod
+    def _target_object_orientation_from_spec(*, task, spec: dict) -> np.ndarray | None:
+        if spec.get("target_object_orientation") is not None:
+            return normalize_quat(spec["target_object_orientation"])
+        if spec.get("target_object_orientation_euler") is not None:
+            return euler_xyz_to_quat(spec["target_object_orientation_euler"])
+        target_name = spec.get("target_object_orientation_target") or spec.get("object_orientation_target")
+        if target_name is None:
+            return None
+        target_pose = UR5ePlumbersBlockAtomicSkillAdapter._target_pose_by_name(
+            task=task,
+            target_name=str(target_name),
+        )
+        if target_pose is None:
+            return None
+        return normalize_quat(target_pose["orientation"])
+
+    def _target_object_position(self, *, task, spec: dict) -> np.ndarray | None:
+        target_pose = self._target_object_pose(task=task, spec=spec)
+        if target_pose is None:
+            return None
+        return np.asarray(target_pose["position"], dtype=float)
 
     def _object_tcp_relative_position(
         self,
@@ -903,17 +1136,47 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         tracked_robots: dict,
         object_pose: dict,
     ) -> np.ndarray | None:
-        cache = getattr(task, "_ur5e_plumbers_object_tcp_relative_positions", None)
+        relative_pose = self._object_tcp_relative_pose(
+            phase_key=phase_key,
+            task=task,
+            robot_name=robot_name,
+            object_name=object_name,
+            spec=spec,
+            tracked_robots=tracked_robots,
+            object_pose=object_pose,
+        )
+        if relative_pose is None:
+            return None
+        return relative_pose[0].copy()
+
+    def _object_tcp_relative_pose(
+        self,
+        *,
+        phase_key,
+        task,
+        robot_name: str,
+        object_name: str,
+        spec: dict,
+        tracked_robots: dict,
+        object_pose: dict,
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        cache = getattr(task, "_ur5e_plumbers_object_tcp_relative_poses", None)
         if not isinstance(cache, dict):
             cache = {}
-            setattr(task, "_ur5e_plumbers_object_tcp_relative_positions", cache)
+            setattr(task, "_ur5e_plumbers_object_tcp_relative_poses", cache)
         cache_key = (str(robot_name), str(object_name))
         cached = cache.get(cache_key)
         if cached is not None:
             try:
-                cached_array = np.asarray(cached, dtype=float)
-                if cached_array.shape == (3,) and np.all(np.isfinite(cached_array)):
-                    return cached_array.copy()
+                cached_position = np.asarray(cached["position"], dtype=float)
+                cached_orientation = normalize_quat(cached["orientation"])
+                if (
+                    cached_position.shape == (3,)
+                    and cached_orientation.shape == (4,)
+                    and np.all(np.isfinite(cached_position))
+                    and np.all(np.isfinite(cached_orientation))
+                ):
+                    return cached_position.copy(), cached_orientation.copy()
             except Exception:
                 pass
 
@@ -931,17 +1194,40 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         )
         if relative_tcp.shape != (3,) or not np.all(np.isfinite(relative_tcp)):
             return None
-        cache[cache_key] = relative_tcp.copy()
+        relative_orientation = normalize_quat(
+            quat_multiply(
+                self._quat_conjugate(current_tcp_pose["orientation"]),
+                object_pose["orientation"],
+            )
+        )
+        if relative_orientation.shape != (4,) or not np.all(np.isfinite(relative_orientation)):
+            return None
+        cache[cache_key] = {
+            "position": relative_tcp.copy(),
+            "orientation": relative_orientation.copy(),
+        }
         if self._debug_grasp_enabled():
             print(
                 "[ur5e-grasp-debug] "
                 f"captured_object_tcp_relative robot={robot_name} object={object_name} "
                 f"phase_key={phase_key} relative_tcp={relative_tcp.tolist()} "
+                f"relative_orientation={relative_orientation.tolist()} "
                 f"object_position={np.asarray(object_pose['position'], dtype=float).tolist()} "
                 f"tcp_position={np.asarray(current_tcp_pose['position'], dtype=float).tolist()}",
                 flush=True,
             )
-        return relative_tcp.copy()
+        return relative_tcp.copy(), relative_orientation.copy()
+
+    @staticmethod
+    def _derive_tcp_orientation_from_target_object(*, spec: dict) -> bool:
+        for name in (
+            "derive_tcp_orientation_from_target_object",
+            "target_orientation_from_object_target",
+            "use_target_object_orientation",
+        ):
+            if name in spec:
+                return bool(spec.get(name))
+        return False
 
     def _locked_target_pose(self, *, phase_key, target_pose: dict, spec: dict) -> dict:
         lock_orientation = bool(spec.get("lock_target_orientation", True))
@@ -1065,6 +1351,18 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             target_q=target_q,
             max_joint_step=float(gate_spec.get("close_gate_max_joint_step", gate_spec.get("max_joint_step", 0.025))),
         )
+        command_q = self._continuous_command_q(
+            task=task,
+            robot_name=robot_name,
+            command_q=command_q,
+            spec={
+                **gate_spec,
+                "max_joint_step": gate_spec.get(
+                    "close_gate_max_joint_step",
+                    gate_spec.get("max_joint_step", 0.025),
+                ),
+            },
+        )
 
         action = OrderedDict()
         action[_ARM_JOINT_CONTROLLER] = [command_q.tolist()]
@@ -1167,6 +1465,18 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             current_q=reference_q,
             target_q=desired_q,
             max_joint_step=float(spec.get("prealign_max_joint_step", spec.get("max_joint_step", 0.035))),
+        )
+        command_q = self._continuous_command_q(
+            task=task,
+            robot_name=robot_name,
+            command_q=command_q,
+            spec={
+                **spec,
+                "max_joint_step": spec.get(
+                    "prealign_max_joint_step",
+                    spec.get("max_joint_step", 0.035),
+                ),
+            },
         )
         action = OrderedDict()
         action[_ARM_JOINT_CONTROLLER] = [command_q.tolist()]
@@ -1372,7 +1682,7 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         return None
 
     @staticmethod
-    def _coerce_arm_q(joint_positions) -> np.ndarray | None:
+    def _coerce_arm_q(joint_positions, *, bound_revolute: bool = True) -> np.ndarray | None:
         if joint_positions is None:
             return None
         try:
@@ -1384,16 +1694,21 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         values = values[: len(_UR5E_ARM_JOINT_NAMES)]
         if not np.all(np.isfinite(values)):
             return None
+        if not bound_revolute:
+            return values.copy()
         return UR5ePlumbersBlockAtomicSkillAdapter._bounded_revolute_joint_values(values)
 
     @staticmethod
     def _bounded_revolute_joint_values(values) -> np.ndarray:
         values = np.asarray(values, dtype=float).copy()
         wrapped = (values + np.pi) % (2.0 * np.pi) - np.pi
-        return np.where(np.abs(values) > np.pi + 0.25, wrapped, values)
+        # UR wrists can legitimately cross multiple pi turns during continuous
+        # motion.  Wrapping too early makes the cached command state jump across
+        # branches, so only fold back values that are far outside a nearby branch.
+        return np.where(np.abs(values) > 4.0 * np.pi + 0.25, wrapped, values)
 
     def _remember_arm_command(self, task, robot_name: str, command_q: np.ndarray) -> None:
-        joint_positions = self._coerce_arm_q(command_q)
+        joint_positions = self._coerce_arm_q(command_q, bound_revolute=False)
         if joint_positions is not None:
             self._last_arm_command_q[robot_name] = joint_positions
             task_cache = getattr(task, "_ur5e_plumbers_last_arm_command_q", None)
@@ -1402,18 +1717,28 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
                 setattr(task, "_ur5e_plumbers_last_arm_command_q", task_cache)
             task_cache[robot_name] = joint_positions.copy()
 
-    def _command_reference_q(self, *, task, robot_name: str, current_q: np.ndarray | None, spec: dict) -> np.ndarray | None:
-        current_q = self._coerce_arm_q(current_q)
-        reference_mode = str(spec.get("ik_reference_mode", spec.get("reference_mode", ""))).strip().lower()
-        if reference_mode in {"current", "current_q", "actual", "measured"}:
-            return current_q
+    def _last_command_q(self, *, task, robot_name: str) -> np.ndarray | None:
         task_cache = getattr(task, "_ur5e_plumbers_last_arm_command_q", None)
         last_q = None
         if isinstance(task_cache, dict):
             last_q = task_cache.get(robot_name)
         if last_q is None:
             last_q = self._last_arm_command_q.get(robot_name)
-        last_q = self._coerce_arm_q(last_q)
+        return self._coerce_arm_q(last_q, bound_revolute=False)
+
+    def _command_reference_q(self, *, task, robot_name: str, current_q: np.ndarray | None, spec: dict) -> np.ndarray | None:
+        current_q = self._coerce_arm_q(current_q)
+        reference_mode = str(spec.get("ik_reference_mode", spec.get("reference_mode", ""))).strip().lower()
+        last_q = self._last_command_q(task=task, robot_name=robot_name)
+        if reference_mode in {"current", "current_q", "actual", "measured"}:
+            if current_q is not None and last_q is not None:
+                return self._unwrap_to_reference(
+                    target_q=current_q,
+                    reference_q=last_q,
+                    preferred_abs_limit=None,
+                    hard_preferred_abs_limit=False,
+                )
+            return current_q
         if last_q is None:
             return current_q
         if current_q is None:
@@ -1426,6 +1751,68 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             except Exception:
                 return current_q
         return last_q
+
+    def _continuous_command_q(
+        self,
+        *,
+        task,
+        robot_name: str,
+        command_q: np.ndarray,
+        spec: dict,
+    ) -> np.ndarray:
+        command_q = self._coerce_arm_q(command_q, bound_revolute=False)
+        if command_q is None:
+            return command_q
+        if not bool(spec.get("enforce_continuous_joint_commands", True)):
+            return command_q
+        last_q = self._last_command_q(task=task, robot_name=robot_name)
+        if last_q is None:
+            return command_q
+        command_q = self._unwrap_to_reference(
+            target_q=command_q,
+            reference_q=last_q,
+            preferred_abs_limit=None,
+            hard_preferred_abs_limit=False,
+        )
+        max_command_step = self._command_joint_step_limits(spec=spec, joint_count=command_q.shape[0])
+        if max_command_step is None:
+            return command_q
+        return self._limited_joint_target(
+            current_q=last_q,
+            target_q=command_q,
+            max_joint_step=max_command_step,
+        )
+
+    @staticmethod
+    def _command_joint_step_limits(*, spec: dict, joint_count: int) -> np.ndarray | float | None:
+        explicit = spec.get("max_command_joint_step")
+        raw_limit = explicit if explicit is not None else spec.get("max_joint_step")
+        if raw_limit is None:
+            return None
+        try:
+            limit_values = np.asarray(raw_limit, dtype=float).reshape(-1)
+        except Exception:
+            return None
+        if limit_values.size == 0 or not np.all(np.isfinite(limit_values)):
+            return None
+        if limit_values.size == 1:
+            scalar_limit = float(limit_values[0])
+            if scalar_limit <= 0.0:
+                return scalar_limit
+            if explicit is None:
+                default_cap = float(spec.get("default_max_command_joint_step", 0.08))
+                if default_cap > 0.0:
+                    scalar_limit = min(scalar_limit, default_cap)
+                limits = np.full(int(joint_count), scalar_limit, dtype=float)
+                wrist_cap = float(spec.get("default_max_command_wrist_joint_step", 0.025))
+                if wrist_cap > 0.0 and limits.shape[0] >= 6:
+                    limits[3:6] = np.minimum(limits[3:6], wrist_cap)
+                return limits
+            return scalar_limit
+        limits = np.full(int(joint_count), float(limit_values[-1]), dtype=float)
+        copy_count = min(int(joint_count), int(limit_values.size))
+        limits[:copy_count] = limit_values[:copy_count]
+        return limits
 
     @staticmethod
     def _ik_branch_jump_detected(*, reference_q: np.ndarray, target_q: np.ndarray, spec: dict) -> bool:
@@ -1518,7 +1905,7 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         return joint_positions
 
     @staticmethod
-    def _limited_joint_target(*, current_q: np.ndarray, target_q: np.ndarray, max_joint_step: float) -> np.ndarray:
+    def _limited_joint_target(*, current_q: np.ndarray, target_q: np.ndarray, max_joint_step) -> np.ndarray:
         current_q = np.asarray(current_q, dtype=float)
         target_q = np.asarray(target_q, dtype=float)
         if not np.all(np.isfinite(current_q)):
@@ -1527,13 +1914,35 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             return current_q
         if current_q.shape != target_q.shape:
             return target_q
-        if max_joint_step <= 0.0:
+        try:
+            step_limits = np.asarray(max_joint_step, dtype=float).reshape(-1)
+        except Exception:
+            return target_q
+        if step_limits.size == 0 or not np.all(np.isfinite(step_limits)):
+            return target_q
+        if step_limits.size == 1:
+            scalar_limit = float(step_limits[0])
+            if scalar_limit <= 0.0:
+                return target_q
+            delta = target_q - current_q
+            max_abs = float(np.max(np.abs(delta))) if delta.size else 0.0
+            if max_abs <= scalar_limit:
+                return target_q
+            return current_q + delta * (scalar_limit / max_abs)
+        if step_limits.size < current_q.shape[0]:
+            padded = np.full(current_q.shape[0], float(step_limits[-1]), dtype=float)
+            padded[: step_limits.size] = step_limits
+            step_limits = padded
+        else:
+            step_limits = step_limits[: current_q.shape[0]]
+        if np.any(step_limits <= 0.0):
             return target_q
         delta = target_q - current_q
-        max_abs = float(np.max(np.abs(delta))) if delta.size else 0.0
-        if max_abs <= max_joint_step:
+        if np.all(np.abs(delta) <= step_limits):
             return target_q
-        return current_q + delta * (max_joint_step / max_abs)
+        nonzero = np.abs(delta) > 1e-12
+        scale = float(np.min(step_limits[nonzero] / np.abs(delta[nonzero]))) if np.any(nonzero) else 1.0
+        return current_q + delta * min(scale, 1.0)
 
     @staticmethod
     def _unwrap_to_reference(
@@ -1554,10 +1963,19 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         preferred_abs_limit = None if preferred_abs_limit is None else float(preferred_abs_limit)
         for joint_index, target_value in enumerate(target_q):
             candidates = target_value + np.arange(-4, 5, dtype=float) * period
+            nearest_candidate = candidates[int(np.argmin(np.abs(candidates - reference_q[joint_index])))]
             if hard_preferred_abs_limit and preferred_abs_limit is not None and preferred_abs_limit > 0.0:
                 bounded = candidates[np.abs(candidates) <= preferred_abs_limit]
                 if bounded.size:
-                    candidates = bounded
+                    bounded_candidate = bounded[
+                        int(np.argmin(np.abs(bounded - reference_q[joint_index])))
+                    ]
+                    nearest_delta = abs(float(nearest_candidate - reference_q[joint_index]))
+                    bounded_delta = abs(float(bounded_candidate - reference_q[joint_index]))
+                    # A preferred range must not turn an equivalent +/-pi wrap
+                    # into an almost 2*pi command jump.
+                    if bounded_delta <= max(0.5, nearest_delta * 4.0):
+                        candidates = bounded
             cost = np.abs(candidates - reference_q[joint_index])
             if not hard_preferred_abs_limit and preferred_abs_limit is not None and preferred_abs_limit > 0.0:
                 cost = cost + 2.0 * np.maximum(np.abs(candidates) - preferred_abs_limit, 0.0)
@@ -2042,6 +2460,9 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             return False, {"reason": "gripper_contact_metrics_unavailable", "object": object_name}
         attach_spec = {
             "require_dual_finger_contact": bool(spec.get("require_dual_finger_contact", True)),
+            "require_force_contact": bool(
+                spec.get("require_force_contact", spec.get("require_contact_report", False))
+            ),
             "finger_contact_distance": float(spec.get("finger_contact_distance", 0.006)),
             "contact_force_threshold": float(spec.get("contact_force_threshold", 0.2)),
             "physical_attach_surface_gap": float(spec.get("physical_attach_surface_gap", 0.006)),
@@ -2075,7 +2496,10 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
                 )
             except Exception:
                 strict_ready = False
-        contact_ready = bool(metrics.get("contact_ready") or strict_ready)
+        if bool(spec.get("require_strict_physical_contact", False)):
+            contact_ready = strict_ready
+        else:
+            contact_ready = bool(metrics.get("contact_ready") or strict_ready)
         return contact_ready, {
             "object": object_name,
             "contact_ready": contact_ready,
