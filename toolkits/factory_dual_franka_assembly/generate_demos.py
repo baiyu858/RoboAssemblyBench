@@ -23,6 +23,7 @@ from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_frank
 from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_PROFILE, list_scene_profiles
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes, load_task_recipe
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
+from constraint_integration.pipeline import RuntimeConstraintEpisodeHook
 
 
 def _to_jsonable(value: Any):
@@ -362,6 +363,11 @@ def _run_task_sequence(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    runtime_constraint_monitor: bool = False,
+    constraint_check_stride: int = 8,
+    constraint_threshold: float | None = None,
+    constraint_include_ground: bool = False,
+    constraint_ignore_pairs: list[str] | None = None,
     record_episode_steps: bool = True,
 ):
     env = _build_env(task_configs=task_configs, headless=headless)
@@ -374,6 +380,13 @@ def _run_task_sequence(
     recorder = None
     video_recorder = None
     runtime_checker = None
+    constraint_hook = RuntimeConstraintEpisodeHook(
+        enabled=runtime_constraint_monitor,
+        check_stride=constraint_check_stride,
+        threshold=constraint_threshold,
+        include_ground=constraint_include_ground,
+        ignore_pairs=constraint_ignore_pairs,
+    )
     last_task = None
     initial_tasks = getattr(env.runner, 'current_tasks', {})
     if initial_tasks:
@@ -413,6 +426,7 @@ def _run_task_sequence(
 
             env_actions = policy.act(task)
             obs_list, _, terminated, _, _ = env.step([env_actions])
+            constraint_hook.observe(task)
 
             if recorder is not None:
                 recorder.record(task, obs_list[0], env_actions)
@@ -448,6 +462,7 @@ def _run_task_sequence(
                 metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
                 if runtime_checker is not None:
                     metrics['runtime_robochecker'] = runtime_checker.finalize()
+                constraint_hook.attach_metrics(metrics)
                 results.append(metrics)
                 if results_output_path is not None:
                     _write_json(results_output_path, results)
@@ -480,6 +495,7 @@ def _run_task_sequence(
                 episode_idx += 1
                 recorder = None
                 video_recorder = None
+                constraint_hook.reset_episode()
                 obs_list, task_cfgs = env.reset([0])
                 if not task_cfgs or task_cfgs[0] is None:
                     break
@@ -492,6 +508,7 @@ def _run_task_sequence(
                 task = next(iter(active_tasks.values())) if active_tasks else last_task
                 if not results and task is not None:
                     metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
+                    constraint_hook.attach_metrics(metrics)
                     metrics.setdefault('terminal_reason', 'rollout-ended-without-termination')
                     results.append(metrics)
             except Exception:
@@ -505,6 +522,7 @@ def _run_task_sequence(
                 runtime_checker.finalize()
             except Exception:
                 pass
+        constraint_monitor_metrics = constraint_hook.finalize() if recorder is not None else None
         live_video_output = None
         if video_recorder is not None:
             try:
@@ -516,6 +534,8 @@ def _run_task_sequence(
                 metrics = _attach_policy_diagnostics(last_task.calculate_metrics(), policy)
             except Exception:
                 metrics = {}
+            if constraint_monitor_metrics is not None:
+                metrics['runtime_constraint_monitor'] = constraint_monitor_metrics
             metrics['success'] = False
             metrics.setdefault('status', 'failed')
             if not metrics.get('terminal_reason'):
@@ -621,6 +641,11 @@ def _worker_mode(args, *, headless: bool):
             runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
             runtime_capture_rgb=bool(args.runtime_capture_rgb),
             runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+            runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+            constraint_check_stride=max(int(args.constraint_check_stride), 1),
+            constraint_threshold=args.constraint_threshold,
+            constraint_include_ground=bool(args.constraint_include_ground),
+            constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
             record_episode_steps=not bool(args.skip_episode_steps),
         )
         return
@@ -654,6 +679,11 @@ def _worker_mode(args, *, headless: bool):
         runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
         runtime_capture_rgb=bool(args.runtime_capture_rgb),
         runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+        runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+        constraint_check_stride=max(int(args.constraint_check_stride), 1),
+        constraint_threshold=args.constraint_threshold,
+        constraint_include_ground=bool(args.constraint_include_ground),
+        constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
         record_episode_steps=not bool(args.skip_episode_steps),
     )
 
@@ -680,6 +710,11 @@ def _invoke_worker(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    runtime_constraint_monitor: bool = False,
+    constraint_check_stride: int = 8,
+    constraint_threshold: float | None = None,
+    constraint_include_ground: bool = False,
+    constraint_ignore_pairs: list[str] | None = None,
     skip_episode_steps: bool = False,
 ):
     command = [
@@ -720,6 +755,15 @@ def _invoke_worker(
             command.append('--runtime-stop-on-violation')
         if runtime_capture_rgb:
             command.append('--runtime-capture-rgb')
+    if runtime_constraint_monitor:
+        command.append('--runtime-constraint-monitor')
+        command.extend(['--constraint-check-stride', str(int(constraint_check_stride))])
+        if constraint_threshold is not None:
+            command.extend(['--constraint-threshold', str(float(constraint_threshold))])
+        if constraint_include_ground:
+            command.append('--constraint-include-ground')
+        for pair in constraint_ignore_pairs or []:
+            command.extend(['--constraint-ignore-pair', str(pair)])
     if scene_profile is not None:
         command.extend(['--worker-scene-profile', scene_profile])
     if seeds:
@@ -749,6 +793,11 @@ def _results_from_worker(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    runtime_constraint_monitor: bool = False,
+    constraint_check_stride: int = 8,
+    constraint_threshold: float | None = None,
+    constraint_include_ground: bool = False,
+    constraint_ignore_pairs: list[str] | None = None,
     skip_episode_steps: bool = False,
 ) -> list[dict]:
     worker_dir.mkdir(parents=True, exist_ok=True)
@@ -779,6 +828,11 @@ def _results_from_worker(
         runtime_stop_on_violation=runtime_stop_on_violation,
         runtime_capture_rgb=runtime_capture_rgb,
         runtime_rgb_frame_stride=runtime_rgb_frame_stride,
+        runtime_constraint_monitor=runtime_constraint_monitor,
+        constraint_check_stride=constraint_check_stride,
+        constraint_threshold=constraint_threshold,
+        constraint_include_ground=constraint_include_ground,
+        constraint_ignore_pairs=constraint_ignore_pairs,
         skip_episode_steps=skip_episode_steps,
     )
     if not results_path.exists():
@@ -848,6 +902,21 @@ def main():
     parser.add_argument('--runtime-capture-rgb', action='store_true')
     parser.add_argument('--runtime-rgb-frame-stride', type=int, default=24)
     parser.add_argument(
+        '--runtime-constraint-monitor',
+        action='store_true',
+        help='Record passive runtime collision metrics without changing rollout behavior.',
+    )
+    parser.add_argument('--constraint-check-stride', type=int, default=8)
+    parser.add_argument('--constraint-threshold', type=float, default=None)
+    parser.add_argument('--constraint-include-ground', action='store_true')
+    parser.add_argument(
+        '--constraint-ignore-pair',
+        action='append',
+        default=[],
+        metavar='A:B',
+        help='Ignore a symmetric entity substring pair; may be repeated.',
+    )
+    parser.add_argument(
         '--output-dir',
         type=str,
         default=str(Path(__file__).resolve().parent / 'outputs' / 'factory_dual_franka_assembly'),
@@ -912,6 +981,11 @@ def main():
                 runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+                runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+                constraint_check_stride=max(int(args.constraint_check_stride), 1),
+                constraint_threshold=args.constraint_threshold,
+                constraint_include_ground=bool(args.constraint_include_ground),
+                constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
                 skip_episode_steps=bool(args.skip_episode_steps),
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
@@ -947,6 +1021,11 @@ def main():
                 runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+                runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+                constraint_check_stride=max(int(args.constraint_check_stride), 1),
+                constraint_threshold=args.constraint_threshold,
+                constraint_include_ground=bool(args.constraint_include_ground),
+                constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
                 skip_episode_steps=bool(args.skip_episode_steps),
             )
             runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
