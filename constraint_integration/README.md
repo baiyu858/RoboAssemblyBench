@@ -3,9 +3,8 @@
 This directory is an isolated bridge between the current RoboAssemblyBench
 assembly pipeline and the experimental `constraint_detection/` project.
 
-The demo pipeline imports it only when `--runtime-constraint-monitor` is
-enabled. The monitor is passive and fail-open: it records metrics but never
-changes actions or task terminal state.
+All integrations are explicit, passive, and fail-open: they record metrics but
+never change actions or task terminal state.
 
 ## Purpose
 
@@ -38,6 +37,9 @@ constraint_integration/
 |-- pipeline.py           # fail-open episode lifecycle adapter
 |-- runtime_monitor.py    # passive rollout-time collision monitor
 |-- precheck_adapter.py   # robot-agnostic trajectory precheck adapter
+|-- precheck_pipeline.py  # sequence/stage precheck episode lifecycle
+|-- sequence_precheck.py  # full-recipe symbolic state simulation
+|-- stage_precheck.py     # commanded-joint interpolation + UR5e Lula FK
 `-- README.md
 ```
 
@@ -108,30 +110,31 @@ events are capped while aggregate counts continue to grow.
 The monitor never modifies actions, `terminated`, `success`, `status`, or
 `terminal_reason`.
 
-## Trajectory Precheck
+## Passive Prechecks
 
-`LinearPosePrechecker` implements an execution-time precheck without assuming a
-Franka Lula configuration. It expects callbacks supplied by the skill layer:
+Two default-off checks run before `env.step()`:
 
-```python
-report = prechecker.check(
-    start_position=current_tcp,
-    target_position=target_tcp,
-    target_orientation=target_quat,
-    solve_ik=solve_ik_callback,
-    forward_kinematics=fk_callback,
-    warm_start=current_q,
-)
-```
+- `AssemblySequencePrechecker` executes the complete `phase_specs` list in a
+  symbolic state machine. It validates robot/object references, end-effector
+  occupancy, object ownership, attach-before-carry ordering, double grasps,
+  and release ownership. It does not step Isaac Sim.
+- `StageTrajectoryPrechecker` samples the current-to-commanded UR5e joint
+  segment, calls the controller's existing Lula FK for each arm link, and
+  reuses `CollisionDetector` for capsule-vs-object, optional ground, and
+  dual-arm checks.
 
-The future hook point is:
+Enable both with:
 
 ```text
-toolkits/factory_dual_franka_assembly/plumbers_block_ur5e_skills.py
+--assembly-sequence-precheck
+--stage-trajectory-precheck
+--stage-precheck-stride 64
+--stage-precheck-waypoints 8
 ```
 
-The first integration intentionally does not call this prechecker from the
-rollout path.
+Reports are written to `assembly_sequence_precheck` and
+`stage_trajectory_precheck`. Exceptions are recorded in `monitor_error` and
+the original action is still passed unchanged to `env.step()`.
 
 ## Validation Guidance
 
@@ -155,7 +158,12 @@ links, and no prim, object-geometry, or monitor errors were reported.
 
 ## Current Status
 
-Runtime monitoring is connected behind an explicit, default-off command-line
-flag. It imports only `constraint_detection.src.collision`; it does not import
-OpenVLA, Transformers, or the action checker. Trajectory precheck and
-enforcement remain disconnected from the rollout path.
+Runtime monitoring, full-sequence logical precheck, and stage trajectory
+precheck are connected behind explicit, default-off flags. None imports
+OpenVLA or Transformers, and none enforces a stop or replan.
+
+The fixed seed-0 validation completed the original assembly successfully in
+15,014 steps while both prechecks were enabled. The sequence report covered 36
+phases and 41 normalized actions with no logical errors. The stage report
+performed 235 checks across 470 arm segments and 1,880 synchronized waypoint
+sets, recorded 112 passive proximity events, and reported no monitor errors.

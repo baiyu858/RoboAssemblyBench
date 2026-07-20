@@ -24,6 +24,7 @@ from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_P
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes, load_task_recipe
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
 from constraint_integration.pipeline import RuntimeConstraintEpisodeHook
+from constraint_integration.precheck_pipeline import PassivePrecheckEpisodeHook
 
 
 def _to_jsonable(value: Any):
@@ -368,6 +369,10 @@ def _run_task_sequence(
     constraint_threshold: float | None = None,
     constraint_include_ground: bool = False,
     constraint_ignore_pairs: list[str] | None = None,
+    assembly_sequence_precheck: bool = False,
+    stage_trajectory_precheck: bool = False,
+    stage_precheck_stride: int = 64,
+    stage_precheck_waypoints: int = 8,
     record_episode_steps: bool = True,
 ):
     env = _build_env(task_configs=task_configs, headless=headless)
@@ -383,6 +388,15 @@ def _run_task_sequence(
     constraint_hook = RuntimeConstraintEpisodeHook(
         enabled=runtime_constraint_monitor,
         check_stride=constraint_check_stride,
+        threshold=constraint_threshold,
+        include_ground=constraint_include_ground,
+        ignore_pairs=constraint_ignore_pairs,
+    )
+    precheck_hook = PassivePrecheckEpisodeHook(
+        sequence_enabled=assembly_sequence_precheck,
+        stage_enabled=stage_trajectory_precheck,
+        stage_check_stride=stage_precheck_stride,
+        stage_waypoints=stage_precheck_waypoints,
         threshold=constraint_threshold,
         include_ground=constraint_include_ground,
         ignore_pairs=constraint_ignore_pairs,
@@ -425,6 +439,7 @@ def _run_task_sequence(
                 )
 
             env_actions = policy.act(task)
+            precheck_hook.observe_before_step(task, env_actions)
             obs_list, _, terminated, _, _ = env.step([env_actions])
             constraint_hook.observe(task)
 
@@ -463,6 +478,7 @@ def _run_task_sequence(
                 if runtime_checker is not None:
                     metrics['runtime_robochecker'] = runtime_checker.finalize()
                 constraint_hook.attach_metrics(metrics)
+                precheck_hook.attach_metrics(metrics)
                 results.append(metrics)
                 if results_output_path is not None:
                     _write_json(results_output_path, results)
@@ -496,6 +512,7 @@ def _run_task_sequence(
                 recorder = None
                 video_recorder = None
                 constraint_hook.reset_episode()
+                precheck_hook.reset_episode()
                 obs_list, task_cfgs = env.reset([0])
                 if not task_cfgs or task_cfgs[0] is None:
                     break
@@ -509,6 +526,7 @@ def _run_task_sequence(
                 if not results and task is not None:
                     metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
                     constraint_hook.attach_metrics(metrics)
+                    precheck_hook.attach_metrics(metrics)
                     metrics.setdefault('terminal_reason', 'rollout-ended-without-termination')
                     results.append(metrics)
             except Exception:
@@ -536,6 +554,7 @@ def _run_task_sequence(
                 metrics = {}
             if constraint_monitor_metrics is not None:
                 metrics['runtime_constraint_monitor'] = constraint_monitor_metrics
+            precheck_hook.attach_metrics(metrics)
             metrics['success'] = False
             metrics.setdefault('status', 'failed')
             if not metrics.get('terminal_reason'):
@@ -646,6 +665,10 @@ def _worker_mode(args, *, headless: bool):
             constraint_threshold=args.constraint_threshold,
             constraint_include_ground=bool(args.constraint_include_ground),
             constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+            assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+            stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+            stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+            stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
             record_episode_steps=not bool(args.skip_episode_steps),
         )
         return
@@ -684,6 +707,10 @@ def _worker_mode(args, *, headless: bool):
         constraint_threshold=args.constraint_threshold,
         constraint_include_ground=bool(args.constraint_include_ground),
         constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+        assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+        stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+        stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+        stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
         record_episode_steps=not bool(args.skip_episode_steps),
     )
 
@@ -715,6 +742,10 @@ def _invoke_worker(
     constraint_threshold: float | None = None,
     constraint_include_ground: bool = False,
     constraint_ignore_pairs: list[str] | None = None,
+    assembly_sequence_precheck: bool = False,
+    stage_trajectory_precheck: bool = False,
+    stage_precheck_stride: int = 64,
+    stage_precheck_waypoints: int = 8,
     skip_episode_steps: bool = False,
 ):
     command = [
@@ -764,6 +795,12 @@ def _invoke_worker(
             command.append('--constraint-include-ground')
         for pair in constraint_ignore_pairs or []:
             command.extend(['--constraint-ignore-pair', str(pair)])
+    if assembly_sequence_precheck:
+        command.append('--assembly-sequence-precheck')
+    if stage_trajectory_precheck:
+        command.append('--stage-trajectory-precheck')
+        command.extend(['--stage-precheck-stride', str(int(stage_precheck_stride))])
+        command.extend(['--stage-precheck-waypoints', str(int(stage_precheck_waypoints))])
     if scene_profile is not None:
         command.extend(['--worker-scene-profile', scene_profile])
     if seeds:
@@ -798,6 +835,10 @@ def _results_from_worker(
     constraint_threshold: float | None = None,
     constraint_include_ground: bool = False,
     constraint_ignore_pairs: list[str] | None = None,
+    assembly_sequence_precheck: bool = False,
+    stage_trajectory_precheck: bool = False,
+    stage_precheck_stride: int = 64,
+    stage_precheck_waypoints: int = 8,
     skip_episode_steps: bool = False,
 ) -> list[dict]:
     worker_dir.mkdir(parents=True, exist_ok=True)
@@ -833,6 +874,10 @@ def _results_from_worker(
         constraint_threshold=constraint_threshold,
         constraint_include_ground=constraint_include_ground,
         constraint_ignore_pairs=constraint_ignore_pairs,
+        assembly_sequence_precheck=assembly_sequence_precheck,
+        stage_trajectory_precheck=stage_trajectory_precheck,
+        stage_precheck_stride=stage_precheck_stride,
+        stage_precheck_waypoints=stage_precheck_waypoints,
         skip_episode_steps=skip_episode_steps,
     )
     if not results_path.exists():
@@ -917,6 +962,18 @@ def main():
         help='Ignore a symmetric entity substring pair; may be repeated.',
     )
     parser.add_argument(
+        '--assembly-sequence-precheck',
+        action='store_true',
+        help='Passively validate the complete phase sequence before rollout.',
+    )
+    parser.add_argument(
+        '--stage-trajectory-precheck',
+        action='store_true',
+        help='Passively precheck commanded joint segments before env.step().',
+    )
+    parser.add_argument('--stage-precheck-stride', type=int, default=64)
+    parser.add_argument('--stage-precheck-waypoints', type=int, default=8)
+    parser.add_argument(
         '--output-dir',
         type=str,
         default=str(Path(__file__).resolve().parent / 'outputs' / 'factory_dual_franka_assembly'),
@@ -986,6 +1043,10 @@ def main():
                 constraint_threshold=args.constraint_threshold,
                 constraint_include_ground=bool(args.constraint_include_ground),
                 constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+                assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+                stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+                stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+                stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
                 skip_episode_steps=bool(args.skip_episode_steps),
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
@@ -1026,6 +1087,10 @@ def main():
                 constraint_threshold=args.constraint_threshold,
                 constraint_include_ground=bool(args.constraint_include_ground),
                 constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+                assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+                stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+                stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+                stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
                 skip_episode_steps=bool(args.skip_episode_steps),
             )
             runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
