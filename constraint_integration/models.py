@@ -92,28 +92,70 @@ UR5E_ROBOTIQ_MODEL = RobotCollisionModel(
         "wrist_2_link",
         "wrist_3_link",
         "Gripper/Robotiq_2F_85/base_link",
+        "Gripper/Robotiq_2F_85/left_outer_knuckle",
+        "Gripper/Robotiq_2F_85/left_outer_finger",
         "Gripper/Robotiq_2F_85/left_inner_finger",
+        "Gripper/Robotiq_2F_85/left_inner_knuckle",
+        "Gripper/Robotiq_2F_85/right_outer_knuckle",
+        "Gripper/Robotiq_2F_85/right_outer_finger",
         "Gripper/Robotiq_2F_85/right_inner_finger",
+        "Gripper/Robotiq_2F_85/right_inner_knuckle",
     ),
     capsules=(
-        # Distal radii are narrower than the upper arm. Keeping the first-pass
-        # conservative values here created false inter-arm overlaps during
-        # close assembly work.
+        # Keep the conservative wrist envelope: the fixed-seed video confirms
+        # that the close-arm overlap around step 8448 is a real collision.
         CapsuleSpec("shoulder_link", "upper_arm_link", 0.070),
         CapsuleSpec("upper_arm_link", "forearm_link", 0.060),
         CapsuleSpec("forearm_link", "wrist_1_link", 0.055),
-        CapsuleSpec("wrist_1_link", "wrist_2_link", 0.040),
-        CapsuleSpec("wrist_2_link", "wrist_3_link", 0.035),
-        CapsuleSpec("wrist_3_link", "Gripper/Robotiq_2F_85/base_link", 0.040),
+        CapsuleSpec("wrist_1_link", "wrist_2_link", 0.045),
+        CapsuleSpec("wrist_2_link", "wrist_3_link", 0.045),
+        CapsuleSpec("wrist_3_link", "Gripper/Robotiq_2F_85/base_link", 0.050),
         CapsuleSpec(
             "Gripper/Robotiq_2F_85/base_link",
+            "Gripper/Robotiq_2F_85/left_outer_knuckle",
+            0.025,
+        ),
+        CapsuleSpec(
+            "Gripper/Robotiq_2F_85/left_outer_knuckle",
+            "Gripper/Robotiq_2F_85/left_outer_finger",
+            0.020,
+        ),
+        CapsuleSpec(
+            "Gripper/Robotiq_2F_85/left_outer_finger",
             "Gripper/Robotiq_2F_85/left_inner_finger",
             0.020,
         ),
         CapsuleSpec(
+            "Gripper/Robotiq_2F_85/left_inner_finger",
+            "Gripper/Robotiq_2F_85/left_inner_knuckle",
+            0.018,
+        ),
+        CapsuleSpec(
             "Gripper/Robotiq_2F_85/base_link",
+            "Gripper/Robotiq_2F_85/right_outer_knuckle",
+            0.025,
+        ),
+        # The palm spans the outer-knuckle roots. This closes the gap between
+        # the two diagonal capsules without filling the open grasping space.
+        CapsuleSpec(
+            "Gripper/Robotiq_2F_85/left_outer_knuckle",
+            "Gripper/Robotiq_2F_85/right_outer_knuckle",
+            0.030,
+        ),
+        CapsuleSpec(
+            "Gripper/Robotiq_2F_85/right_outer_knuckle",
+            "Gripper/Robotiq_2F_85/right_outer_finger",
+            0.020,
+        ),
+        CapsuleSpec(
+            "Gripper/Robotiq_2F_85/right_outer_finger",
             "Gripper/Robotiq_2F_85/right_inner_finger",
             0.020,
+        ),
+        CapsuleSpec(
+            "Gripper/Robotiq_2F_85/right_inner_finger",
+            "Gripper/Robotiq_2F_85/right_inner_knuckle",
+            0.018,
         ),
     ),
     default_threshold=0.03,
@@ -124,13 +166,37 @@ UR5E_ROBOTIQ_MODEL = RobotCollisionModel(
             "Gripper/base_link",
             "wrist_3_link/Gripper/base_link",
         ),
+        "Gripper/Robotiq_2F_85/left_outer_knuckle": (
+            "Gripper/Robotiq_2F_85/left_outer_knuckle",
+            "wrist_3_link/Gripper/Robotiq_2F_85/left_outer_knuckle",
+        ),
+        "Gripper/Robotiq_2F_85/left_outer_finger": (
+            "Gripper/Robotiq_2F_85/left_outer_finger",
+            "wrist_3_link/Gripper/Robotiq_2F_85/left_outer_finger",
+        ),
         "Gripper/Robotiq_2F_85/left_inner_finger": (
             "Gripper/Robotiq_2F_85/left_inner_finger",
             "wrist_3_link/Gripper/Robotiq_2F_85/left_inner_finger",
         ),
+        "Gripper/Robotiq_2F_85/left_inner_knuckle": (
+            "Gripper/Robotiq_2F_85/left_inner_knuckle",
+            "wrist_3_link/Gripper/Robotiq_2F_85/left_inner_knuckle",
+        ),
+        "Gripper/Robotiq_2F_85/right_outer_knuckle": (
+            "Gripper/Robotiq_2F_85/right_outer_knuckle",
+            "wrist_3_link/Gripper/Robotiq_2F_85/right_outer_knuckle",
+        ),
+        "Gripper/Robotiq_2F_85/right_outer_finger": (
+            "Gripper/Robotiq_2F_85/right_outer_finger",
+            "wrist_3_link/Gripper/Robotiq_2F_85/right_outer_finger",
+        ),
         "Gripper/Robotiq_2F_85/right_inner_finger": (
             "Gripper/Robotiq_2F_85/right_inner_finger",
             "wrist_3_link/Gripper/Robotiq_2F_85/right_inner_finger",
+        ),
+        "Gripper/Robotiq_2F_85/right_inner_knuckle": (
+            "Gripper/Robotiq_2F_85/right_inner_knuckle",
+            "wrist_3_link/Gripper/Robotiq_2F_85/right_inner_knuckle",
         ),
     },
 )

@@ -43,6 +43,19 @@ def test_target_gripper_contact_is_allowed_during_grasp():
     assert decision.reason == "phase_target_end_effector_contact"
 
 
+def test_target_outer_finger_contact_is_allowed_during_grasp():
+    decision = AssemblyContactPolicy().classify(
+        _event(
+            "franka_left/Gripper/Robotiq_2F_85/left_outer_knuckle"
+            "->Gripper/Robotiq_2F_85/left_outer_finger",
+            "fabrica_plumbers_block_4",
+        ),
+        PhaseTask(),
+    )
+
+    assert decision.classification == "allowed_contact"
+
+
 def test_non_target_overlap_remains_abnormal_collision():
     decision = AssemblyContactPolicy().classify(
         _event(

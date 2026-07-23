@@ -28,6 +28,41 @@ def _load_xform_reader_cls():
     return SingleXFormPrim
 
 
+def _load_static_scene_boxes(prim_path: str, object_name: str) -> list[dict]:
+    """Read world AABBs for boundable leaves under one static scene object."""
+
+    import omni.usd
+    from pxr import Usd, UsdGeom
+
+    stage = omni.usd.get_context().get_stage()
+    root = stage.GetPrimAtPath(str(prim_path))
+    if not root or not root.IsValid():
+        return []
+    cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(),
+        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+        useExtentsHint=True,
+    )
+    boxes = []
+    for index, prim in enumerate(Usd.PrimRange(root)):
+        if not prim.IsA(UsdGeom.Boundable):
+            continue
+        world_range = cache.ComputeWorldBound(prim).ComputeAlignedRange()
+        minimum = np.asarray(world_range.GetMin(), dtype=float)
+        maximum = np.asarray(world_range.GetMax(), dtype=float)
+        size = maximum - minimum
+        if not np.all(np.isfinite(size)) or np.any(size <= 1e-5):
+            continue
+        boxes.append(
+            {
+                "name": f"static:{object_name}:{index}",
+                "center": (minimum + maximum) * 0.5,
+                "half_extents": np.maximum(size * 0.5, 1e-4),
+            }
+        )
+    return boxes
+
+
 @dataclass(frozen=True)
 class PairFilter:
     """Symmetric substring filter for intentionally allowed contact pairs."""
@@ -62,6 +97,7 @@ class RuntimeConstraintConfig:
     threshold: Optional[float] = None
     check_stride: int = 8
     include_tracked_objects_as_boxes: bool = True
+    include_static_scene_objects: bool = True
     include_ground: bool = False
     ground_z: float = 0.0
     ignore_pairs: List[PairFilter] = field(default_factory=list)
@@ -92,6 +128,7 @@ class RuntimeConstraintMonitor:
         self._registered_links: Dict[str, List[str]] = {}
         self._missing_prims: List[dict] = []
         self._missing_object_geometry: set[str] = set()
+        self._missing_static_geometry: set[str] = set()
         self._monitor_errors: List[dict] = []
         self._observations = 0
         self._checks = 0
@@ -106,6 +143,7 @@ class RuntimeConstraintMonitor:
         self._allowed_contacts: List[dict] = []
         self._events_dropped = 0
         self._object_collision_sizes: Dict[str, np.ndarray] | None = None
+        self._static_scene_boxes: List[dict] | None = None
         self._total_check_seconds = 0.0
         self._max_check_seconds = 0.0
         self._contact_policy = AssemblyContactPolicy(
@@ -184,6 +222,7 @@ class RuntimeConstraintMonitor:
             "collision_threshold": float(self.config.collision_threshold),
             "check_stride": int(self.config.check_stride),
             "include_ground": bool(self.config.include_ground),
+            "include_static_scene_objects": bool(self.config.include_static_scene_objects),
             "observed_steps": int(self._observations),
             "checks": int(self._checks),
             "total_check_seconds": float(self._total_check_seconds),
@@ -205,6 +244,10 @@ class RuntimeConstraintMonitor:
             "registered_links": {name: list(links) for name, links in self._registered_links.items()},
             "missing_prims": list(self._missing_prims),
             "missing_object_geometry": sorted(self._missing_object_geometry),
+            "registered_static_obstacles": (
+                [] if self._static_scene_boxes is None else [item["name"] for item in self._static_scene_boxes]
+            ),
+            "missing_static_geometry": sorted(self._missing_static_geometry),
             "monitor_error": list(self._monitor_errors),
         }
 
@@ -263,6 +306,7 @@ class RuntimeConstraintMonitor:
 
         if self.config.include_ground:
             self.detector.add_ground(float(self.config.ground_z))
+        self._refresh_static_scene_objects(task)
         if not self.config.include_tracked_objects_as_boxes:
             return
 
@@ -291,6 +335,39 @@ class RuntimeConstraintMonitor:
                 center=np.asarray(position, dtype=float),
                 half_extents=half_extents,
                 orient=state.get("orientation"),
+            )
+
+    def _refresh_static_scene_objects(self, task) -> None:
+        if not self.config.include_static_scene_objects:
+            return
+        if self._static_scene_boxes is None:
+            self._static_scene_boxes = []
+            tracked_names = set((getattr(task, "get_tracked_object_states", lambda: {})() or {}))
+            for object_name, scene_object in (getattr(task, "objects", {}) or {}).items():
+                object_name = str(object_name)
+                if object_name in tracked_names:
+                    continue
+                config = getattr(scene_object, "config", None)
+                if config is None or getattr(config, "collider", False) is False:
+                    continue
+                prim_path = getattr(config, "prim_path", None)
+                if not prim_path:
+                    self._missing_static_geometry.add(object_name)
+                    continue
+                try:
+                    boxes = _load_static_scene_boxes(str(prim_path), object_name)
+                except Exception as exc:
+                    self._record_error("static_scene_geometry", exc)
+                    boxes = []
+                if not boxes:
+                    self._missing_static_geometry.add(object_name)
+                self._static_scene_boxes.extend(boxes)
+
+        for item in self._static_scene_boxes:
+            self.detector.add_box(
+                item["name"],
+                center=item["center"],
+                half_extents=item["half_extents"],
             )
 
     def _accumulate(self, events: List[dict]) -> None:

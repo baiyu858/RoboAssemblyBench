@@ -57,7 +57,9 @@ It replaces the hard-coded Franka model with configurable models from
 
 - creates Isaac Sim prim readers lazily,
 - supports root-mounted and wrist-mounted Robotiq 2F-85 prim layouts,
+- covers the Robotiq outer/inner fingers, knuckles, and palm envelope,
 - refreshes unheld box obstacles from `task.get_tracked_object_states()`,
+- loads untracked static collider bounds, including fixtures and optical boards,
 - checks inter-arm, robot-environment, and optional ground collisions,
 - separates proximity candidates, expected assembly contact, and abnormal
   capsule overlap,
@@ -162,12 +164,12 @@ even though the monitor is logically passive. Use the largest stride that
 still provides useful coverage and always compare enabled and disabled runs on
 the same seeds.
 
-For the first legacy fixed-seed server validation, stride 64 completed successfully
-with 229 checks over 14,688 observed steps. Collision computation took 6.35 s
-in total (27.7 ms average per check), both robots registered all 10 expected
-links, and no prim, object-geometry, or monitor errors were reported.
-Its 52 threshold events predate the proximity/contact/collision split and
-therefore must not be interpreted as 52 physical collisions.
+The corrected fixed-seed server validation completed successfully with 229
+checks over 14,688 observed steps. It registered 16 links per robot and two
+static scene obstacles, with no missing prim, geometry, or monitor errors.
+The report contains 9 abnormal inter-arm overlaps around steps 8448-8576, 115
+positive-clearance proximity samples, and 3 allowed target contacts. See
+`DYNAMIC_CONTACT_VALIDATION.md` for the video and three-camera review.
 
 ## Current Status
 

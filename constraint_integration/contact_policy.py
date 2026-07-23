@@ -15,11 +15,7 @@ _CONTACT_PHASE_TOKENS = (
     "settle",
 )
 
-_END_EFFECTOR_TOKENS = (
-    "wrist_3_link->Gripper/Robotiq_2F_85/base_link",
-    "Gripper/Robotiq_2F_85/base_link->Gripper/Robotiq_2F_85/left_inner_finger",
-    "Gripper/Robotiq_2F_85/base_link->Gripper/Robotiq_2F_85/right_inner_finger",
-)
+_END_EFFECTOR_TOKEN = "Gripper/Robotiq_2F_85/"
 
 
 @dataclass(frozen=True)
@@ -114,7 +110,7 @@ class AssemblyContactPolicy:
         object_entity = next((item for item in entities if item == context.object_name), None)
         if robot_entity is None or object_entity is None:
             return False
-        return any(token in robot_entity for token in _END_EFFECTOR_TOKENS)
+        return _END_EFFECTOR_TOKEN in robot_entity
 
     @staticmethod
     def _decision(

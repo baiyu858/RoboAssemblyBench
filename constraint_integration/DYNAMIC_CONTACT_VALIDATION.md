@@ -1,4 +1,4 @@
-# Dynamic Allowed-Contact Validation
+# Dynamic Contact Validation
 
 ## Scope
 
@@ -8,77 +8,84 @@
 - Video frame stride: `8`
 - Mode: passive and fail-open
 
-## False-Positive Cause
+## Superseded Conclusion
 
-The legacy overlay treated every detector candidate below `0.03 m` as a
-collision. At step 8384, the left arm still had positive surface clearance
-from blocks 0 and 3, but those proximity candidates were displayed as red
-warnings. The first-pass distal capsule radii also produced artificial
-inter-arm overlap around steps 8448-8576 even though the source video showed
-no physical contact.
+The first contact-precision pass incorrectly concluded that the close-arm
+interval around 35 seconds was a false positive. It narrowed the distal UR5e
+capsules until all overlap disappeared. Review of the source video showed real
+arm contact, so that calibration and its zero-collision conclusion are
+superseded.
 
-## Changes
+## Corrected Model
 
-1. Candidate distance and collision overlap now have separate meanings:
-   positive clearance is `proximity`; clearance at or below zero is
-   `collision`.
-2. Phase context is read from `get_current_phase_spec()`. During grasp,
-   insertion, and release, active end-effector contact with the active target
-   object is classified as `allowed_contact`.
-3. Attached or grasped payloads remain excluded from environment obstacles
-   during transport.
-4. UR5e/Robotiq distal capsule radii were narrowed:
+1. Conservative wrist envelopes are restored:
 
-| Capsule | Before | After |
-| --- | ---: | ---: |
-| wrist 1 to wrist 2 | 0.045 m | 0.040 m |
-| wrist 2 to wrist 3 | 0.045 m | 0.035 m |
-| wrist 3 to gripper base | 0.050 m | 0.040 m |
-| gripper base to inner finger | 0.025 m | 0.020 m |
+| Capsule | Radius |
+| --- | ---: |
+| wrist 1 to wrist 2 | 0.045 m |
+| wrist 2 to wrist 3 | 0.045 m |
+| wrist 3 to gripper base | 0.050 m |
 
-Configured symmetric ignore pairs remain available, but no fixed
-frame/recipe-specific ignore rule was added for this fix.
+2. The Robotiq model includes base, inner/outer knuckles, inner/outer fingers,
+   and a palm capsule between the two outer-knuckle roots.
+3. Untracked collider objects are loaded from the live USD stage. The fixed
+   seed run registered `optical_board` and `fabrica_fixture`.
+4. Positive surface clearance remains `proximity`; signed clearance at or below
+   zero is `collision`.
+5. Active end-effector contact with the active target during grasp, insert, and
+   release is `allowed_contact`.
 
 ## Fixed-Seed Result
 
-| Metric | Legacy run | Optimized run |
-| --- | ---: | ---: |
-| Assembly success | yes | yes |
-| Episode steps | 14,688 | 14,688 |
-| Runtime checks | 229 | 229 |
-| Detector candidates | 52 | 35 |
-| Allowed assembly contacts | not separated | 1 |
-| Positive-clearance proximity events | not separated | 34 |
-| Abnormal collision events | all 52 were displayed | 0 |
-| Minimum candidate clearance | -0.019462 m | +0.000538 m |
-| Missing prims / geometry / monitor errors | 0 / 0 / 0 | 0 / 0 / 0 |
+| Metric | Corrected run |
+| --- | ---: |
+| Assembly success | yes |
+| Episode steps | 14,688 |
+| Runtime checks | 229 |
+| Detector candidates | 127 |
+| Allowed assembly contacts | 3 |
+| Positive-clearance proximity events | 115 |
+| Abnormal collision events | 9 |
+| Minimum signed clearance | -0.019462 m |
+| Monitor compute time | 13.105 s |
+| Missing prims / geometry / monitor errors | 0 / 0 / 0 |
 
-At the original false-positive interval:
+All nine abnormal events are inter-arm overlaps at steps 8448, 8512, and 8576
+during `left_move_above_block_4`. They cover wrist-to-wrist and
+wrist-to-gripper pairs. The first video warning appears at about 35.2 seconds.
 
-- Step 8384 contains three positive-clearance object proximity samples. The
-  minimum is `0.009532 m`, so none is a collision.
-- Step 8448 has a minimum inter-arm clearance of `0.000809 m`.
-- Step 8512 has a minimum inter-arm clearance of `0.000538 m`.
-- No event from this interval is written to the collision-only `events` list.
+## 22-Second Review
+
+The front camera makes the two end effectors appear to overlap around 22
+seconds. A diagnostic run with a temporary `0.15 m` candidate threshold found:
+
+- closest inter-arm capsule clearance: `0.061547 m` at step 5376;
+- closest active-arm/object clearance: `0.064939 m` to block 0 at step 5312.
+
+The left- and right-wrist cameras confirm that the end effectors are separated
+in depth. This interval is therefore not written to the collision-only event
+list and receives no red overlay. The wide threshold was diagnostic only; the
+runtime default remains `0.03 m`.
 
 ## Tests
 
 ```text
-constraint integration: 37 passed
+constraint integration: 39 passed
 assembly regression:     12 passed
 git diff --check:         passed
 ```
 
-The generated three-camera videos each contain 1,834 frames at 30 FPS
-(61.13 seconds). The overlay reads only the collision-only `events` list, so
-this successful episode contains no red collision banner. Proximity and
-allowed-contact samples remain in `collect_results.json` for audit.
+The three annotated videos contain 1,834 frames each at 30 FPS. Their overlay
+reads only the collision event list and shows the pair, phase, step, and overlap
+depth.
 
 ## Server Artifacts
 
 ```text
-/data/pxb/outputs/fabrica_plumbers_block_ur5e_dynamic_contacts_seed0_v3/
+/data/pxb/outputs/fabrica_plumbers_block_ur5e_contact_precision_v4_seed0/
   collect_results.json
   episode_0000_live_videos/
   episode_0000_annotated_videos/
+  inspection_22s/
+  annotation_checks/
 ```

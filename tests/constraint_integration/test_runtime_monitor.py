@@ -189,6 +189,40 @@ def test_positive_clearance_is_kept_as_auditable_proximity(monkeypatch):
     assert report["proximity_events"][0]["classification_reason"] == "positive_surface_clearance"
 
 
+def test_static_scene_colliders_are_registered_and_cached(monkeypatch):
+    _install_fakes(monkeypatch)
+    calls = []
+
+    def fake_static_boxes(prim_path, object_name):
+        calls.append((prim_path, object_name))
+        return [
+            {
+                "name": f"static:{object_name}:0",
+                "center": np.array([0.5, 0.0, 1.0]),
+                "half_extents": np.array([0.2, 0.1, 0.05]),
+            }
+        ]
+
+    monkeypatch.setattr(runtime_monitor, "_load_static_scene_boxes", fake_static_boxes)
+    task = FakeTask(step_counter=8)
+    task.objects = {
+        "fixture": SimpleNamespace(
+            config=SimpleNamespace(collider=True, prim_path="/World/env_0/objects/fixture")
+        )
+    }
+    monitor = RuntimeConstraintMonitor(RuntimeConstraintConfig())
+
+    monitor.observe(task)
+    task.step_counter = 16
+    monitor.observe(task)
+    report = monitor.finalize()
+
+    assert calls == [("/World/env_0/objects/fixture", "fixture")]
+    assert set(monitor.detector._boxes) == {"free_part", "static:fixture:0"}
+    assert report["registered_static_obstacles"] == ["static:fixture:0"]
+    assert report["missing_static_geometry"] == []
+
+
 def test_detector_exception_is_fail_open(monkeypatch):
     _install_fakes(monkeypatch)
     FakeDetector.raise_on_check = True
