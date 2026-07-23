@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from .contact_policy import AssemblyContactPolicy, ContactDecision
 from .models import RobotCollisionModel, get_robot_collision_model
 
 
@@ -64,12 +65,14 @@ class RuntimeConstraintConfig:
     include_ground: bool = False
     ground_z: float = 0.0
     ignore_pairs: List[PairFilter] = field(default_factory=list)
+    collision_threshold: float = 0.0
     max_recorded_events: int = 5000
 
     def __post_init__(self) -> None:
         self.check_stride = max(int(self.check_stride), 1)
         if self.threshold is not None:
             self.threshold = float(self.threshold)
+        self.collision_threshold = float(self.collision_threshold)
         self.max_recorded_events = max(int(self.max_recorded_events), 0)
 
 
@@ -92,14 +95,23 @@ class RuntimeConstraintMonitor:
         self._monitor_errors: List[dict] = []
         self._observations = 0
         self._checks = 0
+        self._candidate_total = 0
         self._violation_total = 0
         self._violations_by_kind: Counter[str] = Counter()
+        self._classifications: Counter[str] = Counter()
         self._minimum_distance: float | None = None
+        self._candidate_minimum_distance: float | None = None
         self._events: List[dict] = []
+        self._proximity_events: List[dict] = []
+        self._allowed_contacts: List[dict] = []
         self._events_dropped = 0
         self._object_collision_sizes: Dict[str, np.ndarray] | None = None
         self._total_check_seconds = 0.0
         self._max_check_seconds = 0.0
+        self._contact_policy = AssemblyContactPolicy(
+            collision_threshold=self.config.collision_threshold,
+            ignore_pairs=self.config.ignore_pairs,
+        )
 
         try:
             detector_cls = _load_collision_detector_cls()
@@ -132,14 +144,25 @@ class RuntimeConstraintMonitor:
             if not self._registered:
                 self.register_task_robots(task)
             self.refresh_environment_from_task(task)
-            events = [event for event in self.detector.check_all(step=step) if not self._ignored(event)]
-            serialized = [self._event_to_dict(event) for event in events]
-            self._accumulate(serialized)
+            candidates = self.detector.check_all(step=step)
+            classified = [
+                self._event_to_dict(event, self._contact_policy.classify(event, task))
+                for event in candidates
+            ]
+            collisions = [event for event in classified if event["classification"] == "collision"]
+            self._accumulate(classified)
             return {
                 "checked": True,
                 "step": step,
-                "summary": self.detector.summary(events),
-                "violations": serialized,
+                "summary": f"{len(collisions)} collisions from {len(classified)} candidates",
+                "candidate_count": len(classified),
+                "proximity_count": sum(
+                    item["classification"] == "proximity" for item in classified
+                ),
+                "allowed_contact_count": sum(
+                    item["classification"] == "allowed_contact" for item in classified
+                ),
+                "violations": collisions,
             }
         except Exception as exc:
             error = self._record_error("observe", exc, step=step)
@@ -158,6 +181,7 @@ class RuntimeConstraintMonitor:
                 if self.config.threshold is not None
                 else self.robot_model.default_threshold
             ),
+            "collision_threshold": float(self.config.collision_threshold),
             "check_stride": int(self.config.check_stride),
             "include_ground": bool(self.config.include_ground),
             "observed_steps": int(self._observations),
@@ -167,10 +191,15 @@ class RuntimeConstraintMonitor:
                 float(self._total_check_seconds / self._checks) if self._checks else 0.0
             ),
             "max_check_seconds": float(self._max_check_seconds),
+            "candidate_total": int(self._candidate_total),
+            "classifications": dict(sorted(self._classifications.items())),
             "violation_total": int(self._violation_total),
             "violations_by_kind": dict(sorted(self._violations_by_kind.items())),
             "minimum_distance": self._minimum_distance,
+            "candidate_minimum_distance": self._candidate_minimum_distance,
             "events": list(self._events),
+            "proximity_events": list(self._proximity_events),
+            "allowed_contacts": list(self._allowed_contacts),
             "events_dropped": int(self._events_dropped),
             "registered_robots": dict(self._robot_roots),
             "registered_links": {name: list(links) for name, links in self._registered_links.items()},
@@ -265,12 +294,26 @@ class RuntimeConstraintMonitor:
             )
 
     def _accumulate(self, events: List[dict]) -> None:
-        self._violation_total += len(events)
+        self._candidate_total += len(events)
+        collisions = [event for event in events if event["classification"] == "collision"]
+        proximity = [event for event in events if event["classification"] == "proximity"]
+        allowed = [event for event in events if event["classification"] == "allowed_contact"]
+        self._violation_total += len(collisions)
         remaining = max(self.config.max_recorded_events - len(self._events), 0)
         if remaining:
-            self._events.extend(events[:remaining])
-        self._events_dropped += max(len(events) - remaining, 0)
+            self._events.extend(collisions[:remaining])
+        self._events_dropped += max(len(collisions) - remaining, 0)
+        audit_limit = min(self.config.max_recorded_events, 500)
+        proximity_remaining = max(audit_limit - len(self._proximity_events), 0)
+        allowed_remaining = max(audit_limit - len(self._allowed_contacts), 0)
+        self._proximity_events.extend(proximity[:proximity_remaining])
+        self._allowed_contacts.extend(allowed[:allowed_remaining])
         for event in events:
+            self._classifications[str(event["classification"])] += 1
+            distance = float(event["distance"])
+            if self._candidate_minimum_distance is None or distance < self._candidate_minimum_distance:
+                self._candidate_minimum_distance = distance
+        for event in collisions:
             self._violations_by_kind[str(event["kind"])] += 1
             distance = float(event["distance"])
             if self._minimum_distance is None or distance < self._minimum_distance:
@@ -292,9 +335,6 @@ class RuntimeConstraintMonitor:
                 if size is not None:
                     self._object_collision_sizes.setdefault(str(phase_object), np.asarray(size, dtype=float))
         return self._object_collision_sizes.get(str(object_name))
-
-    def _ignored(self, event) -> bool:
-        return any(rule.matches(event.entity_a, event.entity_b) for rule in self.config.ignore_pairs)
 
     def _record_error(self, stage: str, exc: Exception, *, step: int | None = None) -> dict:
         error = {
@@ -325,7 +365,15 @@ class RuntimeConstraintMonitor:
         return None if not value else str(value)
 
     @staticmethod
-    def _event_to_dict(event) -> dict:
+    def _event_to_dict(event, decision: ContactDecision | None = None) -> dict:
+        if decision is None:
+            decision = ContactDecision(
+                classification="candidate",
+                reason="unclassified",
+                phase=None,
+                active_robot=None,
+                active_object=None,
+            )
         return {
             "step": int(event.step),
             "kind": str(event.kind),
@@ -333,6 +381,11 @@ class RuntimeConstraintMonitor:
             "entity_b": str(event.entity_b),
             "distance": float(event.distance),
             "threshold": float(event.threshold),
+            "classification": decision.classification,
+            "classification_reason": decision.reason,
+            "phase": decision.phase,
+            "active_robot": decision.active_robot,
+            "active_object": decision.active_object,
             "pos_a": None if event.pos_a is None else np.asarray(event.pos_a, dtype=float).tolist(),
             "pos_b": None if event.pos_b is None else np.asarray(event.pos_b, dtype=float).tolist(),
         }

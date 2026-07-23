@@ -109,7 +109,7 @@ def _install_fakes(monkeypatch):
 def test_stride_registration_environment_filtering_and_summary(monkeypatch):
     _install_fakes(monkeypatch)
     FakeDetector.emitted_events = [
-        _event(entity_b="fixture"),
+        _event(entity_b="fixture", distance=-0.001),
         _event(entity_a="left/gripper", entity_b="allowed_part", distance=-0.002),
     ]
     monitor = RuntimeConstraintMonitor(
@@ -133,8 +133,10 @@ def test_stride_registration_environment_filtering_and_summary(monkeypatch):
     assert report["average_check_seconds"] >= 0.0
     assert report["max_check_seconds"] >= 0.0
     assert report["violation_total"] == 1
+    assert report["candidate_total"] == 2
+    assert report["classifications"] == {"allowed_contact": 1, "collision": 1}
     assert report["violations_by_kind"] == {"agent_env": 1}
-    assert report["minimum_distance"] == 0.01
+    assert report["minimum_distance"] == -0.001
     assert report["registered_robots"] == {"left": "/ur5e_left", "right": "/ur5e_right"}
     assert {item["link"] for item in report["missing_prims"]} == {
         "Gripper/Robotiq_2F_85/right_inner_finger"
@@ -160,7 +162,7 @@ def test_unknown_object_scale_is_not_treated_as_metric_size(monkeypatch):
 
 def test_detailed_events_are_capped_while_totals_are_preserved(monkeypatch):
     _install_fakes(monkeypatch)
-    FakeDetector.emitted_events = [_event(distance=value / 1000) for value in range(10)]
+    FakeDetector.emitted_events = [_event(distance=-(value + 1) / 1000) for value in range(10)]
     monitor = RuntimeConstraintMonitor(RuntimeConstraintConfig(max_recorded_events=3))
 
     monitor.observe(FakeTask(step_counter=8))
@@ -169,6 +171,22 @@ def test_detailed_events_are_capped_while_totals_are_preserved(monkeypatch):
     assert report["violation_total"] == 10
     assert len(report["events"]) == 3
     assert report["events_dropped"] == 7
+
+
+def test_positive_clearance_is_kept_as_auditable_proximity(monkeypatch):
+    _install_fakes(monkeypatch)
+    FakeDetector.emitted_events = [_event(distance=0.009)]
+    monitor = RuntimeConstraintMonitor(RuntimeConstraintConfig())
+
+    result = monitor.observe(FakeTask(step_counter=8))
+    report = monitor.finalize()
+
+    assert result["violations"] == []
+    assert result["proximity_count"] == 1
+    assert report["candidate_total"] == 1
+    assert report["violation_total"] == 0
+    assert report["classifications"] == {"proximity": 1}
+    assert report["proximity_events"][0]["classification_reason"] == "positive_surface_clearance"
 
 
 def test_detector_exception_is_fail_open(monkeypatch):
@@ -188,7 +206,7 @@ def test_detector_exception_is_fail_open(monkeypatch):
 
 def test_new_monitor_does_not_reuse_previous_episode_state(monkeypatch):
     _install_fakes(monkeypatch)
-    FakeDetector.emitted_events = [_event()]
+    FakeDetector.emitted_events = [_event(distance=-0.001)]
     first = RuntimeConstraintMonitor(RuntimeConstraintConfig())
     first.observe(FakeTask(step_counter=8))
 

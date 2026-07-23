@@ -34,6 +34,7 @@ reversible.
 constraint_integration/
 |-- __init__.py
 |-- models.py             # configurable Franka / UR5e collision models
+|-- contact_policy.py     # phase-aware allowed-contact classification
 |-- pipeline.py           # fail-open episode lifecycle adapter
 |-- runtime_monitor.py    # passive rollout-time collision monitor
 |-- precheck_adapter.py   # robot-agnostic trajectory precheck adapter
@@ -57,7 +58,9 @@ It replaces the hard-coded Franka model with configurable models from
 - creates Isaac Sim prim readers lazily,
 - supports root-mounted and wrist-mounted Robotiq 2F-85 prim layouts,
 - refreshes unheld box obstacles from `task.get_tracked_object_states()`,
-- checks self, inter-arm, robot-environment, and optional ground collisions,
+- checks inter-arm, robot-environment, and optional ground collisions,
+- separates proximity candidates, expected assembly contact, and abnormal
+  capsule overlap,
 - returns JSON-serializable reports,
 - records missing prims, missing object geometry, and monitor errors,
 - never mutates task state or stops a rollout.
@@ -100,12 +103,20 @@ The final episode dictionary gains one field only:
 runtime_constraint_monitor
 ```
 
-It contains check counts and timings, aggregate violation counts, violations by
-kind, minimum signed clearance, detailed events, registered links, missing
-prim/object diagnostics, and fail-open errors. Each event includes `step`,
-`kind`, `entity_a`, `entity_b`, `distance`, `threshold`, `pos_a`, and `pos_b`.
-The last two fields are the nearest points used by the distance check. Stored
-events are capped while aggregate counts continue to grow.
+The detector threshold is a broad candidate distance: positive signed
+clearance up to 0.03 m is recorded as `proximity`, but is not a collision.
+Surface overlap at or below 0 m is classified as `collision`. During grasp,
+insert, and release phases, contact between the active robot end effector and
+the phase target object is classified as `allowed_contact`.
+
+The report contains check counts and timings, candidate and classification
+counts, abnormal collision counts, minimum signed clearance, detailed
+collision events, sampled proximity/allowed-contact audit events, registered
+links, missing prim/object diagnostics, and fail-open errors. Each event
+includes `step`, `phase`, `kind`, `entity_a`, `entity_b`, `distance`,
+`threshold`, `classification`, `classification_reason`, `active_robot`,
+`active_object`, `pos_a`, and `pos_b`. Stored audit events are capped while
+aggregate counts continue to grow.
 
 The monitor never modifies actions, `terminated`, `success`, `status`, or
 `terminal_reason`.
@@ -151,10 +162,12 @@ even though the monitor is logically passive. Use the largest stride that
 still provides useful coverage and always compare enabled and disabled runs on
 the same seeds.
 
-For the first fixed-seed server validation, stride 64 completed successfully
+For the first legacy fixed-seed server validation, stride 64 completed successfully
 with 229 checks over 14,688 observed steps. Collision computation took 6.35 s
 in total (27.7 ms average per check), both robots registered all 10 expected
 links, and no prim, object-geometry, or monitor errors were reported.
+Its 52 threshold events predate the proximity/contact/collision split and
+therefore must not be interpreted as 52 physical collisions.
 
 ## Current Status
 

@@ -96,24 +96,24 @@ UR5E_ROBOTIQ_MODEL = RobotCollisionModel(
         "Gripper/Robotiq_2F_85/right_inner_finger",
     ),
     capsules=(
-        # Conservative first-pass radii.  They should be calibrated against the
-        # actual UR5e/Robotiq USD visual or collision geometry after baseline
-        # rollout is running.
+        # Distal radii are narrower than the upper arm. Keeping the first-pass
+        # conservative values here created false inter-arm overlaps during
+        # close assembly work.
         CapsuleSpec("shoulder_link", "upper_arm_link", 0.070),
         CapsuleSpec("upper_arm_link", "forearm_link", 0.060),
         CapsuleSpec("forearm_link", "wrist_1_link", 0.055),
-        CapsuleSpec("wrist_1_link", "wrist_2_link", 0.045),
-        CapsuleSpec("wrist_2_link", "wrist_3_link", 0.045),
-        CapsuleSpec("wrist_3_link", "Gripper/Robotiq_2F_85/base_link", 0.050),
+        CapsuleSpec("wrist_1_link", "wrist_2_link", 0.040),
+        CapsuleSpec("wrist_2_link", "wrist_3_link", 0.035),
+        CapsuleSpec("wrist_3_link", "Gripper/Robotiq_2F_85/base_link", 0.040),
         CapsuleSpec(
             "Gripper/Robotiq_2F_85/base_link",
             "Gripper/Robotiq_2F_85/left_inner_finger",
-            0.025,
+            0.020,
         ),
         CapsuleSpec(
             "Gripper/Robotiq_2F_85/base_link",
             "Gripper/Robotiq_2F_85/right_inner_finger",
-            0.025,
+            0.020,
         ),
     ),
     default_threshold=0.03,

@@ -32,6 +32,7 @@ class RuntimeConstraintEpisodeHook:
         enabled: bool = False,
         check_stride: int = 8,
         threshold: float | None = None,
+        collision_threshold: float = 0.0,
         include_ground: bool = False,
         ignore_pairs: list[str] | None = None,
         monitor_factory: Callable[[], object] | None = None,
@@ -39,6 +40,7 @@ class RuntimeConstraintEpisodeHook:
         self.enabled = bool(enabled)
         self.check_stride = max(int(check_stride), 1)
         self.threshold = threshold
+        self.collision_threshold = float(collision_threshold)
         self.include_ground = bool(include_ground)
         self.ignore_pairs = list(ignore_pairs or [])
         self._monitor_factory = monitor_factory
@@ -89,6 +91,7 @@ class RuntimeConstraintEpisodeHook:
             RuntimeConstraintConfig(
                 check_stride=self.check_stride,
                 threshold=self.threshold,
+                collision_threshold=self.collision_threshold,
                 include_ground=self.include_ground,
                 ignore_pairs=[PairFilter.parse(value) for value in self.ignore_pairs],
             )
