@@ -4,17 +4,19 @@
 
 - Recipe: `fabrica_plumbers_block_ur5e_right_base_prepare`
 - Seed: `0`
-- Runtime check stride: `64`
+- Runtime check stride: `32`
 - Video frame stride: `8`
 - Mode: passive and fail-open
 
 ## Superseded Conclusion
 
-The first contact-precision pass incorrectly concluded that the close-arm
-interval around 35 seconds was a false positive. It narrowed the distal UR5e
-capsules until all overlap disappeared. Review of the source video showed real
-arm contact, so that calibration and its zero-collision conclusion are
-superseded.
+Two earlier conclusions are superseded:
+
+1. The first contact-precision pass incorrectly removed the real close-arm
+   collision around 35 seconds by narrowing the distal UR5e capsules.
+2. A later stride-64 run incorrectly classified the 22-second interval as
+   camera occlusion. Frame-by-frame review showed that the passive arm was
+   displaced, while stride 64 skipped the brief contact window.
 
 ## Corrected Model
 
@@ -24,10 +26,11 @@ superseded.
 | --- | ---: |
 | wrist 1 to wrist 2 | 0.045 m |
 | wrist 2 to wrist 3 | 0.045 m |
-| wrist 3 to gripper base | 0.050 m |
+| wrist 3 to gripper base | 0.072 m |
 
 2. The Robotiq model includes base, inner/outer knuckles, inner/outer fingers,
-   and a palm capsule between the two outer-knuckle roots.
+   and a palm capsule between the two outer-knuckle roots. The wider 2F-85 base
+   uses a 72 mm envelope; the former 50 mm envelope missed the brief contact.
 3. Untracked collider objects are loaded from the live USD stage. The fixed
    seed run registered `optical_board` and `fabrica_fixture`.
 4. Positive surface clearance remains `proximity`; signed clearance at or below
@@ -40,32 +43,34 @@ superseded.
 | Metric | Corrected run |
 | --- | ---: |
 | Assembly success | yes |
-| Episode steps | 14,688 |
-| Runtime checks | 229 |
-| Detector candidates | 127 |
-| Allowed assembly contacts | 3 |
-| Positive-clearance proximity events | 115 |
-| Abnormal collision events | 9 |
-| Minimum signed clearance | -0.019462 m |
-| Monitor compute time | 13.105 s |
+| Episode steps | 14,610 |
+| Runtime checks | 456 |
+| Detector candidates | 85 |
+| Allowed assembly contacts | 7 |
+| Positive-clearance proximity events | 64 |
+| Abnormal collision events | 14 |
+| Minimum signed clearance | -0.042644 m |
+| Monitor compute time | 26.116 s |
 | Missing prims / geometry / monitor errors | 0 / 0 / 0 |
 
-All nine abnormal events are inter-arm overlaps at steps 8448, 8512, and 8576
-during `left_move_above_block_4`. They cover wrist-to-wrist and
-wrist-to-gripper pairs. The first video warning appears at about 35.2 seconds.
+The report contains 13 inter-arm events and one robot-object event. Both
+visually confirmed intervals are preserved:
 
-## 22-Second Review
+- step 5408, `left_move_above_block_3`: two inter-arm events, first displayed
+  at about 22.5 seconds;
+- steps 8576-8768, `left_move_above_block_4`: the later arm/part and inter-arm
+  collision interval around 35.7-36.5 seconds.
 
-The front camera makes the two end effectors appear to overlap around 22
-seconds. A diagnostic run with a temporary `0.15 m` candidate threshold found:
+## Stride Review
 
-- closest inter-arm capsule clearance: `0.061547 m` at step 5376;
-- closest active-arm/object clearance: `0.064939 m` to block 0 at step 5312.
+- Stride 64 sampled before and after the brief contact and missed it.
+- Stride 8 captured steps 5384-5440 in detail, but increased monitor work to
+  1,254 checks and the rollout timed out in a later phase.
+- Stride 32 sampled step 5408, retained both collision intervals, reduced the
+  work to 456 checks, and completed the full assembly successfully.
 
-The left- and right-wrist cameras confirm that the end effectors are separated
-in depth. This interval is therefore not written to the collision-only event
-list and receives no red overlay. The wide threshold was diagnostic only; the
-runtime default remains `0.03 m`.
+Stride 32 is therefore the validated setting for this recipe. Stride 8 remains
+useful for short diagnostic runs where maximum temporal resolution matters.
 
 ## Tests
 
@@ -82,7 +87,7 @@ depth.
 ## Server Artifacts
 
 ```text
-/data/pxb/outputs/fabrica_plumbers_block_ur5e_contact_precision_v4_seed0/
+/data/pxb/outputs/fabrica_plumbers_block_ur5e_contact_precision_v8_stride32_seed0/
   collect_results.json
   episode_0000_live_videos/
   episode_0000_annotated_videos/

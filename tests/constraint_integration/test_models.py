@@ -18,6 +18,11 @@ def test_ur5e_model_has_expected_capsules_and_threshold():
         0.02,
     ) in model.detector_capsules
     assert (
+        "wrist_3_link",
+        "Gripper/Robotiq_2F_85/base_link",
+        0.072,
+    ) in model.detector_capsules
+    assert (
         "Gripper/Robotiq_2F_85/left_outer_knuckle",
         "Gripper/Robotiq_2F_85/right_outer_knuckle",
         0.03,

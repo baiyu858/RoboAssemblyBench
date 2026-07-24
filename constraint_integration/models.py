@@ -109,7 +109,10 @@ UR5E_ROBOTIQ_MODEL = RobotCollisionModel(
         CapsuleSpec("forearm_link", "wrist_1_link", 0.055),
         CapsuleSpec("wrist_1_link", "wrist_2_link", 0.045),
         CapsuleSpec("wrist_2_link", "wrist_3_link", 0.045),
-        CapsuleSpec("wrist_3_link", "Gripper/Robotiq_2F_85/base_link", 0.050),
+        # The 2F-85 base is wider than the UR5e wrist. A 50 mm envelope
+        # missed the brief inter-arm contact around step 5408 even though the
+        # passive arm was visibly displaced; 72 mm covers the physical palm.
+        CapsuleSpec("wrist_3_link", "Gripper/Robotiq_2F_85/base_link", 0.072),
         CapsuleSpec(
             "Gripper/Robotiq_2F_85/base_link",
             "Gripper/Robotiq_2F_85/left_outer_knuckle",
