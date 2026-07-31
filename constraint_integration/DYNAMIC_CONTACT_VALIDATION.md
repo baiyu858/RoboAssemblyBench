@@ -80,14 +80,14 @@ assembly regression:     12 passed
 git diff --check:         passed
 ```
 
-The three annotated videos contain 1,834 frames each at 30 FPS. Their overlay
+The three annotated videos contain 1,824 frames each at 30 FPS. Their overlay
 reads only the collision event list and shows the pair, phase, step, and overlap
 depth.
 
 ## Server Artifacts
 
 ```text
-/data/pxb/outputs/fabrica_plumbers_block_ur5e_contact_precision_v8_stride32_seed0/
+outputs/fabrica_plumbers_block_ur5e_contact_precision_v8_stride32_seed0/
   collect_results.json
   episode_0000_live_videos/
   episode_0000_annotated_videos/

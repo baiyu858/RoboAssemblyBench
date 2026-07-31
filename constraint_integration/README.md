@@ -87,7 +87,7 @@ The monitor is disabled by default. Enable it with:
 
 ```text
 --runtime-constraint-monitor
---constraint-check-stride 64
+--constraint-check-stride 32
 --constraint-threshold 0.03
 --constraint-include-ground
 --constraint-ignore-pair left_inner_finger:block_0
@@ -96,8 +96,9 @@ The monitor is disabled by default. Enable it with:
 `--constraint-ignore-pair` may be repeated. Matching is symmetric, so `A:B`
 also ignores `B:A`. Omitting `--constraint-threshold` uses the UR5e model
 default of 0.03 m. The command-line stride default remains 8 to match the
-initial interface contract, but the first server rollout was validated with an
-explicit stride of 64 because stride 8 perturbed this timing-sensitive task.
+initial interface contract. This recipe was validated with an explicit stride
+of 32: stride 64 skipped a brief contact, while stride 8 increased monitor work
+enough to make the timing-sensitive rollout fail later.
 
 The final episode dictionary gains one field only:
 
