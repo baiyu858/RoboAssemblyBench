@@ -2270,28 +2270,23 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
         )
         detected_clamp = bool(contact_candidate or stall_contact)
 
-        if detected_clamp and close_elapsed_steps >= min_steps and state.get("hold_gripper_openness") is None:
-            hold_openness = self._gripper_openness_from_q(
-                gripper_q=gripper_q,
-                open_q=open_q,
-                closed_q=closed_q,
-                squeeze_margin=hold_squeeze_margin,
-            )
-            if hold_openness is not None:
-                max_hold_openness = spec.get("max_hold_gripper_openness", spec.get("closed_openness"))
-                if max_hold_openness is not None:
-                    hold_openness = min(float(hold_openness), float(max_hold_openness))
-                state["hold_gripper_openness"] = float(hold_openness)
-                self._remember_gripper_hold_openness(
-                    task=task,
-                    robot_name=robot_name,
-                    openness=float(hold_openness),
-                )
-
         if detected_clamp:
             state["close_contact_stable_steps"] = int(state.get("close_contact_stable_steps", 0)) + 1
+            if close_elapsed_steps >= min_steps and state.get("hold_gripper_openness") is None:
+                hold_openness = self._gripper_openness_from_q(
+                    gripper_q=gripper_q,
+                    open_q=open_q,
+                    closed_q=closed_q,
+                    squeeze_margin=hold_squeeze_margin,
+                )
+                if hold_openness is not None:
+                    max_hold_openness = spec.get("max_hold_gripper_openness", spec.get("closed_openness"))
+                    if max_hold_openness is not None:
+                        hold_openness = min(float(hold_openness), float(max_hold_openness))
+                    state["hold_gripper_openness"] = float(hold_openness)
         else:
             state["close_contact_stable_steps"] = 0
+            state.pop("hold_gripper_openness", None)
 
         motion_ready = True
         motion_detail: dict[str, Any] = {"checked": False}
@@ -2357,6 +2352,15 @@ class UR5ePlumbersBlockAtomicSkillAdapter:
             and motion_ready
             and motion_stable_ready
         )
+        if ready:
+            hold_openness = state.get("hold_gripper_openness")
+            if hold_openness is not None:
+                self._remember_gripper_hold_openness(
+                    task=task,
+                    robot_name=robot_name,
+                    openness=float(hold_openness),
+                )
+
         reason = (
             "contact"
             if contact_candidate

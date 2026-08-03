@@ -130,6 +130,66 @@ def test_transport_completion_requires_carried_object_pose_when_enabled():
     assert completions[0]['detail']['target_object_pose_complete'] is True
 
 
+def test_close_until_contact_releases_transient_hold_before_latching(monkeypatch):
+    adapter = UR5ePlumbersBlockAtomicSkillAdapter({})
+    contact_sequence = iter([True, False, True, True])
+    remembered_openness = []
+
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **kwargs: 0.45)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **kwargs: (0.0, 0.8))
+    monkeypatch.setattr(
+        adapter,
+        '_grasp_contact_ready',
+        lambda **kwargs: (next(contact_sequence), {'contact_checked': True}),
+    )
+    monkeypatch.setattr(
+        adapter,
+        '_remember_gripper_hold_openness',
+        lambda **kwargs: remembered_openness.append(kwargs['openness']),
+    )
+
+    state = {}
+    spec = {
+        'close_until_contact_min_steps': 0,
+        'close_contact_stable_steps': 2,
+        'use_joint_stall_for_close_until_contact': False,
+        'close_contact_hold_squeeze_margin': 0.04,
+        'closed_openness': 0.0,
+    }
+
+    def close_step(step):
+        return adapter._close_until_contact_ready(
+            state=state,
+            task=SimpleNamespace(),
+            robot_name='franka_left',
+            spec=spec,
+            tracked_objects={},
+            close_elapsed_steps=step,
+            gripper_openness=0.0,
+        )
+
+    ready, _ = close_step(1)
+    assert ready is False
+    assert 'hold_gripper_openness' in state
+    assert remembered_openness == []
+
+    ready, _ = close_step(2)
+    assert ready is False
+    assert state['close_contact_stable_steps'] == 0
+    assert 'hold_gripper_openness' not in state
+    assert remembered_openness == []
+
+    ready, _ = close_step(3)
+    assert ready is False
+    assert 'hold_gripper_openness' in state
+    assert remembered_openness == []
+
+    ready, _ = close_step(4)
+    assert ready is True
+    assert state['close_contact_stable_steps'] == 2
+    assert state['hold_gripper_openness'] == pytest.approx(remembered_openness[-1])
+
+
 def test_task_specs_are_discoverable():
     recipes = list_task_recipes()
     assert 'screw_fastening' in recipes
