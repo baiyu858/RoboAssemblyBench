@@ -47,11 +47,11 @@ test -d roboassemblybench/assets/Fabrica
 test -d roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
 ```
 
-不要只下载 `constraint_detection/` 或 `constraint_integration/` 子目录；
+不要只下载 `toolkits/constraint_checking/` 或旧兼容目录；
 应完整克隆本分支并按后文恢复资产：
 
 ```bash
-git clone -b feature/constraint-integration-v1 \
+git clone -b feature/contact-precision-v2 \
   https://github.com/baiyu858/RoboAssemblyBench.git
 cd RoboAssemblyBench
 ```
@@ -91,9 +91,9 @@ stride 8 虽具有更高时间分辨率，但会显著增加该时序敏感任�
 - 约束集成测试 39 项通过，原装配回归测试 12 项通过。
 
 详细架构和字段说明见
-[`constraint_integration/README.md`](constraint_integration/README.md)，碰撞模型
+[`toolkits/constraint_checking/README.md`](toolkits/constraint_checking/README.md)，碰撞模型
 校准过程见
-[`constraint_integration/DYNAMIC_CONTACT_VALIDATION.md`](constraint_integration/DYNAMIC_CONTACT_VALIDATION.md)。
+[`toolkits/constraint_checking/docs/dynamic_contact_validation.md`](toolkits/constraint_checking/docs/dynamic_contact_validation.md)。
 
 ---
 
