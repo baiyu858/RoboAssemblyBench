@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from constraint_integration.precheck_pipeline import PassivePrecheckEpisodeHook
+from toolkits.constraint_checking.integration.precheck_pipeline import PassivePrecheckEpisodeHook
 
 
 class FakeStageChecker:

@@ -23,8 +23,8 @@ from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_frank
 from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_PROFILE, list_scene_profiles
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes, load_task_recipe
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
-from constraint_integration.pipeline import RuntimeConstraintEpisodeHook
-from constraint_integration.precheck_pipeline import PassivePrecheckEpisodeHook
+from toolkits.constraint_checking.integration.pipeline import RuntimeConstraintEpisodeHook
+from toolkits.constraint_checking.integration.precheck_pipeline import PassivePrecheckEpisodeHook
 
 
 def _to_jsonable(value: Any):

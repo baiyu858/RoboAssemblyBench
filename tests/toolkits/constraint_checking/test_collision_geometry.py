@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from constraint_detection.src.collision import CollisionDetector, _closest_point_box
+from toolkits.constraint_checking.detector.collision import CollisionDetector, _closest_point_box
 
 
 class FakeXform:

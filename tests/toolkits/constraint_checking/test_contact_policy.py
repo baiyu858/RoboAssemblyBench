@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from constraint_integration.contact_policy import AssemblyContactPolicy
+from toolkits.constraint_checking.integration.contact_policy import AssemblyContactPolicy
 
 
 def _event(entity_a, entity_b, distance=-0.001):

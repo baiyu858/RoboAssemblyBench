@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from constraint_integration import runtime_monitor
-from constraint_integration.runtime_monitor import PairFilter, RuntimeConstraintConfig, RuntimeConstraintMonitor
+from toolkits.constraint_checking.integration import runtime_monitor
+from toolkits.constraint_checking.integration.runtime_monitor import PairFilter, RuntimeConstraintConfig, RuntimeConstraintMonitor
 
 
 class FakeXform:

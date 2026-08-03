@@ -1,4 +1,4 @@
-from constraint_integration.models import UR5E_ROBOTIQ_MODEL, get_robot_collision_model
+from toolkits.constraint_checking.integration.models import UR5E_ROBOTIQ_MODEL, get_robot_collision_model
 
 
 def test_ur5e_model_has_expected_capsules_and_threshold():

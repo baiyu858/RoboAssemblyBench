@@ -1,4 +1,4 @@
-from constraint_integration.sequence_precheck import AssemblySequencePrechecker
+from toolkits.constraint_checking.integration.sequence_precheck import AssemblySequencePrechecker
 
 
 ROBOTS = ["left", "right"]

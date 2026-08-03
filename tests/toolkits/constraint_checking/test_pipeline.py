@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from constraint_integration.pipeline import RuntimeConstraintEpisodeHook
+from toolkits.constraint_checking.integration.pipeline import RuntimeConstraintEpisodeHook
 
 
 class FakeMonitor:

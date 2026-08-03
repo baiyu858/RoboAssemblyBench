@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from constraint_integration.stage_precheck import StageTrajectoryPrechecker
+from toolkits.constraint_checking.integration.stage_precheck import StageTrajectoryPrechecker
 
 
 class JointSubset:
