@@ -39,7 +39,7 @@ class PrecheckReport:
 class LinearPosePrechecker:
     """Precheck a straight-line EE pose path with caller-provided IK/FK.
 
-    The existing constraint_detection prechecker is tied to Franka Lula config.
+    The standalone detector prechecker is tied to Franka Lula config.
     This adapter is robot-agnostic: the UR5e skill layer can pass its own IK and
     FK functions later, after the baseline task is confirmed working.
     """

@@ -47,7 +47,7 @@ test -d roboassemblybench/assets/Fabrica
 test -d roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001
 ```
 
-不要只下载 `toolkits/constraint_checking/` 或旧兼容目录；
+不要只下载 `toolkits/constraint_checking/` 子目录；
 应完整克隆本分支并按后文恢复资产：
 
 ```bash

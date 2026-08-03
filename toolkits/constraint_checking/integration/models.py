@@ -1,6 +1,6 @@
 """Robot collision models used by the isolated constraint bridge.
 
-The existing constraint_detection demo hard-codes Franka link names.  The main
+The standalone detector demo hard-codes Franka link names.  The main
 RoboAssemblyBench reproduction task uses UR5e + Robotiq, so this module keeps
 robot geometry in data instead of inside the detector implementation.
 """
@@ -46,7 +46,7 @@ class RobotCollisionModel:
 
     @property
     def detector_capsules(self) -> list[tuple[str, str, float]]:
-        """Format expected by constraint_detection.src.collision.CollisionDetector."""
+        """Format expected by the toolkit CollisionDetector."""
 
         return [(item.parent, item.child, float(item.radius)) for item in self.capsules]
 

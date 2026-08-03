@@ -155,7 +155,7 @@ needs them. Importing the package in ordinary unit tests does not initialize Isa
 assembly runtime path, so OpenVLA, Transformers, and their model weights are not required for
 the three assembly checks.
 
-## Legacy Compatibility
+## Canonical Imports
 
 New code should use:
 
@@ -164,14 +164,8 @@ from toolkits.constraint_checking.integration.pipeline import RuntimeConstraintE
 from toolkits.constraint_checking.detector.collision import CollisionDetector
 ```
 
-The legacy paths remain as thin forwarding modules for existing users:
-
-```python
-from constraint_integration.pipeline import RuntimeConstraintEpisodeHook
-from constraint_detection.src.collision import CollisionDetector
-```
-
-There is only one implementation. Legacy modules and Demo entries forward to
-`toolkits/constraint_checking` and are retained temporarily for migration compatibility.
+Constraint implementation, integration adapters, documentation, and Demos all live under
+`toolkits/constraint_checking`. Root-level compatibility packages are intentionally not
+retained so the toolkit can be merged into the main branch as one self-contained module.
 
 See `docs/dynamic_contact_validation.md` for the V2 dynamic-contact validation record.
