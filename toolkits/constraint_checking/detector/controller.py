@@ -9,7 +9,9 @@ Usage per VLA prediction:
 import numpy as np
 
 try:
-    from isaacsim.robot.manipulators.examples.franka.controllers import RMPFlowController
+    from isaacsim.robot.manipulators.examples.franka.controllers import (
+        RMPFlowController,
+    )
 except ImportError:
     from omni.isaac.franka.controllers import RMPFlowController
 
@@ -21,20 +23,24 @@ except ImportError:
     except ImportError:
         from omni.isaac.core.prims import XFormPrim as _XFormPrim
 
+
 class FrankaEEController:
     """OpenVLA Bridge action: [dx,dy,dz, droll,dpitch,dyaw, gripper] in meters/rad."""
 
-    def __init__(self, franka,
-                 ee_prim_path: str = "/World/Franka/panda_hand",
-                 pos_scale: float = 1.0,
-                 max_step: float = 0.05,
-                 precheck=None):
+    def __init__(
+        self,
+        franka,
+        ee_prim_path: str = '/World/Franka/panda_hand',
+        pos_scale: float = 1.0,
+        max_step: float = 0.05,
+        precheck=None,
+    ):
         self.franka = franka
         self.pos_scale = pos_scale
         self.max_step = max_step  # safety clamp per VLA step (meters)
         self.precheck = precheck  # optional TrajectoryPrechecker
         self.rmpflow = RMPFlowController(
-            name="franka_rmpflow",
+            name='franka_rmpflow',
             robot_articulation=franka,
         )
         self.ee_prim = _XFormPrim(ee_prim_path)
@@ -72,11 +78,10 @@ class FrankaEEController:
         target_pos = cur_pos + delta
 
         if self.precheck is not None:
-            report = self.precheck.check_trajectory(target_pos, cur_orn,
-                                                    step=step)
+            report = self.precheck.check_trajectory(target_pos, cur_orn, step=step)
             self.last_precheck = report
             if not report.feasible:
-                print(f"[controller] precheck rejected: {report}")
+                print(f'[controller] precheck rejected: {report}')
                 return False
 
         self._target_pos = target_pos

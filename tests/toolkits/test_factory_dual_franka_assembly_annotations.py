@@ -1,5 +1,7 @@
 from toolkits.factory_dual_franka_assembly.convert_dataset import build_dataset_entries
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_episode
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_episode,
+)
 from toolkits.factory_dual_franka_assembly.task_specs import (
     list_task_annotations,
     load_task_annotation,
@@ -25,16 +27,16 @@ def test_annotation_loader_exposes_description_and_roles():
     assert annotation['metadata']['authoring_stack'] == 'RoboFactory/RoboTwin-style'
     assert annotation['metadata']['object_roles']['assembly_part']['role'] == 'workpiece'
     assert annotation['metadata']['target_roles']['screw_insert']['object'] == 'screw'
-    assert 'fasten the screw' in annotation['task_description']
+    assert 'insert the screw' in annotation['task_description']
 
 
 def test_recipe_loader_merges_annotation_metadata():
     recipe_spec = load_task_recipe('peg_insertion', scene_profile='taoyuan_tabletop')
     assert recipe_spec['annotation_name'] == 'peg_insertion'
-    assert recipe_spec['task_description'].startswith('Two Franka arms align the housing')
-    assert 'dual-arm' in recipe_spec['metadata']['tags']
-    assert recipe_spec['annotation_target_roles']['peg_insert']['object'] == 'peg'
-    assert recipe_spec['annotation_phase_notes'][0]['name'] == 'left_approach_housing'
+    assert recipe_spec['task_description'].startswith('A square socket block')
+    assert 'physical-grasp' in recipe_spec['metadata']['tags']
+    assert recipe_spec['annotation_target_roles']['right_insert_robot']['object'] == 'peg'
+    assert recipe_spec['annotation_phase_notes'][0]['name'] == 'right_approach_peg'
 
 
 def test_scene_builder_uses_annotation_targets():
@@ -76,7 +78,9 @@ def test_dataset_entries_preserve_annotation_metadata():
                 'annotation_object_roles': {'bracket': {'role': 'workpiece'}},
                 'annotation_target_roles': {'latch_insert': {'object': 'latch'}},
                 'annotation_phase_notes': [{'name': 'left_approach_bracket'}],
-                'target_annotations': {'latch_insert': {'object': 'latch', 'pose': {'position': [0, 0, 0], 'orientation': [1, 0, 0, 0]}}},
+                'target_annotations': {
+                    'latch_insert': {'object': 'latch', 'pose': {'position': [0, 0, 0], 'orientation': [1, 0, 0, 0]}}
+                },
                 'phase_annotations': [{'name': 'left_approach_bracket'}],
                 'metrics': {'success': True},
                 'steps': [

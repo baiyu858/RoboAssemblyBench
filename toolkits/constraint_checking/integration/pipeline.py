@@ -11,10 +11,10 @@ class _StaticReportMonitor:
 
     def observe(self, task) -> dict:
         return {
-            "checked": False,
-            "step": int(getattr(task, "step_counter", 0)),
-            "violations": [],
-            "monitor_error": self.report.get("monitor_error", []),
+            'checked': False,
+            'step': int(getattr(task, 'step_counter', 0)),
+            'violations': [],
+            'monitor_error': self.report.get('monitor_error', []),
         }
 
     def finalize(self) -> dict:
@@ -24,7 +24,7 @@ class _StaticReportMonitor:
 class RuntimeConstraintEpisodeHook:
     """Own exactly one monitor instance per active episode."""
 
-    metric_key = "runtime_constraint_monitor"
+    metric_key = 'runtime_constraint_monitor'
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class RuntimeConstraintEpisodeHook:
         try:
             return monitor.observe(task)
         except Exception as exc:
-            self._replace_with_failure_report(monitor, "observe", exc, task=task)
+            self._replace_with_failure_report(monitor, 'observe', exc, task=task)
             return self._monitor.observe(task)
 
     def attach_metrics(self, metrics: dict) -> dict:
@@ -69,7 +69,7 @@ class RuntimeConstraintEpisodeHook:
         try:
             return monitor.finalize()
         except Exception as exc:
-            self._replace_with_failure_report(monitor, "finalize", exc)
+            self._replace_with_failure_report(monitor, 'finalize', exc)
             return self._monitor.finalize()
 
     def reset_episode(self) -> None:
@@ -81,11 +81,15 @@ class RuntimeConstraintEpisodeHook:
         try:
             self._monitor = self._monitor_factory() if self._monitor_factory else self._build_monitor()
         except Exception as exc:
-            self._monitor = _StaticReportMonitor(self._failure_report("initialize", exc))
+            self._monitor = _StaticReportMonitor(self._failure_report('initialize', exc))
         return self._monitor
 
     def _build_monitor(self):
-        from .runtime_monitor import PairFilter, RuntimeConstraintConfig, RuntimeConstraintMonitor
+        from .runtime_monitor import (
+            PairFilter,
+            RuntimeConstraintConfig,
+            RuntimeConstraintMonitor,
+        )
 
         return RuntimeConstraintMonitor(
             RuntimeConstraintConfig(
@@ -102,15 +106,15 @@ class RuntimeConstraintEpisodeHook:
             report = dict(monitor.finalize())
         except Exception:
             report = {}
-        errors = list(report.get("monitor_error") or [])
+        errors = list(report.get('monitor_error') or [])
         errors.append(self._error(stage, exc, task=task))
         report.update(
             {
-                "enabled": True,
-                "checks": int(report.get("checks", 0)),
-                "violation_total": int(report.get("violation_total", 0)),
-                "events": list(report.get("events") or []),
-                "monitor_error": errors,
+                'enabled': True,
+                'checks': int(report.get('checks', 0)),
+                'violation_total': int(report.get('violation_total', 0)),
+                'events': list(report.get('events') or []),
+                'monitor_error': errors,
             }
         )
         self._monitor = _StaticReportMonitor(report)
@@ -118,18 +122,18 @@ class RuntimeConstraintEpisodeHook:
     @classmethod
     def _failure_report(cls, stage: str, exc: Exception) -> dict:
         return {
-            "enabled": True,
-            "checks": 0,
-            "violation_total": 0,
-            "events": [],
-            "monitor_error": [cls._error(stage, exc)],
+            'enabled': True,
+            'checks': 0,
+            'violation_total': 0,
+            'events': [],
+            'monitor_error': [cls._error(stage, exc)],
         }
 
     @staticmethod
     def _error(stage: str, exc: Exception, *, task=None) -> dict:
         return {
-            "stage": str(stage),
-            "step": None if task is None else int(getattr(task, "step_counter", 0)),
-            "type": type(exc).__name__,
-            "message": str(exc),
+            'stage': str(stage),
+            'step': None if task is None else int(getattr(task, 'step_counter', 0)),
+            'type': type(exc).__name__,
+            'message': str(exc),
         }

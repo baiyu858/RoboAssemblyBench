@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import time
+from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 
@@ -25,16 +25,16 @@ class SequencePrecheckReport:
 
     def to_dict(self) -> dict:
         return {
-            "enabled": True,
-            "mode": "passive",
-            "feasible": bool(self.feasible),
-            "phase_count": int(self.phase_count),
-            "normalized_action_count": len(self.actions),
-            "actions": list(self.actions),
-            "errors": list(self.errors),
-            "warnings": list(self.warnings),
-            "final_holding": dict(self.final_holding),
-            "check_seconds": float(self.check_seconds),
+            'enabled': True,
+            'mode': 'passive',
+            'feasible': bool(self.feasible),
+            'phase_count': int(self.phase_count),
+            'normalized_action_count': len(self.actions),
+            'actions': list(self.actions),
+            'errors': list(self.errors),
+            'warnings': list(self.warnings),
+            'final_holding': dict(self.final_holding),
+            'check_seconds': float(self.check_seconds),
         }
 
 
@@ -59,59 +59,57 @@ class AssemblySequencePrechecker:
         warnings: list[dict] = []
 
         for index, phase in enumerate(phases):
-            phase_name = str(phase.get("name") or f"phase_{index}")
+            phase_name = str(phase.get('name') or f'phase_{index}')
             local_skills = self._local_skills(phase)
             for skill in local_skills:
-                robot = self._text(skill.get("robot"))
-                object_name = self._text(skill.get("object"))
+                robot = self._text(skill.get('robot'))
+                object_name = self._text(skill.get('object'))
                 action = {
-                    "phase_index": index,
-                    "phase": phase_name,
-                    "kind": "skill",
-                    "skill": self._text(skill.get("name")),
-                    "robot": robot,
-                    "object": object_name,
+                    'phase_index': index,
+                    'phase': phase_name,
+                    'kind': 'skill',
+                    'skill': self._text(skill.get('name')),
+                    'robot': robot,
+                    'object': object_name,
                 }
                 actions.append(action)
-                self._validate_reference(
-                    action, known_robots, known_objects, errors
-                )
+                self._validate_reference(action, known_robots, known_objects, errors)
                 if robot and object_name:
                     owner = held_by.get(object_name)
                     if owner and owner != robot:
                         errors.append(
                             self._issue(
                                 action,
-                                "object_owned_by_other_robot",
-                                f"{object_name} is held by {owner}, but {robot} is scheduled to manipulate it.",
+                                'object_owned_by_other_robot',
+                                f'{object_name} is held by {owner}, but {robot} is scheduled to manipulate it.',
                             )
                         )
-                    skill_name = str(skill.get("name") or "").lower()
-                    if ("move_part" in skill_name or "hold_part" in skill_name) and owner != robot:
+                    skill_name = str(skill.get('name') or '').lower()
+                    if ('move_part' in skill_name or 'hold_part' in skill_name) and owner != robot:
                         errors.append(
                             self._issue(
                                 action,
-                                "payload_not_held",
-                                f"{robot} is scheduled to carry {object_name} before attaching it.",
+                                'payload_not_held',
+                                f'{robot} is scheduled to carry {object_name} before attaching it.',
                             )
                         )
 
-            for attach in _as_list(phase.get("attach")):
+            for attach in _as_list(phase.get('attach')):
                 if not isinstance(attach, dict):
                     continue
-                robot = self._text(attach.get("robot"))
-                object_name = self._text(attach.get("object"))
+                robot = self._text(attach.get('robot'))
+                object_name = self._text(attach.get('object'))
                 action = {
-                    "phase_index": index,
-                    "phase": phase_name,
-                    "kind": "attach",
-                    "robot": robot,
-                    "object": object_name,
+                    'phase_index': index,
+                    'phase': phase_name,
+                    'kind': 'attach',
+                    'robot': robot,
+                    'object': object_name,
                 }
                 actions.append(action)
                 self._validate_reference(action, known_robots, known_objects, errors)
                 if not robot or not object_name:
-                    errors.append(self._issue(action, "incomplete_attach", "Attach requires robot and object."))
+                    errors.append(self._issue(action, 'incomplete_attach', 'Attach requires robot and object.'))
                     continue
                 current_payload = holding.get(robot)
                 current_owner = held_by.get(object_name)
@@ -119,8 +117,8 @@ class AssemblySequencePrechecker:
                     errors.append(
                         self._issue(
                             action,
-                            "end_effector_occupied",
-                            f"{robot} already holds {current_payload} and cannot also attach {object_name}.",
+                            'end_effector_occupied',
+                            f'{robot} already holds {current_payload} and cannot also attach {object_name}.',
                         )
                     )
                     continue
@@ -128,8 +126,8 @@ class AssemblySequencePrechecker:
                     errors.append(
                         self._issue(
                             action,
-                            "double_grasp",
-                            f"{object_name} is already held by {current_owner}; {robot} cannot attach it.",
+                            'double_grasp',
+                            f'{object_name} is already held by {current_owner}; {robot} cannot attach it.',
                         )
                     )
                     continue
@@ -137,35 +135,41 @@ class AssemblySequencePrechecker:
                 held_by[object_name] = robot
 
             released_objects = set()
-            for detach in _as_list(phase.get("detach")):
-                object_name = self._text(detach.get("object")) if isinstance(detach, dict) else self._text(detach)
-                robot = self._text(detach.get("robot")) if isinstance(detach, dict) else None
+            for detach in _as_list(phase.get('detach')):
+                object_name = self._text(detach.get('object')) if isinstance(detach, dict) else self._text(detach)
+                robot = self._text(detach.get('robot')) if isinstance(detach, dict) else None
                 released_objects.add(object_name)
-                self._release(
-                    index, phase_name, object_name, robot, holding, held_by, actions, errors, warnings
-                )
+                self._release(index, phase_name, object_name, robot, holding, held_by, actions, errors, warnings)
 
-            for lock in _as_list(phase.get("lock")):
+            for lock in _as_list(phase.get('lock')):
                 if not isinstance(lock, dict):
                     continue
-                object_name = self._text(lock.get("object"))
+                object_name = self._text(lock.get('object'))
                 released_objects.add(object_name)
                 self._release(
-                    index, phase_name, object_name, None, holding, held_by, actions, errors, warnings,
-                    kind="place",
+                    index,
+                    phase_name,
+                    object_name,
+                    None,
+                    holding,
+                    held_by,
+                    actions,
+                    errors,
+                    warnings,
+                    kind='place',
                 )
 
-            for robot, command in (phase.get("gripper_commands") or {}).items():
-                if str(command).lower() != "open":
+            for robot, command in (phase.get('gripper_commands') or {}).items():
+                if str(command).lower() != 'open':
                     continue
                 payload = holding.get(str(robot))
                 if payload and payload not in released_objects:
                     action = {
-                        "phase_index": index,
-                        "phase": phase_name,
-                        "kind": "release",
-                        "robot": str(robot),
-                        "object": payload,
+                        'phase_index': index,
+                        'phase': phase_name,
+                        'kind': 'release',
+                        'robot': str(robot),
+                        'object': payload,
                     }
                     actions.append(action)
                     holding[str(robot)] = None
@@ -184,10 +188,10 @@ class AssemblySequencePrechecker:
     @staticmethod
     def _local_skills(phase: dict) -> list[dict]:
         result = []
-        singular = phase.get("local_skill")
+        singular = phase.get('local_skill')
         if isinstance(singular, dict):
             result.append(singular)
-        plural = phase.get("local_skills")
+        plural = phase.get('local_skills')
         if isinstance(plural, dict):
             result.extend(item for item in plural.values() if isinstance(item, dict))
         elif isinstance(plural, list):
@@ -196,13 +200,13 @@ class AssemblySequencePrechecker:
 
     @staticmethod
     def _validate_reference(action, known_robots, known_objects, errors) -> None:
-        robot = action.get("robot")
-        object_name = action.get("object")
+        robot = action.get('robot')
+        object_name = action.get('object')
         if robot and known_robots and robot not in known_robots:
-            errors.append(AssemblySequencePrechecker._issue(action, "unknown_robot", f"Unknown robot: {robot}."))
+            errors.append(AssemblySequencePrechecker._issue(action, 'unknown_robot', f'Unknown robot: {robot}.'))
         if object_name and known_objects and object_name not in known_objects:
             errors.append(
-                AssemblySequencePrechecker._issue(action, "unknown_object", f"Unknown object: {object_name}.")
+                AssemblySequencePrechecker._issue(action, 'unknown_object', f'Unknown object: {object_name}.')
             )
 
     @staticmethod
@@ -217,26 +221,26 @@ class AssemblySequencePrechecker:
         errors,
         warnings,
         *,
-        kind="detach",
+        kind='detach',
     ) -> None:
         action = {
-            "phase_index": index,
-            "phase": phase_name,
-            "kind": kind,
-            "robot": requested_robot,
-            "object": object_name,
+            'phase_index': index,
+            'phase': phase_name,
+            'kind': kind,
+            'robot': requested_robot,
+            'object': object_name,
         }
         actions.append(action)
         if not object_name:
-            errors.append(AssemblySequencePrechecker._issue(action, "incomplete_release", "Release requires object."))
+            errors.append(AssemblySequencePrechecker._issue(action, 'incomplete_release', 'Release requires object.'))
             return
         owner = held_by.get(object_name)
         if requested_robot and owner and owner != requested_robot:
             errors.append(
                 AssemblySequencePrechecker._issue(
                     action,
-                    "release_by_non_owner",
-                    f"{requested_robot} cannot release {object_name}, which is held by {owner}.",
+                    'release_by_non_owner',
+                    f'{requested_robot} cannot release {object_name}, which is held by {owner}.',
                 )
             )
             return
@@ -244,22 +248,22 @@ class AssemblySequencePrechecker:
             warnings.append(
                 AssemblySequencePrechecker._issue(
                     action,
-                    "release_without_attach",
-                    f"{object_name} is placed or detached without a preceding attach.",
+                    'release_without_attach',
+                    f'{object_name} is placed or detached without a preceding attach.',
                 )
             )
             return
         holding[owner] = None
         held_by.pop(object_name, None)
-        action["robot"] = owner
+        action['robot'] = owner
 
     @staticmethod
     def _issue(action: dict, code: str, message: str) -> dict:
         return {
-            "phase_index": int(action["phase_index"]),
-            "phase": str(action["phase"]),
-            "code": str(code),
-            "message": str(message),
+            'phase_index': int(action['phase_index']),
+            'phase': str(action['phase']),
+            'code': str(code),
+            'message': str(message),
         }
 
     @staticmethod

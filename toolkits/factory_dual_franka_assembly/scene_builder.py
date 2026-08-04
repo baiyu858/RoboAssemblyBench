@@ -13,23 +13,25 @@ from internutopia_extension.configs.objects import (
     UsdObjCfg,
     VisualCubeCfg,
 )
+from internutopia_extension.configs.robots.franka import FrankaRobotCfg
+from internutopia_extension.configs.robots.franka import arm_ik_cfg as franka_arm_ik_cfg
 from internutopia_extension.configs.robots.franka import (
-    FrankaRobotCfg,
-    arm_ik_cfg as franka_arm_ik_cfg,
     arm_joint_cfg as franka_arm_joint_cfg,
+)
+from internutopia_extension.configs.robots.franka import (
     gripper_cfg as franka_gripper_cfg,
 )
+from internutopia_extension.configs.robots.ur5e import UR5eRobotCfg
+from internutopia_extension.configs.robots.ur5e import arm_ik_cfg as ur5e_arm_ik_cfg
 from internutopia_extension.configs.robots.ur5e import (
-    UR5eRobotCfg,
-    arm_ik_cfg as ur5e_arm_ik_cfg,
     arm_joint_cfg as ur5e_arm_joint_cfg,
-    gripper_cfg as ur5e_gripper_cfg,
 )
+from internutopia_extension.configs.robots.ur5e import gripper_cfg as ur5e_gripper_cfg
 from internutopia_extension.configs.sensors import RepCameraCfg
 from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task import (
     FactoryDualFrankaAssemblyTaskCfg,
 )
-
+from roboassemblybench.core.domain_randomization import apply_domain_randomization
 from toolkits.factory_dual_franka_assembly.planner_primitives import (
     compose_pose,
     euler_xyz_intrinsic_to_quat,
@@ -151,13 +153,17 @@ def _build_camera_cfg(camera_spec: dict) -> RepCameraCfg:
         depth=bool(normalized_spec.get('depth', False)),
         pointcloud=bool(normalized_spec.get('pointcloud', False)),
         camera_params=bool(normalized_spec.get('camera_params', False)),
-        position=None if normalized_spec.get('position') is None else tuple(float(value) for value in normalized_spec['position']),
-        translation=None if normalized_spec.get('translation') is None else tuple(float(value) for value in normalized_spec['translation']),
+        position=None
+        if normalized_spec.get('position') is None
+        else tuple(float(value) for value in normalized_spec['position']),
+        translation=None
+        if normalized_spec.get('translation') is None
+        else tuple(float(value) for value in normalized_spec['translation']),
         orientation=orientation,
-        look_at=None if normalized_spec.get('look_at') is None else tuple(float(value) for value in normalized_spec['look_at']),
-        focal_length=None
-        if normalized_spec.get('focal_length') is None
-        else float(normalized_spec['focal_length']),
+        look_at=None
+        if normalized_spec.get('look_at') is None
+        else tuple(float(value) for value in normalized_spec['look_at']),
+        focal_length=None if normalized_spec.get('focal_length') is None else float(normalized_spec['focal_length']),
         horizontal_aperture=None
         if normalized_spec.get('horizontal_aperture') is None
         else float(normalized_spec['horizontal_aperture']),
@@ -188,6 +194,12 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
             static_friction=object_spec.get('static_friction'),
             dynamic_friction=object_spec.get('dynamic_friction'),
             restitution=object_spec.get('restitution'),
+            linear_damping=object_spec.get('linear_damping'),
+            angular_damping=object_spec.get('angular_damping'),
+            sleep_threshold=object_spec.get('sleep_threshold'),
+            stabilization_threshold=object_spec.get('stabilization_threshold'),
+            solver_position_iteration_count=object_spec.get('solver_position_iteration_count'),
+            solver_velocity_iteration_count=object_spec.get('solver_velocity_iteration_count'),
             **common_kwargs,
         )
     if kind == 'dynamic_compound_cuboid':
@@ -235,6 +247,10 @@ def _sample_objects(recipe_spec: dict, rng: random.Random, workspace_offset: np.
     object_metadata = []
     for object_spec in recipe_spec['objects']:
         position = sample_position(object_spec['position'], object_spec.get('random_xy'), rng)
+        spawn_clearance = float(object_spec.get('spawn_clearance', 0.0))
+        if not np.isfinite(spawn_clearance) or spawn_clearance < 0.0:
+            raise ValueError(f"Object {object_spec['name']!r} spawn_clearance must be a finite non-negative value.")
+        position[2] += spawn_clearance
         if object_spec.get('apply_workspace_offset', True):
             position = position + workspace_offset
         orientation = _resolve_orientation(object_spec)
@@ -252,6 +268,7 @@ def _sample_objects(recipe_spec: dict, rng: random.Random, workspace_offset: np.
                 **copy.deepcopy(object_spec),
                 'sampled_position': position.tolist(),
                 'sampled_orientation': orientation.tolist(),
+                'applied_spawn_clearance': spawn_clearance,
             }
         )
     return object_cfgs, object_states, tuple(tracked_object_names), object_metadata
@@ -292,18 +309,32 @@ def _build_target_poses(recipe_spec: dict, object_states: dict, workspace_offset
 
 def _build_annotation_target_metadata(recipe_spec: dict, target_poses: dict) -> dict:
     target_role_map = recipe_spec.get('annotation_target_roles', {})
+    target_spec_map = {
+        str(entry.get('name')): entry
+        for entry in recipe_spec.get('targets', [])
+        if isinstance(entry, dict) and entry.get('name') is not None
+    }
     target_annotations = {}
     for target_name, pose in target_poses.items():
         target_annotation = copy.deepcopy(target_role_map.get(target_name, {}))
         target_annotation.setdefault('name', target_name)
         target_annotation['pose'] = copy.deepcopy(pose)
+        target_spec = target_spec_map.get(target_name, {})
+        for key in ('domain_randomization_group', 'domain_randomization_translation'):
+            if key in target_spec:
+                target_annotation[key] = copy.deepcopy(target_spec[key])
         target_annotations[target_name] = target_annotation
     return target_annotations
 
 
 def _build_annotation_phase_metadata(recipe_spec: dict) -> list[dict]:
-    note_map = {entry.get('name'): entry for entry in recipe_spec.get('annotation_phase_notes', []) if entry.get('name')}
-    return [copy.deepcopy(note_map.get(phase_spec['name'], {'name': phase_spec['name']})) for phase_spec in recipe_spec.get('phases', [])]
+    note_map = {
+        entry.get('name'): entry for entry in recipe_spec.get('annotation_phase_notes', []) if entry.get('name')
+    }
+    return [
+        copy.deepcopy(note_map.get(phase_spec['name'], {'name': phase_spec['name']}))
+        for phase_spec in recipe_spec.get('phases', [])
+    ]
 
 
 def _normalize_phase_specs(phase_specs: Iterable[dict]) -> list[dict]:
@@ -317,12 +348,21 @@ def _normalize_success_criteria(success_criteria: Iterable[dict]) -> list[dict]:
 def build_dual_franka_assembly_episode(
     recipe: str,
     seed: int,
+    layout_seed: int | None = None,
     episode_idx: int = 0,
     spec_path: str | None = None,
     scene_profile: str | None = None,
     attach_runtime_cameras: bool = False,
+    domain_randomization_enabled: bool | None = None,
+    policy_evaluation_mode: bool = False,
 ) -> FactoryDualFrankaAssemblyTaskCfg:
     recipe_spec = load_task_recipe(spec_path or recipe, scene_profile=scene_profile)
+    resolved_layout_seed = int(seed if layout_seed is None else layout_seed)
+    recipe_spec, domain_randomization = apply_domain_randomization(
+        recipe_spec,
+        seed=resolved_layout_seed,
+        enabled_override=domain_randomization_enabled,
+    )
     rng = random.Random(seed)
     workspace_offset = np.asarray(recipe_spec.get('workspace_offset', [0.0, 0.0, 0.0]), dtype=float)
     robots, robot_names = _build_robot_cfgs(recipe_spec)
@@ -336,9 +376,7 @@ def build_dual_franka_assembly_episode(
         )
         owner_name = normalized_camera_spec['owner']
         if owner_name not in robot_cfg_map:
-            raise KeyError(
-                f"Camera {normalized_camera_spec['name']!r} references unknown robot owner {owner_name!r}."
-            )
+            raise KeyError(f"Camera {normalized_camera_spec['name']!r} references unknown robot owner {owner_name!r}.")
         if normalized_camera_spec.get('attach_runtime_sensor', False):
             robot_cfg_map[owner_name].sensors.append(_build_camera_cfg(normalized_camera_spec))
         camera_metadata.append(normalized_camera_spec)
@@ -356,7 +394,9 @@ def build_dual_franka_assembly_episode(
         prompt=recipe_spec['prompt'],
         task_description=recipe_spec.get('task_description') or recipe_spec['prompt'],
         recipe=recipe_spec['task_name'],
+        recipe_fingerprint=str(recipe_spec.get('recipe_fingerprint', '')),
         seed=seed,
+        layout_seed=resolved_layout_seed,
         episode_idx=episode_idx,
         max_steps=int(recipe_spec.get('max_steps', 1800)),
         phase_timeout_steps=None
@@ -408,27 +448,52 @@ def build_dual_franka_assembly_episode(
         scene_profile_metadata=copy.deepcopy(recipe_spec.get('scene_profile_metadata', {})),
         scene_lights=copy.deepcopy(recipe_spec.get('scene_lights', [])),
         asset_references=copy.deepcopy(recipe_spec.get('asset_references', [])),
-        source_benchmark=str(recipe_spec.get('source_benchmark', recipe_spec.get('benchmark_family', 'factory_dual_franka_assembly'))),
+        source_benchmark=str(
+            recipe_spec.get('source_benchmark', recipe_spec.get('benchmark_family', 'factory_dual_franka_assembly'))
+        ),
         source_config_path=recipe_spec.get('source_config_path'),
         camera_metadata=copy.deepcopy(camera_metadata),
         robot_metadata=copy.deepcopy(recipe_spec.get('robots', [])),
         object_metadata=object_metadata,
+        domain_randomization=copy.deepcopy(domain_randomization),
+        policy_evaluation_mode=bool(policy_evaluation_mode),
+        policy_success_stable_steps=int(recipe_spec.get('policy_success_stable_steps', 24)),
+        policy_auto_grasp=bool(recipe_spec.get('policy_auto_grasp', True)),
+        policy_auto_grasp_closed_joint_threshold=float(
+            recipe_spec.get('policy_auto_grasp_closed_joint_threshold', 0.35)
+        ),
+        policy_auto_release_open_joint_threshold=float(
+            recipe_spec.get('policy_auto_release_open_joint_threshold', 0.12)
+        ),
     )
 
 
 def build_dual_franka_assembly_batch(
     recipe: str,
     seeds: Iterable[int],
+    layout_seeds: Iterable[int] | None = None,
     scene_profile: str | None = None,
     attach_runtime_cameras: bool = False,
+    domain_randomization_enabled: bool | None = None,
+    policy_evaluation_mode: bool = False,
 ):
+    seeds = [int(seed) for seed in seeds]
+    if layout_seeds is None:
+        resolved_layout_seeds = list(seeds)
+    else:
+        resolved_layout_seeds = [int(seed) for seed in layout_seeds]
+        if len(resolved_layout_seeds) != len(seeds):
+            raise ValueError('layout_seeds must contain exactly one entry per episode seed.')
     return [
         build_dual_franka_assembly_episode(
             recipe=recipe,
             seed=seed,
+            layout_seed=layout_seed,
             episode_idx=index,
             scene_profile=scene_profile,
             attach_runtime_cameras=attach_runtime_cameras,
+            domain_randomization_enabled=domain_randomization_enabled,
+            policy_evaluation_mode=policy_evaluation_mode,
         )
-        for index, seed in enumerate(seeds)
+        for index, (seed, layout_seed) in enumerate(zip(seeds, resolved_layout_seeds))
     ]

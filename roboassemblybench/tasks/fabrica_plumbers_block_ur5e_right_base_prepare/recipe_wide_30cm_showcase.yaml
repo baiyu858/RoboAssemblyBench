@@ -1,0 +1,41 @@
+extends: recipe.yaml
+
+task_name: fabrica_plumbers_block_ur5e_right_base_prepare_pickup_10x10cm_assembly_15cm_showcase
+max_steps: 26000
+
+collection:
+  layout_seeds:
+    - 439314
+    - 2831800
+    - 915333
+    - 4667522
+    - 1683518
+    - 2896846
+    - 310134
+    - 1875394
+    - 675630
+    - 518498
+    - 1705799
+    - 662755
+    - 1252392
+    - 2020953
+    - 741847
+    - 2170245
+
+domain_randomization:
+  enabled: false
+  seed_namespace: fabrica_plumbers_block_ur5e_right_base_prepare_position_wide_30cm_v1
+  fixed_objects:
+    - optical_board
+  groups:
+    start_parts:
+      translation:
+        x: [-0.15, -0.05]
+        y: [0.05, 0.15]
+        z: [0.0, 0.0]
+    assembly_base:
+      translation:
+        x: [-0.075, 0.075]
+        y: [-0.075, 0.075]
+        z: [0.0, 0.0]
+      objects: []

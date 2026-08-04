@@ -1,0 +1,17 @@
+extends: _fabrica_canonical_ur5e.yaml
+task_name: fabrica_stool_circular_ur5e_staged
+prompt: Assemble the canonical Fabrica circular stool with staged UR5e pick, transport, insertion, release, and retreat skills.
+
+fabrica_canonical:
+  assembly: stool_circular
+  pickup_origin: [0.35, -0.48, 0.0125]
+  assembly_origin: [0.70, -0.15, 0.0125]
+  board_origin: [0.47, -0.14, 0.0125]
+  base_robot: franka_right
+  assembly_robot: franka_left
+
+qualification:
+  seed_count: 4
+  required_seeds: [4906, 485, 34, 12]
+collection:
+  layout_seeds: [4906, 485, 34, 12]

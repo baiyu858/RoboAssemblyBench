@@ -36,38 +36,36 @@ class PassivePrecheckEpisodeHook:
         if self.sequence_enabled and self._sequence_report is None:
             try:
                 checker = self.sequence_factory() if self.sequence_factory else AssemblySequencePrechecker()
-                config = getattr(task, "config", None)
-                phases = getattr(config, "phase_specs", None)
+                config = getattr(task, 'config', None)
+                phases = getattr(config, 'phase_specs', None)
                 if phases is None:
-                    phases = getattr(task, "phase_specs", [])
+                    phases = getattr(task, 'phase_specs', [])
                 self._sequence_report = checker.check(
                     phases=phases or [],
-                    robot_names=getattr(config, "robot_names", []) or [],
-                    object_names=getattr(config, "object_names", []) or [],
+                    robot_names=getattr(config, 'robot_names', []) or [],
+                    object_names=getattr(config, 'object_names', []) or [],
                 ).to_dict()
             except Exception as exc:
-                self._sequence_report = self._failure("sequence", exc)
+                self._sequence_report = self._failure('sequence', exc)
         if self.stage_enabled:
             try:
                 self._get_stage_checker().observe(task, actions)
             except Exception as exc:
-                self._stage_failure = self._failure("stage", exc)
+                self._stage_failure = self._failure('stage', exc)
 
     def attach_metrics(self, metrics: dict) -> dict:
         if self.sequence_enabled:
-            metrics["assembly_sequence_precheck"] = self._sequence_report or {
-                "enabled": True,
-                "mode": "passive",
-                "feasible": None,
-                "errors": [],
-                "warnings": [],
-                "monitor_error": [{"stage": "sequence", "message": "precheck_not_observed"}],
+            metrics['assembly_sequence_precheck'] = self._sequence_report or {
+                'enabled': True,
+                'mode': 'passive',
+                'feasible': None,
+                'errors': [],
+                'warnings': [],
+                'monitor_error': [{'stage': 'sequence', 'message': 'precheck_not_observed'}],
             }
         if self.stage_enabled:
-            metrics["stage_trajectory_precheck"] = (
-                self._stage_failure
-                if self._stage_failure is not None
-                else self._get_stage_checker().finalize()
+            metrics['stage_trajectory_precheck'] = (
+                self._stage_failure if self._stage_failure is not None else self._get_stage_checker().finalize()
             )
         return metrics
 
@@ -95,16 +93,16 @@ class PassivePrecheckEpisodeHook:
     @staticmethod
     def _failure(stage: str, exc: Exception) -> dict:
         return {
-            "enabled": True,
-            "mode": "passive",
-            "checks": 0,
-            "violation_total": 0,
-            "events": [],
-            "monitor_error": [
+            'enabled': True,
+            'mode': 'passive',
+            'checks': 0,
+            'violation_total': 0,
+            'events': [],
+            'monitor_error': [
                 {
-                    "stage": stage,
-                    "type": type(exc).__name__,
-                    "message": str(exc),
+                    'stage': stage,
+                    'type': type(exc).__name__,
+                    'message': str(exc),
                 }
             ],
         }

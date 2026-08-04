@@ -8,9 +8,13 @@ from internutopia.core.config import Config, SimConfig
 from internutopia.core.util import has_display
 from internutopia.core.vec_env import Env
 from internutopia_extension import import_extensions
-
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_batch
-from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_PROFILE, list_scene_profiles
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_batch,
+)
+from toolkits.factory_dual_franka_assembly.scene_profiles import (
+    DEFAULT_SCENE_PROFILE,
+    list_scene_profiles,
+)
 from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes
 
 
@@ -54,12 +58,17 @@ def main():
     parser.add_argument('--recipe', default='peg_insertion', choices=list_task_recipes())
     parser.add_argument('--scene-profile', default=DEFAULT_SCENE_PROFILE, choices=list_scene_profiles())
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument(
+        '--domain-randomization',
+        action='store_true',
+        help='Apply the recipe position and appearance randomization for the selected seed.',
+    )
     parser.add_argument('--headless', action='store_true')
     parser.add_argument(
         '--warmup-render-steps',
         type=int,
         default=8,
-        help='Render-only warmup steps after reset. Physics is not stepped.',
+        help='Render-only warm-up steps after reset. Physics is not stepped.',
     )
     parser.add_argument(
         '--attach-runtime-cameras',
@@ -77,6 +86,7 @@ def main():
             seeds=[int(args.seed)],
             scene_profile=args.scene_profile,
             attach_runtime_cameras=bool(args.attach_runtime_cameras),
+            domain_randomization_enabled=True if args.domain_randomization else None,
         ),
         headless=bool(args.headless),
     )

@@ -2,7 +2,9 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from toolkits.constraint_checking.integration.stage_precheck import StageTrajectoryPrechecker
+from toolkits.constraint_checking.integration.stage_precheck import (
+    StageTrajectoryPrechecker,
+)
 
 
 class JointSubset:
@@ -11,7 +13,7 @@ class JointSubset:
 
 
 class JointController:
-    config = SimpleNamespace(name="arm_joint")
+    config = SimpleNamespace(name='arm_joint')
 
     def get_joint_subset(self):
         return JointSubset()
@@ -19,12 +21,12 @@ class JointController:
 
 class Solver:
     frames = [
-        "shoulder_link",
-        "upper_arm_link",
-        "forearm_link",
-        "wrist_1_link",
-        "wrist_2_link",
-        "wrist_3_link",
+        'shoulder_link',
+        'upper_arm_link',
+        'forearm_link',
+        'wrist_1_link',
+        'wrist_2_link',
+        'wrist_3_link',
     ]
 
     def set_robot_base_pose(self, **kwargs):
@@ -39,7 +41,7 @@ class Solver:
 
 
 class IKController:
-    config = SimpleNamespace(name="arm_ik")
+    config = SimpleNamespace(name='arm_ik')
     _kinematics_solver = Solver()
     _robot_scale = 1.0
 
@@ -60,12 +62,10 @@ class WrappedIKController(IKController):
 
 
 def make_task(step=0, object_states=None):
-    robot = SimpleNamespace(
-        controllers={"arm_joint": JointController(), "arm_ik": IKController()}
-    )
+    robot = SimpleNamespace(controllers={'arm_joint': JointController(), 'arm_ik': IKController()})
     return SimpleNamespace(
         step_counter=step,
-        robots={"left": robot},
+        robots={'left': robot},
         get_tracked_object_states=lambda: object_states or {},
     )
 
@@ -73,23 +73,23 @@ def make_task(step=0, object_states=None):
 def test_project_kinematics_wrapper_uses_inner_lula_solver():
     robot = SimpleNamespace(
         controllers={
-            "arm_joint": JointController(),
-            "arm_ik": WrappedIKController(),
+            'arm_joint': JointController(),
+            'arm_ik': WrappedIKController(),
         }
     )
     current_task = SimpleNamespace(
         step_counter=0,
-        robots={"left": robot},
+        robots={'left': robot},
         get_tracked_object_states=lambda: {},
     )
     checker = StageTrajectoryPrechecker(check_stride=1, num_waypoints=4)
 
     checker.observe(
         current_task,
-        {"left": {"arm_joint": [[0.1, 0, 0, 0, 0, 0]]}},
+        {'left': {'arm_joint': [[0.1, 0, 0, 0, 0, 0]]}},
     )
 
-    assert checker.finalize()["waypoints_checked"] == 4
+    assert checker.finalize()['waypoints_checked'] == 4
 
 
 def test_safe_joint_segment_checks_all_waypoints():
@@ -97,14 +97,14 @@ def test_safe_joint_segment_checks_all_waypoints():
 
     result = checker.observe(
         make_task(),
-        {"left": {"arm_joint": [[0.2, 0, 0, 0, 0, 0]]}},
+        {'left': {'arm_joint': [[0.2, 0, 0, 0, 0, 0]]}},
     )
     report = checker.finalize()
 
-    assert result["checked"] is True
-    assert report["segments_checked"] == 1
-    assert report["waypoints_checked"] == 5
-    assert report["violation_total"] == 0
+    assert result['checked'] is True
+    assert report['segments_checked'] == 1
+    assert report['waypoints_checked'] == 5
+    assert report['violation_total'] == 0
 
 
 def test_environment_collision_is_serialized():
@@ -112,19 +112,19 @@ def test_environment_collision_is_serialized():
     checker.observe(
         make_task(
             object_states={
-                "fixture": {
-                    "position": [0.0, 0.0, 0.35],
-                    "size": [0.1, 0.1, 0.1],
-                    "orientation": [1.0, 0.0, 0.0, 0.0],
+                'fixture': {
+                    'position': [0.0, 0.0, 0.35],
+                    'size': [0.1, 0.1, 0.1],
+                    'orientation': [1.0, 0.0, 0.0, 0.0],
                 }
             }
         ),
-        {"left": {"arm_joint": [[0.0, 0, 0, 0, 0, 0]]}},
+        {'left': {'arm_joint': [[0.0, 0, 0, 0, 0, 0]]}},
     )
     report = checker.finalize()
 
-    assert report["violation_total"] > 0
-    assert report["events"][0]["entity_b"] == "fixture"
+    assert report['violation_total'] > 0
+    assert report['events'][0]['entity_b'] == 'fixture'
 
 
 def test_stride_skips_without_running_fk():
@@ -132,11 +132,11 @@ def test_stride_skips_without_running_fk():
 
     result = checker.observe(
         make_task(step=1),
-        {"left": {"arm_joint": [[0.0, 0, 0, 0, 0, 0]]}},
+        {'left': {'arm_joint': [[0.0, 0, 0, 0, 0, 0]]}},
     )
 
-    assert result["reason"] == "stride_skip"
-    assert checker.finalize()["checks"] == 0
+    assert result['reason'] == 'stride_skip'
+    assert checker.finalize()['checks'] == 0
 
 
 def test_invalid_joint_target_is_fail_open():
@@ -144,8 +144,8 @@ def test_invalid_joint_target_is_fail_open():
 
     result = checker.observe(
         make_task(),
-        {"left": {"arm_joint": [[float("nan")] * 6]}},
+        {'left': {'arm_joint': [[float('nan')] * 6]}},
     )
 
-    assert result["reason"] == "no_joint_targets"
-    assert checker.finalize()["skip_reasons"]["invalid_joint_target"] == 1
+    assert result['reason'] == 'no_joint_targets'
+    assert checker.finalize()['skip_reasons']['invalid_joint_target'] == 1

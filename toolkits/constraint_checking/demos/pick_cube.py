@@ -9,12 +9,15 @@ Run:
     /mnt/SSD_7T/panxubei/isaac-sim5.1/python.sh demos/pick_cube.py
 """
 import numpy as np
-
 from isaacsim import SimulationApp
 
-sim_app = SimulationApp({"headless": False})
+sim_app = SimulationApp({'headless': False})
 
-from toolkits.constraint_checking.detector.scene import build_scene, CUBE_POS, TABLE_TOP_Z
+from toolkits.constraint_checking.detector.scene import (
+    CUBE_POS,
+    TABLE_TOP_Z,
+    build_scene,
+)
 
 try:
     from isaacsim.robot.manipulators.examples.franka.controllers import (
@@ -25,7 +28,7 @@ except ImportError:
 
 
 def main():
-    print("[pick_cube] building scene ...")
+    print('[pick_cube] building scene ...')
     world, franka, cube, camera = build_scene()
 
     # Ensure the gripper starts open.
@@ -38,7 +41,7 @@ def main():
     ee_initial_height = TABLE_TOP_Z + 0.25  # 0.65
 
     controller = PickPlaceController(
-        name="pick_place_controller",
+        name='pick_place_controller',
         gripper=franka.gripper,
         robot_articulation=franka,
         end_effector_initial_height=ee_initial_height,
@@ -52,11 +55,8 @@ def main():
         dtype=np.float32,
     )
 
-    print(
-        f"[pick_cube] picking_position={CUBE_POS}, "
-        f"placing_position={placing_position}"
-    )
-    print(f"[pick_cube] ee_initial_height={ee_initial_height}")
+    print(f'[pick_cube] picking_position={CUBE_POS}, ' f'placing_position={placing_position}')
+    print(f'[pick_cube] ee_initial_height={ee_initial_height}')
 
     reset_needed = False
     while sim_app.is_running():
@@ -80,16 +80,16 @@ def main():
             articulation_controller.apply_action(actions)
 
             if controller.is_done():
-                print("[pick_cube] done picking and placing.")
+                print('[pick_cube] done picking and placing.')
                 break
 
     # Hold a moment so the result is visible.
     for _ in range(120):
         world.step(render=True)
 
-    print("[pick_cube] closing.")
+    print('[pick_cube] closing.')
     sim_app.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

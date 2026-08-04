@@ -26,10 +26,10 @@ Does NOT modify existing files — works alongside two_arm_collide.py.
 
 from __future__ import annotations
 
-import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
 
+import numpy as np
 
 # ═══════════════════════════════════════════════════════════════════════════
 # data classes
@@ -51,9 +51,9 @@ class CollisionEvent:
 
     def __str__(self):
         return (
-            f"[step {self.step:04d}] {self.kind}: "
-            f"{self.entity_a} <-> {self.entity_b}  "
-            f"({self.distance * 100:.1f}cm, threshold={self.threshold * 100:.1f}cm)"
+            f'[step {self.step:04d}] {self.kind}: '
+            f'{self.entity_a} <-> {self.entity_b}  '
+            f'({self.distance * 100:.1f}cm, threshold={self.threshold * 100:.1f}cm)'
         )
 
 
@@ -69,7 +69,7 @@ def _orientation_matrix(orient: np.ndarray) -> np.ndarray:
     if value.shape == (3, 3):
         return value
     if value.shape != (4,):
-        raise ValueError(f"Expected wxyz quaternion or 3x3 matrix, got shape {value.shape}.")
+        raise ValueError(f'Expected wxyz quaternion or 3x3 matrix, got shape {value.shape}.')
     norm = float(np.linalg.norm(value))
     if norm <= 1e-12:
         return np.eye(3, dtype=np.float64)
@@ -84,9 +84,9 @@ def _orientation_matrix(orient: np.ndarray) -> np.ndarray:
     )
 
 
-def _closest_point_box(point: np.ndarray, center: np.ndarray,
-                       half_extents: np.ndarray,
-                       orient: Optional[np.ndarray] = None) -> np.ndarray:
+def _closest_point_box(
+    point: np.ndarray, center: np.ndarray, half_extents: np.ndarray, orient: Optional[np.ndarray] = None
+) -> np.ndarray:
     """Closest point on (or inside) a box to a given world-space *point*.
 
     Args:
@@ -122,9 +122,9 @@ def _closest_point_box(point: np.ndarray, center: np.ndarray,
     return closest_world
 
 
-def _point_box_distance(point: np.ndarray, center: np.ndarray,
-                        half_extents: np.ndarray,
-                        orient: Optional[np.ndarray] = None) -> Tuple[float, np.ndarray]:
+def _point_box_distance(
+    point: np.ndarray, center: np.ndarray, half_extents: np.ndarray, orient: Optional[np.ndarray] = None
+) -> Tuple[float, np.ndarray]:
     """Minimum distance from a point to a box surface, and the closest point."""
     cp = _closest_point_box(point, center, half_extents, orient)
     d = np.linalg.norm(point - cp)
@@ -138,35 +138,37 @@ def _point_ground_distance(point: np.ndarray, ground_z: float) -> float:
     return float(point[2] - ground_z)
 
 
-def _closest_segment_segment(p1: np.ndarray, q1: np.ndarray,
-                             p2: np.ndarray, q2: np.ndarray
-                             ) -> Tuple[np.ndarray, np.ndarray]:
+def _closest_segment_segment(
+    p1: np.ndarray, q1: np.ndarray, p2: np.ndarray, q2: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     """Closest points between two line segments [p1,q1] and [p2,q2].
 
     Exact clamped solution (Ericson, Real-Time Collision Detection).
     Returns (c1, c2): the closest point on each segment.
     """
-    p1 = np.asarray(p1, dtype=np.float64); q1 = np.asarray(q1, dtype=np.float64)
-    p2 = np.asarray(p2, dtype=np.float64); q2 = np.asarray(q2, dtype=np.float64)
-    d1 = q1 - p1                       # direction of segment 1
-    d2 = q2 - p2                       # direction of segment 2
+    p1 = np.asarray(p1, dtype=np.float64)
+    q1 = np.asarray(q1, dtype=np.float64)
+    p2 = np.asarray(p2, dtype=np.float64)
+    q2 = np.asarray(q2, dtype=np.float64)
+    d1 = q1 - p1  # direction of segment 1
+    d2 = q2 - p2  # direction of segment 2
     r = p1 - p2
-    a = float(d1 @ d1)                 # squared length of segment 1
-    e = float(d2 @ d2)                 # squared length of segment 2
+    a = float(d1 @ d1)  # squared length of segment 1
+    e = float(d2 @ d2)  # squared length of segment 2
     f = float(d2 @ r)
     eps = 1e-12
 
-    if a <= eps and e <= eps:          # both segments are points
+    if a <= eps and e <= eps:  # both segments are points
         return p1, p2
-    if a <= eps:                       # segment 1 is a point
+    if a <= eps:  # segment 1 is a point
         s = 0.0
         t = np.clip(f / e, 0.0, 1.0)
     else:
         c = float(d1 @ r)
-        if e <= eps:                   # segment 2 is a point
+        if e <= eps:  # segment 2 is a point
             t = 0.0
             s = np.clip(-c / a, 0.0, 1.0)
-        else:                          # general non-degenerate case
+        else:  # general non-degenerate case
             b = float(d1 @ d2)
             denom = a * e - b * b
             s = np.clip((b * f - c * e) / denom, 0.0, 1.0) if denom > eps else 0.0
@@ -183,10 +185,9 @@ def _closest_segment_segment(p1: np.ndarray, q1: np.ndarray,
     return c1, c2
 
 
-def _segment_box_distance(p: np.ndarray, q: np.ndarray,
-                          center: np.ndarray, half_extents: np.ndarray,
-                          orient: Optional[np.ndarray] = None
-                          ) -> Tuple[float, np.ndarray, np.ndarray]:
+def _segment_box_distance(
+    p: np.ndarray, q: np.ndarray, center: np.ndarray, half_extents: np.ndarray, orient: Optional[np.ndarray] = None
+) -> Tuple[float, np.ndarray, np.ndarray]:
     """Minimum distance from a segment [p,q] to a (possibly oriented) box.
 
     The squared distance from a point on the segment to a convex box is convex
@@ -203,7 +204,7 @@ def _segment_box_distance(p: np.ndarray, q: np.ndarray,
         diff = pt - cp
         return float(diff @ diff), pt, cp
 
-    gr = (np.sqrt(5.0) - 1.0) / 2.0    # golden ratio conjugate
+    gr = (np.sqrt(5.0) - 1.0) / 2.0  # golden ratio conjugate
     a, b = 0.0, 1.0
     c = b - gr * (b - a)
     dd = a + gr * (b - a)
@@ -229,6 +230,7 @@ def _segment_box_distance(p: np.ndarray, q: np.ndarray,
 # CollisionDetector
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class CollisionDetector:
     """Unified collision detector for all agents and environment objects.
 
@@ -244,14 +246,22 @@ class CollisionDetector:
         self._agents: Dict[str, dict] = {}
 
         # Environment obstacles
-        self._boxes: Dict[str, dict] = {}       # name -> {center, half_extents, orient}
+        self._boxes: Dict[str, dict] = {}  # name -> {center, half_extents, orient}
         self._ground_z: Optional[float] = None  # ground plane Z height
 
         # FRANKA_LINKS — link names shared across all Franka arms
         self.franka_links = [
-            "panda_link0", "panda_link1", "panda_link2", "panda_link3",
-            "panda_link4", "panda_link5", "panda_link6", "panda_link7",
-            "panda_hand", "panda_leftfinger", "panda_rightfinger",
+            'panda_link0',
+            'panda_link1',
+            'panda_link2',
+            'panda_link3',
+            'panda_link4',
+            'panda_link5',
+            'panda_link6',
+            'panda_link7',
+            'panda_hand',
+            'panda_leftfinger',
+            'panda_rightfinger',
         ]
 
         # FRANKA_CAPSULES — each arm link is modelled as a capsule: the line
@@ -264,15 +274,15 @@ class CollisionDetector:
         # to the mounting surface and doesn't move during execution.
         self.franka_capsules = [
             # ("panda_link0", "panda_link1", 0.060),  # excluded: fixed base
-            ("panda_link1", "panda_link2", 0.060),
-            ("panda_link2", "panda_link3", 0.060),
-            ("panda_link3", "panda_link4", 0.055),
-            ("panda_link4", "panda_link5", 0.050),
-            ("panda_link5", "panda_link6", 0.050),
-            ("panda_link6", "panda_link7", 0.045),
-            ("panda_link7", "panda_hand", 0.045),
-            ("panda_hand", "panda_leftfinger", 0.022),
-            ("panda_hand", "panda_rightfinger", 0.022),
+            ('panda_link1', 'panda_link2', 0.060),
+            ('panda_link2', 'panda_link3', 0.060),
+            ('panda_link3', 'panda_link4', 0.055),
+            ('panda_link4', 'panda_link5', 0.050),
+            ('panda_link5', 'panda_link6', 0.050),
+            ('panda_link6', 'panda_link7', 0.045),
+            ('panda_link7', 'panda_hand', 0.045),
+            ('panda_hand', 'panda_leftfinger', 0.022),
+            ('panda_hand', 'panda_rightfinger', 0.022),
         ]
 
     # ── registration ────────────────────────────────────────────────────
@@ -287,9 +297,13 @@ class CollisionDetector:
         """
         self._agents[name] = link_xforms
 
-    def add_box(self, name: str, center: Union[list, tuple, np.ndarray],
-                half_extents: Union[list, tuple, np.ndarray],
-                orient: Optional[Union[list, tuple, np.ndarray]] = None) -> None:
+    def add_box(
+        self,
+        name: str,
+        center: Union[list, tuple, np.ndarray],
+        half_extents: Union[list, tuple, np.ndarray],
+        orient: Optional[Union[list, tuple, np.ndarray]] = None,
+    ) -> None:
         """Register a box-shaped obstacle.
 
         Args:
@@ -299,9 +313,9 @@ class CollisionDetector:
             orient:       Orientation quaternion [w, x, y, z] (optional).
         """
         self._boxes[name] = {
-            "center": np.asarray(center, dtype=np.float64),
-            "half_extents": np.asarray(half_extents, dtype=np.float64),
-            "orient": _orientation_matrix(orient) if orient is not None else None,
+            'center': np.asarray(center, dtype=np.float64),
+            'half_extents': np.asarray(half_extents, dtype=np.float64),
+            'orient': _orientation_matrix(orient) if orient is not None else None,
         }
 
     def add_ground(self, z: float = 0.0) -> None:
@@ -348,8 +362,7 @@ class CollisionDetector:
                 pass
         return out
 
-    def _build_capsules(self, name: str
-                        ) -> List[Tuple[str, np.ndarray, np.ndarray, float]]:
+    def _build_capsules(self, name: str) -> List[Tuple[str, np.ndarray, np.ndarray, float]]:
         """Build the capsule chain for agent *name* from current link poses.
 
         Returns a list of (capsule_label, p, q, radius) where [p, q] is the
@@ -359,8 +372,9 @@ class CollisionDetector:
         pos = self._read_link_position_map(name)
         return self._build_capsules_from_positions(pos)
 
-    def _build_capsules_from_positions(self, pos: Dict[str, np.ndarray]
-                                       ) -> List[Tuple[str, np.ndarray, np.ndarray, float]]:
+    def _build_capsules_from_positions(
+        self, pos: Dict[str, np.ndarray]
+    ) -> List[Tuple[str, np.ndarray, np.ndarray, float]]:
         """Build capsule chain from an externally-supplied {link_name: position} dict.
 
         Used by check_config() for offline (non-physics) collision checks.
@@ -368,12 +382,13 @@ class CollisionDetector:
         capsules: List[Tuple[str, np.ndarray, np.ndarray, float]] = []
         for parent, child, radius in self.franka_capsules:
             if parent in pos and child in pos:
-                label = f"{parent}->{child}"
+                label = f'{parent}->{child}'
                 capsules.append((label, pos[parent], pos[child], float(radius)))
         return capsules
 
-    def check_config(self, link_positions: Dict[str, np.ndarray],
-                     step: int = 0, agent_name: str = "agent") -> List[CollisionEvent]:
+    def check_config(
+        self, link_positions: Dict[str, np.ndarray], step: int = 0, agent_name: str = 'agent'
+    ) -> List[CollisionEvent]:
         """Check a *hypothetical* set of link world positions against obstacles.
 
         Unlike check_agent_env, this does NOT read live XForms — positions are
@@ -392,18 +407,26 @@ class CollisionDetector:
         for bname, box in self._boxes.items():
             for label, p, q, radius in capsules:
                 d_seg, pt, cp = _segment_box_distance(
-                    p, q, box["center"],
-                    box["half_extents"], box["orient"],
+                    p,
+                    q,
+                    box['center'],
+                    box['half_extents'],
+                    box['orient'],
                 )
                 clearance = d_seg - radius
                 if clearance < self.threshold:
-                    events.append(CollisionEvent(
-                        step=step, kind="agent_env",
-                        entity_a=f"{agent_name}/{label}",
-                        entity_b=bname,
-                        distance=clearance, threshold=self.threshold,
-                        pos_a=pt, pos_b=cp,
-                    ))
+                    events.append(
+                        CollisionEvent(
+                            step=step,
+                            kind='agent_env',
+                            entity_a=f'{agent_name}/{label}',
+                            entity_b=bname,
+                            distance=clearance,
+                            threshold=self.threshold,
+                            pos_a=pt,
+                            pos_b=cp,
+                        )
+                    )
 
         if self._ground_z is not None:
             for label, p, q, radius in capsules:
@@ -411,14 +434,18 @@ class CollisionDetector:
                 pt = p if p[2] <= q[2] else q
                 clearance = (lo_z - self._ground_z) - radius
                 if clearance < self.threshold:
-                    events.append(CollisionEvent(
-                        step=step, kind="agent_env",
-                        entity_a=f"{agent_name}/{label}",
-                        entity_b="ground",
-                        distance=clearance, threshold=self.threshold,
-                        pos_a=pt,
-                        pos_b=np.array([pt[0], pt[1], self._ground_z]),
-                    ))
+                    events.append(
+                        CollisionEvent(
+                            step=step,
+                            kind='agent_env',
+                            entity_a=f'{agent_name}/{label}',
+                            entity_b='ground',
+                            distance=clearance,
+                            threshold=self.threshold,
+                            pos_a=pt,
+                            pos_b=np.array([pt[0], pt[1], self._ground_z]),
+                        )
+                    )
 
         return events
 
@@ -448,13 +475,18 @@ class CollisionDetector:
                         centerline = float(np.linalg.norm(c1 - c2))
                         clearance = centerline - ra - rb
                         if clearance < self.threshold:
-                            events.append(CollisionEvent(
-                                step=step, kind="inter_agent",
-                                entity_a=f"{na}/{la}",
-                                entity_b=f"{nb}/{lb}",
-                                distance=clearance, threshold=self.threshold,
-                                pos_a=c1, pos_b=c2,
-                            ))
+                            events.append(
+                                CollisionEvent(
+                                    step=step,
+                                    kind='inter_agent',
+                                    entity_a=f'{na}/{la}',
+                                    entity_b=f'{nb}/{lb}',
+                                    distance=clearance,
+                                    threshold=self.threshold,
+                                    pos_a=c1,
+                                    pos_b=c2,
+                                )
+                            )
         return events
 
     def check_agent_env(self, step: int = 0) -> List[CollisionEvent]:
@@ -477,18 +509,26 @@ class CollisionDetector:
             for bname, box in self._boxes.items():
                 for label, p, q, radius in capsules:
                     d_seg, pt, cp = _segment_box_distance(
-                        p, q, box["center"],
-                        box["half_extents"], box["orient"],
+                        p,
+                        q,
+                        box['center'],
+                        box['half_extents'],
+                        box['orient'],
                     )
                     clearance = d_seg - radius
                     if clearance < self.threshold:
-                        events.append(CollisionEvent(
-                            step=step, kind="agent_env",
-                            entity_a=f"{aname}/{label}",
-                            entity_b=bname,
-                            distance=clearance, threshold=self.threshold,
-                            pos_a=pt, pos_b=cp,
-                        ))
+                        events.append(
+                            CollisionEvent(
+                                step=step,
+                                kind='agent_env',
+                                entity_a=f'{aname}/{label}',
+                                entity_b=bname,
+                                distance=clearance,
+                                threshold=self.threshold,
+                                pos_a=pt,
+                                pos_b=cp,
+                            )
+                        )
 
             # ── ground plane ──
             if self._ground_z is not None:
@@ -498,14 +538,18 @@ class CollisionDetector:
                     pt = p if p[2] <= q[2] else q
                     clearance = (lo_z - self._ground_z) - radius
                     if clearance < self.threshold:
-                        events.append(CollisionEvent(
-                            step=step, kind="agent_env",
-                            entity_a=f"{aname}/{label}",
-                            entity_b="ground",
-                            distance=clearance, threshold=self.threshold,
-                            pos_a=pt,
-                            pos_b=np.array([pt[0], pt[1], self._ground_z]),
-                        ))
+                        events.append(
+                            CollisionEvent(
+                                step=step,
+                                kind='agent_env',
+                                entity_a=f'{aname}/{label}',
+                                entity_b='ground',
+                                distance=clearance,
+                                threshold=self.threshold,
+                                pos_a=pt,
+                                pos_b=np.array([pt[0], pt[1], self._ground_z]),
+                            )
+                        )
 
         return events
 
@@ -525,20 +569,21 @@ class CollisionDetector:
     def summary(self, events: List[CollisionEvent]) -> str:
         """Return a human-readable summary string for a list of events."""
         if not events:
-            return "no collision"
+            return 'no collision'
         by_kind: Dict[str, int] = {}
-        min_d = float("inf")
+        min_d = float('inf')
         for e in events:
             by_kind[e.kind] = by_kind.get(e.kind, 0) + 1
             if e.distance < min_d:
                 min_d = e.distance
-        parts = [f"{v} {k}" for k, v in by_kind.items()]
+        parts = [f'{v} {k}' for k, v in by_kind.items()]
         return f"{', '.join(parts)}  (min={min_d*100:.1f}cm)"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # convenience: mirror two_arm_collide.py setup function
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def setup_link_xforms(prefix: str) -> dict:
     """Create SingleXFormPrim readers for all Franka links under *prefix*.
@@ -551,14 +596,22 @@ def setup_link_xforms(prefix: str) -> dict:
         from omni.isaac.core.prims import SingleXFormPrim
 
     FRANKA_LINKS = [
-        "panda_link0", "panda_link1", "panda_link2", "panda_link3",
-        "panda_link4", "panda_link5", "panda_link6", "panda_link7",
-        "panda_hand", "panda_leftfinger", "panda_rightfinger",
+        'panda_link0',
+        'panda_link1',
+        'panda_link2',
+        'panda_link3',
+        'panda_link4',
+        'panda_link5',
+        'panda_link6',
+        'panda_link7',
+        'panda_hand',
+        'panda_leftfinger',
+        'panda_rightfinger',
     ]
     xforms = {}
     for name in FRANKA_LINKS:
         try:
-            xf = SingleXFormPrim(prim_path=f"{prefix}/{name}")
+            xf = SingleXFormPrim(prim_path=f'{prefix}/{name}')
             xf.get_world_pose()
             xforms[name] = xf
         except Exception:

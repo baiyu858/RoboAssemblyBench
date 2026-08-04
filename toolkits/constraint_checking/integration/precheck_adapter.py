@@ -13,7 +13,6 @@ from typing import Callable, Dict, Iterable, Optional, Tuple
 
 import numpy as np
 
-
 IKCallback = Callable[[np.ndarray, np.ndarray, Optional[np.ndarray]], Tuple[Optional[np.ndarray], bool]]
 FKCallback = Callable[[np.ndarray], Dict[str, np.ndarray]]
 
@@ -21,18 +20,18 @@ FKCallback = Callable[[np.ndarray], Dict[str, np.ndarray]]
 @dataclass
 class PrecheckReport:
     feasible: bool
-    reason: str = "ok"
+    reason: str = 'ok'
     first_fail_idx: int = -1
     num_waypoints: int = 0
     events: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
-            "feasible": bool(self.feasible),
-            "reason": str(self.reason),
-            "first_fail_idx": int(self.first_fail_idx),
-            "num_waypoints": int(self.num_waypoints),
-            "events": [str(event) for event in self.events],
+            'feasible': bool(self.feasible),
+            'reason': str(self.reason),
+            'first_fail_idx': int(self.first_fail_idx),
+            'num_waypoints': int(self.num_waypoints),
+            'events': [str(event) for event in self.events],
         }
 
 
@@ -68,7 +67,7 @@ class LinearPosePrechecker:
             if not ok or q is None:
                 return PrecheckReport(
                     feasible=False,
-                    reason="ik_unreachable",
+                    reason='ik_unreachable',
                     first_fail_idx=index,
                     num_waypoints=self.num_waypoints,
                 )
@@ -77,12 +76,12 @@ class LinearPosePrechecker:
             events = self.detector.check_config(
                 link_positions,
                 step=int(step),
-                agent_name="precheck_robot",
+                agent_name='precheck_robot',
             )
             if events:
                 return PrecheckReport(
                     feasible=False,
-                    reason="collision",
+                    reason='collision',
                     first_fail_idx=index,
                     num_waypoints=self.num_waypoints,
                     events=events,
@@ -90,7 +89,7 @@ class LinearPosePrechecker:
 
         return PrecheckReport(
             feasible=True,
-            reason="ok",
+            reason='ok',
             first_fail_idx=-1,
             num_waypoints=self.num_waypoints,
         )

@@ -5,17 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-
 _CONTACT_PHASE_TOKENS = (
-    "descend",
-    "grasp",
-    "close_gripper",
-    "insert",
-    "release",
-    "settle",
+    'descend',
+    'grasp',
+    'close_gripper',
+    'insert',
+    'release',
+    'settle',
 )
 
-_END_EFFECTOR_TOKEN = "Gripper/Robotiq_2F_85/"
+_END_EFFECTOR_TOKEN = 'Gripper/Robotiq_2F_85/'
 
 
 @dataclass(frozen=True)
@@ -49,49 +48,49 @@ class AssemblyContactPolicy:
     def classify(self, event, task) -> ContactDecision:
         context = self.context_from_task(task)
         if any(rule.matches(event.entity_a, event.entity_b) for rule in self.ignore_pairs):
-            return self._decision("allowed_contact", "configured_ignore_pair", context)
+            return self._decision('allowed_contact', 'configured_ignore_pair', context)
         if self._is_expected_assembly_contact(event, context):
-            return self._decision("allowed_contact", "phase_target_end_effector_contact", context)
+            return self._decision('allowed_contact', 'phase_target_end_effector_contact', context)
         if float(event.distance) > self.collision_threshold:
-            return self._decision("proximity", "positive_surface_clearance", context)
-        return self._decision("collision", "capsule_surface_overlap", context)
+            return self._decision('proximity', 'positive_surface_clearance', context)
+        return self._decision('collision', 'capsule_surface_overlap', context)
 
     @staticmethod
     def context_from_task(task) -> ContactContext:
-        phase = getattr(task, "phase", None)
+        phase = getattr(task, 'phase', None)
         phase_spec = {}
-        getter = getattr(task, "get_current_phase_spec", None)
+        getter = getattr(task, 'get_current_phase_spec', None)
         if callable(getter):
             phase_spec = getter() or {}
         if not isinstance(phase_spec, dict):
             phase_spec = {}
 
-        local_skill = phase_spec.get("local_skill")
+        local_skill = phase_spec.get('local_skill')
         if not isinstance(local_skill, dict):
             local_skill = {}
-        robot = local_skill.get("robot")
-        object_name = local_skill.get("object")
+        robot = local_skill.get('robot')
+        object_name = local_skill.get('object')
 
-        attach = phase_spec.get("attach")
+        attach = phase_spec.get('attach')
         attach_items = attach if isinstance(attach, list) else [attach]
         for item in attach_items:
             if isinstance(item, dict):
-                robot = robot or item.get("robot")
-                object_name = object_name or item.get("object")
+                robot = robot or item.get('robot')
+                object_name = object_name or item.get('object')
 
-        lock = phase_spec.get("lock")
+        lock = phase_spec.get('lock')
         lock_items = lock if isinstance(lock, list) else [lock]
         for item in lock_items:
-            if isinstance(item, dict) and item.get("object"):
-                object_name = object_name or item["object"]
+            if isinstance(item, dict) and item.get('object'):
+                object_name = object_name or item['object']
                 break
 
-        phase_text = str(phase or phase_spec.get("name") or "")
+        phase_text = str(phase or phase_spec.get('name') or '')
         if robot is None:
-            if phase_text.startswith("left_"):
-                robot = "franka_left"
-            elif phase_text.startswith("right_"):
-                robot = "franka_right"
+            if phase_text.startswith('left_'):
+                robot = 'franka_left'
+            elif phase_text.startswith('right_'):
+                robot = 'franka_right'
 
         contact_intended = any(token in phase_text.lower() for token in _CONTACT_PHASE_TOKENS)
         return ContactContext(
@@ -106,7 +105,7 @@ class AssemblyContactPolicy:
         if not context.contact_intended or not context.robot or not context.object_name:
             return False
         entities = (str(event.entity_a), str(event.entity_b))
-        robot_entity = next((item for item in entities if item.startswith(f"{context.robot}/")), None)
+        robot_entity = next((item for item in entities if item.startswith(f'{context.robot}/')), None)
         object_entity = next((item for item in entities if item == context.object_name), None)
         if robot_entity is None or object_entity is None:
             return False

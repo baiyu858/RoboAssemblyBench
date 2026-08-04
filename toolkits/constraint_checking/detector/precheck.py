@@ -12,37 +12,40 @@ validates task-level semantics) with geometric-level feasibility.
 """
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
+
+import numpy as np
 
 try:
     from isaacsim.robot_motion.motion_generation import (
-        interface_config_loader, LulaKinematicsSolver,
+        LulaKinematicsSolver,
+        interface_config_loader,
     )
 except ImportError:
     from omni.isaac.motion_generation import (
-        interface_config_loader, LulaKinematicsSolver,
+        LulaKinematicsSolver,
+        interface_config_loader,
     )
 
 
 @dataclass
 class PrecheckReport:
     """Structured result of a trajectory precheck."""
+
     feasible: bool
-    reason: str = "ok"            # "ok" | "ik_unreachable" | "joint_limit" | "collision"
-    first_fail_idx: int = -1      # 0-based index of the first failing waypoint
+    reason: str = 'ok'  # "ok" | "ik_unreachable" | "joint_limit" | "collision"
+    first_fail_idx: int = -1  # 0-based index of the first failing waypoint
     num_waypoints: int = 0
     events: list = field(default_factory=list)  # CollisionEvent list if collision
 
     def __str__(self):
         if self.feasible:
-            return f"[precheck OK] {self.num_waypoints} waypoints feasible"
-        detail = ""
+            return f'[precheck OK] {self.num_waypoints} waypoints feasible'
+        detail = ''
         if self.events:
-            detail = " | " + "; ".join(str(e) for e in self.events[:3])
-        return (f"[precheck FAIL] {self.reason} "
-                f"at waypoint {self.first_fail_idx}/{self.num_waypoints}{detail}")
+            detail = ' | ' + '; '.join(str(e) for e in self.events[:3])
+        return f'[precheck FAIL] {self.reason} ' f'at waypoint {self.first_fail_idx}/{self.num_waypoints}{detail}'
 
 
 class TrajectoryPrechecker:
@@ -56,11 +59,14 @@ class TrajectoryPrechecker:
         num_waypoints:   How many intermediate poses to sample along the path.
     """
 
-    def __init__(self, franka,
-                 collision_detector,
-                 robot_name: str = "Franka",
-                 ee_frame: str = "panda_hand",
-                 num_waypoints: int = 12):
+    def __init__(
+        self,
+        franka,
+        collision_detector,
+        robot_name: str = 'Franka',
+        ee_frame: str = 'panda_hand',
+        num_waypoints: int = 12,
+    ):
         self.franka = franka
         self.detector = collision_detector
         self.ee_frame = ee_frame
@@ -81,8 +87,7 @@ class TrajectoryPrechecker:
 
         # ── identify which Franka links the solver supports for FK ──
         all_frames = set(self.ik.get_all_frame_names())
-        self._fk_links = [ln for ln in self.detector.franka_links
-                          if ln in all_frames]
+        self._fk_links = [ln for ln in self.detector.franka_links if ln in all_frames]
 
         # ── joint limits (read from articulation for fine-grained cutoff) ──
         self._joint_lower = None
@@ -113,9 +118,9 @@ class TrajectoryPrechecker:
         except Exception:
             return np.zeros(7, dtype=np.float64)
 
-    def _interpolate_waypoints(self, start_pos, start_orn,
-                               target_pos, target_orn
-                               ) -> List[Tuple[np.ndarray, np.ndarray]]:
+    def _interpolate_waypoints(
+        self, start_pos, start_orn, target_pos, target_orn
+    ) -> List[Tuple[np.ndarray, np.ndarray]]:
         """Linear position interpolation + constant orientation.
         Returns list of (pos, orn) waypoints, including both endpoints.
         Uses the provided target_orn (guaranteed quaternion) for all waypoints
@@ -136,11 +141,9 @@ class TrajectoryPrechecker:
         if self._joint_lower is None:
             return True
         dof = min(len(q), len(self._joint_lower))
-        return bool(np.all(q[:dof] >= self._joint_lower[:dof])
-                    and np.all(q[:dof] <= self._joint_upper[:dof]))
+        return bool(np.all(q[:dof] >= self._joint_lower[:dof]) and np.all(q[:dof] <= self._joint_upper[:dof]))
 
-    def check_trajectory(self, target_pos, target_orn,
-                         step: int = 0) -> PrecheckReport:
+    def check_trajectory(self, target_pos, target_orn, step: int = 0) -> PrecheckReport:
         """Run precheck on the full path from current EE pose to target.
 
         Args:
@@ -154,14 +157,18 @@ class TrajectoryPrechecker:
         # ── 1. get current EE pose as start ──
         cur_q = self._current_joints()
         start_pos, start_orn = self.ik.compute_forward_kinematics(
-            self.ee_frame, cur_q,
+            self.ee_frame,
+            cur_q,
         )
         start_pos = np.asarray(start_pos, dtype=np.float64)
         start_orn = np.asarray(start_orn, dtype=np.float64)
 
         # ── 2. generate waypoints ──
         waypoints = self._interpolate_waypoints(
-            start_pos, start_orn, target_pos, target_orn,
+            start_pos,
+            start_orn,
+            target_pos,
+            target_orn,
         )
 
         # ── 3. validate each waypoint ──
@@ -176,7 +183,10 @@ class TrajectoryPrechecker:
             )
             if not success or result is None:
                 return PrecheckReport(
-                    False, "ik_unreachable", i, self.num_waypoints,
+                    False,
+                    'ik_unreachable',
+                    i,
+                    self.num_waypoints,
                 )
 
             # result is already a numpy array of joint positions
@@ -186,7 +196,10 @@ class TrajectoryPrechecker:
             # 3b. joint limit check
             if not self._check_joint_limits(q):
                 return PrecheckReport(
-                    False, "joint_limit", i, self.num_waypoints,
+                    False,
+                    'joint_limit',
+                    i,
+                    self.num_waypoints,
                 )
 
             # 3c. FK → link world positions
@@ -197,11 +210,17 @@ class TrajectoryPrechecker:
 
             # 3d. collision check
             events = self.detector.check_config(
-                link_positions, step=step, agent_name="franka",
+                link_positions,
+                step=step,
+                agent_name='franka',
             )
             if events:
                 return PrecheckReport(
-                    False, "collision", i, self.num_waypoints, events,
+                    False,
+                    'collision',
+                    i,
+                    self.num_waypoints,
+                    events,
                 )
 
-        return PrecheckReport(True, "ok", -1, self.num_waypoints)
+        return PrecheckReport(True, 'ok', -1, self.num_waypoints)
