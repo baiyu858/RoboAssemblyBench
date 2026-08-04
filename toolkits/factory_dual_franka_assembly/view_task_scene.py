@@ -54,6 +54,11 @@ def main():
     parser.add_argument('--recipe', default='peg_insertion', choices=list_task_recipes())
     parser.add_argument('--scene-profile', default=DEFAULT_SCENE_PROFILE, choices=list_scene_profiles())
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument(
+        '--domain-randomization',
+        action='store_true',
+        help='Apply the recipe position and appearance randomization for the selected seed.',
+    )
     parser.add_argument('--headless', action='store_true')
     parser.add_argument(
         '--warmup-render-steps',
@@ -77,6 +82,7 @@ def main():
             seeds=[int(args.seed)],
             scene_profile=args.scene_profile,
             attach_runtime_cameras=bool(args.attach_runtime_cameras),
+            domain_randomization_enabled=True if args.domain_randomization else None,
         ),
         headless=bool(args.headless),
     )

@@ -19,7 +19,9 @@ class FactoryDualFrankaAssemblyTaskCfg(TaskCfg):
     prompt: Optional[str] = ''
     task_description: str = ''
     recipe: str = 'screw_fastening'
+    recipe_fingerprint: str = ''
     seed: int = 0
+    layout_seed: Optional[int] = None
     episode_idx: int = 0
     robot_names: Tuple[str, ...] = ('franka_left', 'franka_right')
     tracked_object_names: Tuple[str, ...] = ()
@@ -52,3 +54,9 @@ class FactoryDualFrankaAssemblyTaskCfg(TaskCfg):
     camera_metadata: List[Dict[str, Any]] = []
     robot_metadata: List[Dict[str, Any]] = []
     object_metadata: List[Dict[str, Any]] = []
+    domain_randomization: Dict[str, Any] = {}
+    policy_evaluation_mode: bool = False
+    policy_success_stable_steps: int = 24
+    policy_auto_grasp: bool = True
+    policy_auto_grasp_closed_joint_threshold: float = 0.35
+    policy_auto_release_open_joint_threshold: float = 0.12

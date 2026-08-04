@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, List, Optional, Tuple, Union
 
 from internutopia.core.config import Config, DistributedConfig, TaskCfg
@@ -483,9 +484,21 @@ class SimulatorRunner:
         headless = self.config.simulator.headless
         native = self.config.simulator.native
         webrtc = self.config.simulator.webrtc
-        self._simulation_app = SimulationApp(
-            {'headless': headless, 'anti_aliasing': 0, 'hide_ui': False, 'multi_gpu': False}
-        )
+        launch_config = {'headless': headless, 'anti_aliasing': 0, 'hide_ui': False, 'multi_gpu': False}
+        active_gpu = os.environ.get('ISAACSIM_ACTIVE_GPU')
+        physics_gpu = os.environ.get('ISAACSIM_PHYSICS_GPU', active_gpu)
+        if active_gpu is not None:
+            launch_config['active_gpu'] = int(active_gpu)
+        if physics_gpu is not None:
+            launch_config['physics_gpu'] = int(physics_gpu)
+        if active_gpu is not None or physics_gpu is not None:
+            log.info(
+                f'Isaac GPU assignment: renderer={launch_config.get("active_gpu")}, '
+                f'physics={launch_config.get("physics_gpu")}'
+            )
+        if headless:
+            launch_config['extra_args'] = ['--/app/extensions/fsWatcherEnabled=0']
+        self._simulation_app = SimulationApp(launch_config)
         self._simulation_app._carb_settings.set('/physics/cooking/ujitsoCollisionCooking', False)
         log.debug('SimulationApp init done')
 

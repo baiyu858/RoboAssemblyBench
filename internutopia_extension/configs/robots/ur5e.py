@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+import sys
 from typing import Dict, Optional
 
 import numpy as np
@@ -11,17 +13,47 @@ from internutopia_extension.configs.controllers import (
 )
 
 
-_ISAAC_SIM_ROOT = os.environ.get("ISAAC_SIM_ROOT", "/home/baiyu24/APP/isaac-smi")
-_UR5E_MOTION_CFG_ROOT = os.path.join(
-    _ISAAC_SIM_ROOT,
-    "exts/isaacsim.robot_motion.motion_generation/motion_policy_configs/universal_robots/ur5e",
+_MOTION_CFG_RELATIVE = Path(
+    "exts/isaacsim.robot_motion.motion_generation/motion_policy_configs/universal_robots/ur5e"
 )
+
+
+def _resolve_ur5e_motion_cfg_root() -> Path:
+    candidates = []
+    configured_root = os.environ.get("ISAAC_SIM_ROOT")
+    if configured_root:
+        candidates.append(Path(configured_root).expanduser() / _MOTION_CFG_RELATIVE)
+    candidates.append(Path("/home/baiyu24/APP/isaac-smi") / _MOTION_CFG_RELATIVE)
+    for entry in sys.path:
+        if not entry:
+            continue
+        package_root = Path(entry).expanduser()
+        candidates.append(package_root / "isaacsim" / _MOTION_CFG_RELATIVE)
+        candidates.append(package_root / _MOTION_CFG_RELATIVE)
+
+    checked = []
+    for candidate in candidates:
+        candidate = candidate.resolve()
+        if candidate in checked:
+            continue
+        checked.append(candidate)
+        if (candidate / "rmpflow/ur5e_robot_description.yaml").is_file() and (
+            candidate / "ur5e.urdf"
+        ).is_file():
+            return candidate
+    raise FileNotFoundError(
+        "Cannot locate Isaac Sim UR5e motion-policy configuration. Set ISAAC_SIM_ROOT or install "
+        f"isaacsim.robot_motion.motion_generation. Checked: {[str(path) for path in checked]}"
+    )
+
+
+_UR5E_MOTION_CFG_ROOT = _resolve_ur5e_motion_cfg_root()
 
 
 arm_ik_cfg = InverseKinematicsControllerCfg(
     name="arm_ik_controller",
-    robot_description_path=os.path.join(_UR5E_MOTION_CFG_ROOT, "rmpflow/ur5e_robot_description.yaml"),
-    robot_urdf_path=os.path.join(_UR5E_MOTION_CFG_ROOT, "ur5e.urdf"),
+    robot_description_path=str(_UR5E_MOTION_CFG_ROOT / "rmpflow/ur5e_robot_description.yaml"),
+    robot_urdf_path=str(_UR5E_MOTION_CFG_ROOT / "ur5e.urdf"),
     end_effector_frame_name="tool0",
     threshold=0.01,
 )

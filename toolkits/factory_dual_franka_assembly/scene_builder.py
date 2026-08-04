@@ -6,6 +6,8 @@ from typing import Iterable
 
 import numpy as np
 
+from roboassemblybench.core.domain_randomization import apply_domain_randomization
+
 from internutopia_extension.configs.objects import (
     DynamicCompoundCuboidCfg,
     DynamicCubeCfg,
@@ -188,6 +190,12 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
             static_friction=object_spec.get('static_friction'),
             dynamic_friction=object_spec.get('dynamic_friction'),
             restitution=object_spec.get('restitution'),
+            linear_damping=object_spec.get('linear_damping'),
+            angular_damping=object_spec.get('angular_damping'),
+            sleep_threshold=object_spec.get('sleep_threshold'),
+            stabilization_threshold=object_spec.get('stabilization_threshold'),
+            solver_position_iteration_count=object_spec.get('solver_position_iteration_count'),
+            solver_velocity_iteration_count=object_spec.get('solver_velocity_iteration_count'),
             **common_kwargs,
         )
     if kind == 'dynamic_compound_cuboid':
@@ -235,6 +243,12 @@ def _sample_objects(recipe_spec: dict, rng: random.Random, workspace_offset: np.
     object_metadata = []
     for object_spec in recipe_spec['objects']:
         position = sample_position(object_spec['position'], object_spec.get('random_xy'), rng)
+        spawn_clearance = float(object_spec.get('spawn_clearance', 0.0))
+        if not np.isfinite(spawn_clearance) or spawn_clearance < 0.0:
+            raise ValueError(
+                f"Object {object_spec['name']!r} spawn_clearance must be a finite non-negative value."
+            )
+        position[2] += spawn_clearance
         if object_spec.get('apply_workspace_offset', True):
             position = position + workspace_offset
         orientation = _resolve_orientation(object_spec)
@@ -252,6 +266,7 @@ def _sample_objects(recipe_spec: dict, rng: random.Random, workspace_offset: np.
                 **copy.deepcopy(object_spec),
                 'sampled_position': position.tolist(),
                 'sampled_orientation': orientation.tolist(),
+                'applied_spawn_clearance': spawn_clearance,
             }
         )
     return object_cfgs, object_states, tuple(tracked_object_names), object_metadata
@@ -292,11 +307,20 @@ def _build_target_poses(recipe_spec: dict, object_states: dict, workspace_offset
 
 def _build_annotation_target_metadata(recipe_spec: dict, target_poses: dict) -> dict:
     target_role_map = recipe_spec.get('annotation_target_roles', {})
+    target_spec_map = {
+        str(entry.get('name')): entry
+        for entry in recipe_spec.get('targets', [])
+        if isinstance(entry, dict) and entry.get('name') is not None
+    }
     target_annotations = {}
     for target_name, pose in target_poses.items():
         target_annotation = copy.deepcopy(target_role_map.get(target_name, {}))
         target_annotation.setdefault('name', target_name)
         target_annotation['pose'] = copy.deepcopy(pose)
+        target_spec = target_spec_map.get(target_name, {})
+        for key in ('domain_randomization_group', 'domain_randomization_translation'):
+            if key in target_spec:
+                target_annotation[key] = copy.deepcopy(target_spec[key])
         target_annotations[target_name] = target_annotation
     return target_annotations
 
@@ -317,12 +341,21 @@ def _normalize_success_criteria(success_criteria: Iterable[dict]) -> list[dict]:
 def build_dual_franka_assembly_episode(
     recipe: str,
     seed: int,
+    layout_seed: int | None = None,
     episode_idx: int = 0,
     spec_path: str | None = None,
     scene_profile: str | None = None,
     attach_runtime_cameras: bool = False,
+    domain_randomization_enabled: bool | None = None,
+    policy_evaluation_mode: bool = False,
 ) -> FactoryDualFrankaAssemblyTaskCfg:
     recipe_spec = load_task_recipe(spec_path or recipe, scene_profile=scene_profile)
+    resolved_layout_seed = int(seed if layout_seed is None else layout_seed)
+    recipe_spec, domain_randomization = apply_domain_randomization(
+        recipe_spec,
+        seed=resolved_layout_seed,
+        enabled_override=domain_randomization_enabled,
+    )
     rng = random.Random(seed)
     workspace_offset = np.asarray(recipe_spec.get('workspace_offset', [0.0, 0.0, 0.0]), dtype=float)
     robots, robot_names = _build_robot_cfgs(recipe_spec)
@@ -356,7 +389,9 @@ def build_dual_franka_assembly_episode(
         prompt=recipe_spec['prompt'],
         task_description=recipe_spec.get('task_description') or recipe_spec['prompt'],
         recipe=recipe_spec['task_name'],
+        recipe_fingerprint=str(recipe_spec.get('recipe_fingerprint', '')),
         seed=seed,
+        layout_seed=resolved_layout_seed,
         episode_idx=episode_idx,
         max_steps=int(recipe_spec.get('max_steps', 1800)),
         phase_timeout_steps=None
@@ -413,22 +448,45 @@ def build_dual_franka_assembly_episode(
         camera_metadata=copy.deepcopy(camera_metadata),
         robot_metadata=copy.deepcopy(recipe_spec.get('robots', [])),
         object_metadata=object_metadata,
+        domain_randomization=copy.deepcopy(domain_randomization),
+        policy_evaluation_mode=bool(policy_evaluation_mode),
+        policy_success_stable_steps=int(recipe_spec.get('policy_success_stable_steps', 24)),
+        policy_auto_grasp=bool(recipe_spec.get('policy_auto_grasp', True)),
+        policy_auto_grasp_closed_joint_threshold=float(
+            recipe_spec.get('policy_auto_grasp_closed_joint_threshold', 0.35)
+        ),
+        policy_auto_release_open_joint_threshold=float(
+            recipe_spec.get('policy_auto_release_open_joint_threshold', 0.12)
+        ),
     )
 
 
 def build_dual_franka_assembly_batch(
     recipe: str,
     seeds: Iterable[int],
+    layout_seeds: Iterable[int] | None = None,
     scene_profile: str | None = None,
     attach_runtime_cameras: bool = False,
+    domain_randomization_enabled: bool | None = None,
+    policy_evaluation_mode: bool = False,
 ):
+    seeds = [int(seed) for seed in seeds]
+    if layout_seeds is None:
+        resolved_layout_seeds = list(seeds)
+    else:
+        resolved_layout_seeds = [int(seed) for seed in layout_seeds]
+        if len(resolved_layout_seeds) != len(seeds):
+            raise ValueError('layout_seeds must contain exactly one entry per episode seed.')
     return [
         build_dual_franka_assembly_episode(
             recipe=recipe,
             seed=seed,
+            layout_seed=layout_seed,
             episode_idx=index,
             scene_profile=scene_profile,
             attach_runtime_cameras=attach_runtime_cameras,
+            domain_randomization_enabled=domain_randomization_enabled,
+            policy_evaluation_mode=policy_evaluation_mode,
         )
-        for index, seed in enumerate(seeds)
+        for index, (seed, layout_seed) in enumerate(zip(seeds, resolved_layout_seeds))
     ]

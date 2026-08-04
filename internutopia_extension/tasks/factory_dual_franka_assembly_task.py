@@ -153,6 +153,19 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             for metadata in config.object_metadata
             if isinstance(metadata, dict) and metadata.get('name') is not None
         }
+        self.policy_evaluation_mode = bool(getattr(config, 'policy_evaluation_mode', False))
+        self._policy_success_stable_steps = max(int(getattr(config, 'policy_success_stable_steps', 24)), 1)
+        self._policy_success_stable_count = 0
+        self._policy_auto_grasp = bool(getattr(config, 'policy_auto_grasp', True))
+        self._policy_grasp_closed_threshold = float(
+            getattr(config, 'policy_auto_grasp_closed_joint_threshold', 0.35)
+        )
+        self._policy_release_open_threshold = float(
+            getattr(config, 'policy_auto_release_open_joint_threshold', 0.12)
+        )
+        self._policy_release_cooldown_until = {name: 0 for name in config.robot_names}
+        self._policy_interaction_history = []
+        self._policy_attach_specs = self._collect_policy_attach_specs(config.phase_specs)
 
     @property
     def cfg(self) -> FactoryDualFrankaAssemblyTaskCfg:
@@ -162,6 +175,92 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if 0 <= self.phase_index < len(self.phase_specs):
             return self.phase_specs[self.phase_index]
         return {}
+
+    @staticmethod
+    def _collect_policy_attach_specs(phase_specs) -> list[dict]:
+        specs = []
+        seen = set()
+        for phase_spec in phase_specs:
+            entries = phase_spec.get('attach', []) if isinstance(phase_spec, dict) else []
+            if isinstance(entries, dict):
+                entries = [entries]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                object_name = entry.get('object') or entry.get('name')
+                robot_name = entry.get('robot') or entry.get('robot_name')
+                key = (object_name, robot_name)
+                if object_name is None or robot_name is None or key in seen:
+                    continue
+                seen.add(key)
+                specs.append(copy.deepcopy(entry))
+        return specs
+
+    def _policy_evaluation_interactions(self) -> None:
+        if not self._policy_auto_grasp:
+            return
+
+        attached_by_robot = {
+            state.get('robot_name'): object_name
+            for object_name, state in self._attachments.items()
+            if state.get('robot_name') is not None
+        }
+        for robot_name, object_name in list(attached_by_robot.items()):
+            gripper_joint = self._get_robot_gripper_opening(robot_name)
+            if gripper_joint is None or gripper_joint > self._policy_release_open_threshold:
+                continue
+            self._detach_object(object_name)
+            self._policy_release_cooldown_until[robot_name] = int(self.step_counter) + 24
+            self._policy_interaction_history.append(
+                {
+                    'event': 'release',
+                    'step': int(self.step_counter),
+                    'robot': robot_name,
+                    'object': object_name,
+                    'gripper_joint': float(gripper_joint),
+                }
+            )
+
+        attached_by_robot = {
+            state.get('robot_name'): object_name
+            for object_name, state in self._attachments.items()
+            if state.get('robot_name') is not None
+        }
+        for attach_spec in self._policy_attach_specs:
+            robot_name = str(attach_spec.get('robot') or attach_spec.get('robot_name'))
+            object_name = str(attach_spec.get('object') or attach_spec.get('name'))
+            if robot_name in attached_by_robot or object_name in self._attachments:
+                continue
+            if int(self.step_counter) < int(self._policy_release_cooldown_until.get(robot_name, 0)):
+                continue
+            gripper_joint = self._get_robot_gripper_opening(robot_name)
+            if gripper_joint is None or gripper_joint < self._policy_grasp_closed_threshold:
+                continue
+            contact_metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
+            if not bool(contact_metrics.get('contact_ready')):
+                continue
+            runtime_attach_spec = copy.deepcopy(attach_spec)
+            runtime_attach_spec['require_contact'] = True
+            runtime_attach_spec['allow_noncontact_joint_attachment'] = False
+            self._attach_object(
+                object_name,
+                robot_name,
+                phase_spec={'name': 'policy_evaluation_auto_grasp'},
+                attach_spec=runtime_attach_spec,
+            )
+            if object_name not in self._attachments:
+                continue
+            self._policy_interaction_history.append(
+                {
+                    'event': 'grasp',
+                    'step': int(self.step_counter),
+                    'robot': robot_name,
+                    'object': object_name,
+                    'gripper_joint': float(gripper_joint),
+                    'contact_metrics': copy.deepcopy(contact_metrics),
+                }
+            )
+            attached_by_robot[robot_name] = object_name
 
     def mark_local_skill_complete(self, robot_name: str, skill_name: str, detail: dict | None = None):
         self._local_skill_completions[
@@ -1085,36 +1184,48 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             cursor = cursor.GetParent()
         return False
 
-    def _ensure_dynamic_mesh_colliders_are_supported(self, prim) -> None:
-        if prim is None or not prim.IsValid() or not self._prim_has_enabled_rigid_body(prim):
-            return
+    def _set_dynamic_mesh_colliders_enabled(self, prim, enabled: bool) -> bool:
+        if prim is None or not prim.IsValid():
+            return False
         try:
             from pxr import UsdGeom, UsdPhysics
         except Exception:
-            return
+            return False
 
-        unsupported_approximations = {'', 'none', 'meshSimplification', 'triangleMesh'}
+        dynamic_body = self._prim_has_enabled_rigid_body(prim)
+        unsupported_approximations = {'', 'none', 'meshsimplification', 'trianglemesh'}
+        handled = False
 
         def _walk(current_prim):
+            nonlocal handled
             if current_prim is None or not current_prim.IsValid():
                 return
             if current_prim.IsA(UsdGeom.Mesh) and current_prim.HasAPI(UsdPhysics.CollisionAPI):
                 try:
-                    mesh_collision_api = (
-                        UsdPhysics.MeshCollisionAPI(current_prim)
-                        if current_prim.HasAPI(UsdPhysics.MeshCollisionAPI)
-                        else UsdPhysics.MeshCollisionAPI.Apply(current_prim)
-                    )
-                    approximation_attr = mesh_collision_api.GetApproximationAttr()
-                    approximation = approximation_attr.Get()
-                    if approximation is None or str(approximation) in unsupported_approximations:
-                        approximation_attr.Set(getattr(UsdPhysics.Tokens, 'convexHull', 'convexHull'))
+                    collision_enabled = bool(enabled)
+                    if dynamic_body and enabled:
+                        mesh_collision_api = (
+                            UsdPhysics.MeshCollisionAPI(current_prim)
+                            if current_prim.HasAPI(UsdPhysics.MeshCollisionAPI)
+                            else UsdPhysics.MeshCollisionAPI.Apply(current_prim)
+                        )
+                        approximation_attr = mesh_collision_api.GetApproximationAttr()
+                        approximation = approximation_attr.Get()
+                        approximation_name = '' if approximation is None else str(approximation).strip().lower()
+                        if approximation_name in unsupported_approximations:
+                            collision_enabled = False
+                    collision_attr = UsdPhysics.CollisionAPI(current_prim).GetCollisionEnabledAttr()
+                    current_enabled = collision_attr.Get()
+                    if current_enabled is None or bool(current_enabled) != collision_enabled:
+                        collision_attr.Set(collision_enabled)
+                    handled = True
                 except Exception:
                     pass
             for child in current_prim.GetChildren():
                 _walk(child)
 
         _walk(prim)
+        return handled
 
     def _set_object_collision(self, object_name: str, enabled: bool):
         prim = self._object_prims.get(object_name)
@@ -1125,8 +1236,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return
         self._object_collision_enabled[object_name] = bool(enabled)
         try:
+            handled = self._set_dynamic_mesh_colliders_enabled(prim, bool(enabled))
+            if handled:
+                return
             if enabled:
-                self._ensure_dynamic_mesh_colliders_are_supported(prim)
                 activate_collider(prim)
             else:
                 deactivate_collider(prim)
@@ -1451,6 +1564,17 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         return float(self._contact_observation_between(prim_path, filter_prim_path).get('force', 0.0))
 
     @staticmethod
+    def _force_contact_measurement_enabled(attach_spec: dict | None) -> bool:
+        attach_spec = attach_spec or {}
+        required = bool(
+            attach_spec.get(
+                'require_force_contact',
+                attach_spec.get('require_contact_report', False),
+            )
+        )
+        return bool(required or attach_spec.get('measure_force_contact', False))
+
+    @staticmethod
     def _point_to_world_aabb_gap(point: np.ndarray, center: np.ndarray, half_extents: np.ndarray) -> float:
         outside = np.maximum(np.abs(point - center) - half_extents, 0.0)
         return float(np.linalg.norm(outside))
@@ -1588,6 +1712,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             attach_spec.get('contact_force_threshold', self._FINGER_CONTACT_FORCE_THRESHOLD)
         )
         require_dual_contact = bool(attach_spec.get('require_dual_finger_contact', True))
+        measure_force_contact = self._force_contact_measurement_enabled(attach_spec)
 
         object_prim_path = object_rigid_body.unwrap().prim_path
         finger_rigid_bodies = self._get_robot_finger_rigid_bodies(robot_name)
@@ -1619,6 +1744,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             best_sample_position = None
             best_sample_gap = None
             best_local_contact = None
+            sample_contacts = []
             geometric_contact = False
             for sample_position in sample_positions:
                 local_sample_position = self._point_to_local_frame(
@@ -1635,6 +1761,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 if sample_gap is None:
                     sample_gap = self._point_to_world_aabb_gap(sample_position, contact_box_center, half_extents)
                 sample_gap = float(sample_gap)
+                sample_contacts.append(
+                    {
+                        'sample_position': np.asarray(sample_position, dtype=float).tolist(),
+                        'surface_gap': sample_gap,
+                        'local_contact': local_contact,
+                    }
+                )
                 if best_sample_gap is None or sample_gap < best_sample_gap:
                     best_sample_gap = sample_gap
                     best_sample_position = np.asarray(sample_position, dtype=float)
@@ -1649,9 +1782,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'best_surface_gap': None,
                 'axes': {},
             }
-            contact_observation = self._contact_observation_between(
-                rigid_body.unwrap().prim_path,
-                object_prim_path,
+            contact_observation = (
+                self._contact_observation_between(
+                    rigid_body.unwrap().prim_path,
+                    object_prim_path,
+                )
+                if measure_force_contact
+                else {'force': 0.0, 'valid': False, 'source': 'disabled'}
             )
             force = float(contact_observation.get('force', 0.0))
             probe_valid = bool(contact_observation.get('valid', False))
@@ -1672,6 +1809,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'sample_count': len(sample_positions),
                 'best_sample_position': None if best_sample_position is None else best_sample_position.tolist(),
                 'local_contact': local_contact,
+                'sample_contacts': sample_contacts,
                 'has_contact': has_contact,
                 'force_contact': force_contact,
                 'geometric_contact': geometric_contact,
@@ -1679,8 +1817,6 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             finger_contacts.append(has_contact)
 
         pinch_axis = None
-        left_axes = ((finger_metrics.get('left') or {}).get('local_contact') or {}).get('axes') or {}
-        right_axes = ((finger_metrics.get('right') or {}).get('local_contact') or {}).get('axes') or {}
         pinch_candidates = []
         caging_axis = None
         caging_candidates = []
@@ -1690,36 +1826,67 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 max(contact_distance * 4.0, 0.01),
             )
         )
+
+        def _sample_local_contacts(metric: dict) -> list[dict]:
+            contacts = [
+                item.get('local_contact') or {}
+                for item in (metric.get('sample_contacts') or [])
+                if isinstance(item, dict)
+            ]
+            if contacts:
+                return contacts
+            local_contact = metric.get('local_contact') or {}
+            return [local_contact] if local_contact else []
+
+        left_contacts = _sample_local_contacts(finger_metrics.get('left') or {})
+        right_contacts = _sample_local_contacts(finger_metrics.get('right') or {})
         for axis_name in ('x', 'y', 'z'):
-            left_axis = left_axes.get(axis_name)
-            right_axis = right_axes.get(axis_name)
-            if left_axis is None or right_axis is None:
-                continue
-            if float(left_axis.get('signed_coordinate', 0.0)) * float(right_axis.get('signed_coordinate', 0.0)) >= 0.0:
-                continue
-            combined_surface_gap = float(left_axis['surface_gap']) + float(right_axis['surface_gap'])
-            if bool(left_axis.get('contact')) and bool(right_axis.get('contact')):
-                pinch_candidates.append(
-                    {
-                        'axis': axis_name,
-                        'combined_surface_gap': combined_surface_gap,
-                    }
-                )
-            if (
-                bool(left_axis.get('within_patch'))
-                and bool(right_axis.get('within_patch'))
-                and float(max(left_axis['surface_gap'], right_axis['surface_gap'])) <= caging_contact_distance
-            ):
-                caging_candidates.append(
-                    {
-                        'axis': axis_name,
-                        'combined_surface_gap': combined_surface_gap,
-                    }
-                )
+            for left_contact in left_contacts:
+                left_axis = (left_contact.get('axes') or {}).get(axis_name)
+                if left_axis is None:
+                    continue
+                for right_contact in right_contacts:
+                    right_axis = (right_contact.get('axes') or {}).get(axis_name)
+                    if right_axis is None:
+                        continue
+                    if (
+                        float(left_axis.get('signed_coordinate', 0.0))
+                        * float(right_axis.get('signed_coordinate', 0.0))
+                        >= 0.0
+                    ):
+                        continue
+                    combined_surface_gap = float(left_axis['surface_gap']) + float(right_axis['surface_gap'])
+                    if bool(left_axis.get('contact')) and bool(right_axis.get('contact')):
+                        pinch_candidates.append(
+                            {
+                                'axis': axis_name,
+                                'combined_surface_gap': combined_surface_gap,
+                                'left_local_point': left_contact.get('local_point'),
+                                'right_local_point': right_contact.get('local_point'),
+                            }
+                        )
+                    if (
+                        bool(left_axis.get('within_patch'))
+                        and bool(right_axis.get('within_patch'))
+                        and float(max(left_axis['surface_gap'], right_axis['surface_gap']))
+                        <= caging_contact_distance
+                    ):
+                        caging_candidates.append(
+                            {
+                                'axis': axis_name,
+                                'combined_surface_gap': combined_surface_gap,
+                                'left_local_point': left_contact.get('local_point'),
+                                'right_local_point': right_contact.get('local_point'),
+                            }
+                        )
+        pinch_sample_pair = None
         if pinch_candidates:
-            pinch_axis = min(pinch_candidates, key=lambda item: item['combined_surface_gap'])['axis']
+            pinch_sample_pair = min(pinch_candidates, key=lambda item: item['combined_surface_gap'])
+            pinch_axis = pinch_sample_pair['axis']
+        caging_sample_pair = None
         if caging_candidates:
-            caging_axis = min(caging_candidates, key=lambda item: item['combined_surface_gap'])['axis']
+            caging_sample_pair = min(caging_candidates, key=lambda item: item['combined_surface_gap'])
+            caging_axis = caging_sample_pair['axis']
 
         dual_finger_contact = bool(
             bool((finger_metrics.get('left') or {}).get('has_contact'))
@@ -1742,6 +1909,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'object': object_name,
             'robot': robot_name,
             'contact_available': contact_available,
+            'force_contact_measurement_enabled': measure_force_contact,
             'require_dual_finger_contact': require_dual_contact,
             'contact_force_threshold': contact_force_threshold,
             'contact_distance': contact_distance,
@@ -1749,10 +1917,16 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'left_finger': finger_metrics['left'],
             'right_finger': finger_metrics['right'],
             'pinch_axis': pinch_axis,
+            'pinch_sample_pair': pinch_sample_pair,
             'caging_axis': caging_axis,
+            'caging_sample_pair': caging_sample_pair,
             'caging_contact_distance': caging_contact_distance,
             'contact_ready': contact_ready,
             'contact_box_center': contact_box_center.tolist(),
+            'contact_box_orientation': np.asarray(
+                contact_box_orientation,
+                dtype=float,
+            ).tolist(),
             'contact_box_scale': (half_extents * 2.0).tolist(),
         }
 
@@ -1769,6 +1943,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             )
         )
         dual_force_contact = bool(left_finger_metrics.get('force_contact')) and bool(
+            right_finger_metrics.get('force_contact')
+        )
+        any_force_contact = bool(left_finger_metrics.get('force_contact')) or bool(
             right_finger_metrics.get('force_contact')
         )
         dual_force_probe_valid = bool(left_finger_metrics.get('force_probe_valid')) and bool(
@@ -1789,12 +1966,145 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                         and max(float(left_surface_gap), float(right_surface_gap)) <= strict_surface_gap
                     )
 
+        configured_axes = attach_spec.get('physical_contact_axes')
+        if configured_axes is None:
+            attach_mode = self._attachment_mode(attach_spec)
+            allowed_axes = (
+                ('x', 'y')
+                if attach_mode in self._PHYSICAL_GRASP_ATTACHMENT_MODES
+                else ('x', 'y', 'z')
+            )
+        elif isinstance(configured_axes, str):
+            allowed_axes = tuple(axis.strip().lower() for axis in configured_axes.split(',') if axis.strip())
+        else:
+            allowed_axes = tuple(str(axis).strip().lower() for axis in configured_axes if str(axis).strip())
+        contact_box_scale = np.asarray(contact_metrics.get('contact_box_scale') or [], dtype=float).reshape(-1)
+        axis_indices = {'x': 0, 'y': 1, 'z': 2}
+
+        interior_scale = attach_spec.get('physical_contact_interior_scale')
+        if interior_scale is not None:
+            try:
+                interior_scale = float(interior_scale)
+            except (TypeError, ValueError):
+                interior_scale = 0.0
+        try:
+            interior_margin = max(
+                float(
+                    attach_spec.get(
+                        'physical_contact_interior_margin',
+                        min(strict_surface_gap * 0.5, 0.003),
+                    )
+                ),
+                0.0,
+            )
+        except (TypeError, ValueError):
+            interior_margin = 0.0
+
+        def _sample_local_contacts(metric: dict) -> list[dict]:
+            samples = [
+                item.get('local_contact') or {}
+                for item in (metric.get('sample_contacts') or [])
+                if isinstance(item, dict)
+            ]
+            if samples:
+                return samples
+            local_contact = metric.get('local_contact') or {}
+            return [local_contact] if local_contact else []
+
+        def _inside_patch(local_contact: dict, axis: str) -> bool:
+            if interior_scale is None:
+                return True
+            local_point = local_contact.get('local_point')
+            if (
+                local_point is None
+                or contact_box_scale.size != 3
+                or axis not in axis_indices
+                or interior_scale <= 0.0
+                or interior_scale > 1.0
+            ):
+                return False
+            local_point = np.asarray(local_point, dtype=float).reshape(-1)
+            if local_point.size != 3:
+                return False
+            return all(
+                abs(float(local_point[index]))
+                <= float(contact_box_scale[index]) * 0.5 * interior_scale + interior_margin
+                for candidate_axis, index in axis_indices.items()
+                if candidate_axis != axis
+            )
+
+        strict_sample_pairs = []
+        for axis in allowed_axes:
+            if axis not in axis_indices:
+                continue
+            for left_contact in _sample_local_contacts(left_finger_metrics):
+                left_axis = (left_contact.get('axes') or {}).get(axis)
+                if left_axis is None or not bool(left_axis.get('contact')) or not _inside_patch(left_contact, axis):
+                    continue
+                for right_contact in _sample_local_contacts(right_finger_metrics):
+                    right_axis = (right_contact.get('axes') or {}).get(axis)
+                    if (
+                        right_axis is None
+                        or not bool(right_axis.get('contact'))
+                        or not _inside_patch(right_contact, axis)
+                    ):
+                        continue
+                    left_gap = left_axis.get('surface_gap')
+                    right_gap = right_axis.get('surface_gap')
+                    left_coordinate = left_axis.get('signed_coordinate')
+                    right_coordinate = right_axis.get('signed_coordinate')
+                    if None in {left_gap, right_gap, left_coordinate, right_coordinate}:
+                        continue
+                    if float(left_coordinate) * float(right_coordinate) >= 0.0:
+                        continue
+                    if max(float(left_gap), float(right_gap)) > strict_surface_gap:
+                        continue
+                    strict_sample_pairs.append(
+                        {
+                            'axis': axis,
+                            'combined_surface_gap': float(left_gap) + float(right_gap),
+                            'left_local_point': left_contact.get('local_point'),
+                            'right_local_point': right_contact.get('local_point'),
+                        }
+                    )
+        strict_sample_pair = (
+            min(strict_sample_pairs, key=lambda item: item['combined_surface_gap'])
+            if strict_sample_pairs
+            else None
+        )
+        if strict_sample_pair is not None:
+            pinch_axis = strict_sample_pair['axis']
+            strict_pinch_contact = True
+
         strict_dual_finger_contact = self._strict_dual_finger_contact(
             object_name,
             left_finger_metrics,
             right_finger_metrics,
             attach_spec=attach_spec,
         )
+        interior_contact_ready = True
+        if interior_scale is not None:
+            def _finger_inside_contact_patch(metric: dict) -> bool:
+                local_point = ((metric.get('local_contact') or {}).get('local_point'))
+                if local_point is None or contact_box_scale.size != 3 or pinch_axis not in axis_indices:
+                    return False
+                local_point = np.asarray(local_point, dtype=float).reshape(-1)
+                if local_point.size != 3 or interior_scale <= 0.0 or interior_scale > 1.0:
+                    return False
+                return all(
+                    abs(float(local_point[index]))
+                    <= float(contact_box_scale[index]) * 0.5 * interior_scale + interior_margin
+                    for axis, index in axis_indices.items()
+                    if axis != pinch_axis
+                )
+
+            interior_contact_ready = bool(
+                strict_sample_pair is not None
+                or (
+                    _finger_inside_contact_patch(left_finger_metrics)
+                    and _finger_inside_contact_patch(right_finger_metrics)
+                )
+            )
 
         require_force_contact = bool(
             attach_spec.get(
@@ -1802,20 +2112,37 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 attach_spec.get('require_contact_report', False),
             )
         )
+        require_dual_force_contact = bool(attach_spec.get('require_dual_force_contact', False))
+        force_supported_geometric_contact = bool(
+            any_force_contact
+            and interior_contact_ready
+            and (strict_pinch_contact or strict_dual_finger_contact)
+        )
         physical_contact_ready = bool(
-            dual_force_contact or strict_pinch_contact or strict_dual_finger_contact
+            interior_contact_ready
+            and (dual_force_contact or strict_pinch_contact or strict_dual_finger_contact)
         )
         if require_force_contact:
-            physical_contact_ready = dual_force_contact
+            physical_contact_ready = bool(
+                dual_force_contact
+                or (not require_dual_force_contact and force_supported_geometric_contact)
+            )
 
         return {
             'pinch_axis': pinch_axis,
             'strict_surface_gap_limit': strict_surface_gap,
             'dual_force_contact': dual_force_contact,
+            'any_force_contact': any_force_contact,
             'dual_force_probe_valid': dual_force_probe_valid,
             'require_force_contact': require_force_contact,
+            'require_dual_force_contact': require_dual_force_contact,
+            'force_supported_geometric_contact': force_supported_geometric_contact,
             'strict_pinch_contact': strict_pinch_contact,
+            'strict_sample_pair': strict_sample_pair,
             'strict_dual_finger_contact': strict_dual_finger_contact,
+            'physical_contact_interior_scale': interior_scale,
+            'physical_contact_interior_margin': interior_margin,
+            'interior_contact_ready': interior_contact_ready,
             'physical_contact_ready': physical_contact_ready,
         }
 
@@ -1871,6 +2198,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return False
         if not bool((right_finger_metrics or {}).get('geometric_contact')):
             return False
+        if bool(attach_spec.get('allow_cross_axis_dual_finger_contact', False)):
+            left_surface_gap = left_finger_metrics.get('surface_gap')
+            right_surface_gap = right_finger_metrics.get('surface_gap')
+            if (
+                left_surface_gap is not None
+                and right_surface_gap is not None
+                and max(float(left_surface_gap), float(right_surface_gap)) <= strict_surface_gap
+            ):
+                return True
         return any(
             _axis_contact(left_finger_metrics, axis)
             and _axis_contact(right_finger_metrics, axis)
@@ -1892,6 +2228,354 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             delete_prim(joint_path)
         except Exception:
             return
+
+    def relax_fixed_attachment_to_physical_hold(
+        self,
+        object_name: str,
+        *,
+        locked_linear_world_direction=None,
+    ) -> bool:
+        attachment_state = self._attachments.get(str(object_name))
+        if attachment_state is None:
+            return False
+        if attachment_state.get('mode') == 'compliant_joint':
+            return True
+        if attachment_state.get('mode') != 'fixed_joint':
+            return False
+
+        robot_name = attachment_state.get('robot_name')
+        if robot_name is None:
+            return False
+        attach_spec = dict(attachment_state.get('attach_spec') or {})
+        if locked_linear_world_direction is not None:
+            locked_direction = np.asarray(locked_linear_world_direction, dtype=float)
+            locked_direction_norm = float(np.linalg.norm(locked_direction))
+            if (
+                locked_direction.shape != (3,)
+                or not np.all(np.isfinite(locked_direction))
+                or not np.isfinite(locked_direction_norm)
+                or locked_direction_norm <= 1e-9
+            ):
+                raise ValueError(
+                    'locked_linear_world_direction must be a finite non-zero 3-vector.'
+                )
+            attach_spec['compliant_hold_locked_linear_world_direction'] = (
+                locked_direction / locked_direction_norm
+            ).tolist()
+        contact_metrics = self._gripper_contact_metrics(
+            str(object_name),
+            str(robot_name),
+            attach_spec=attach_spec,
+        )
+        strict_contact = self._strict_physical_grasp_contact(
+            str(object_name),
+            contact_metrics,
+            attach_spec=attach_spec,
+        )
+        if not bool(strict_contact.get('physical_contact_ready')):
+            return False
+
+        relative_position, relative_orientation = self._current_relative_pose(
+            str(object_name),
+            str(robot_name),
+        )
+        filtered_paths = attachment_state.get('filtered_gripper_collision_paths') or []
+        self._remove_attachment_joint(str(object_name))
+        joint_path = self._create_compliant_attachment_joint(
+            str(object_name),
+            str(robot_name),
+            attach_spec=attach_spec,
+        )
+        if joint_path is None:
+            replacement_path = self._create_attachment_joint(str(object_name), str(robot_name))
+            attachment_state['joint_path'] = replacement_path
+            return False
+        filter_gripper_collisions = bool(
+            attach_spec.get('compliant_hold_filter_gripper_collisions', True)
+        )
+        if filter_gripper_collisions and not filtered_paths:
+            filtered_paths = self._set_attachment_gripper_collision_filter(
+                str(object_name),
+                str(robot_name),
+                enabled=True,
+            )
+        elif filtered_paths and not filter_gripper_collisions:
+            self._set_attachment_gripper_collision_filter(
+                str(object_name),
+                str(robot_name),
+                enabled=False,
+                filtered_paths=filtered_paths,
+            )
+            filtered_paths = []
+        attachment_state.update(
+            {
+                'mode': 'compliant_joint',
+                'joint_path': joint_path,
+                'position': np.asarray(relative_position, dtype=float).tolist(),
+                'orientation': normalize_quat(relative_orientation).tolist(),
+                'attach_spec': attach_spec,
+                'filtered_gripper_collision_paths': list(filtered_paths),
+                'attach_step': int(self.step_counter),
+                'relaxed_from_fixed_joint_step': int(self.step_counter),
+            }
+        )
+        return True
+
+    def _create_compliant_attachment_joint(
+        self,
+        object_name: str,
+        robot_name: str,
+        *,
+        attach_spec: dict,
+    ) -> str | None:
+        object_rigid_body = self._resolve_object(object_name)
+        hand_rigid_body = self._get_robot_hand_rigid_body(robot_name)
+        if hand_rigid_body is None:
+            return None
+
+        joint_path = self._attachment_joint_path(object_name)
+        object_position, object_orientation = object_rigid_body.get_pose()
+        hand_position, hand_orientation = hand_rigid_body.get_pose()
+        hand_relative_position, hand_relative_orientation = relative_pose(
+            base_position=np.asarray(hand_position, dtype=float),
+            base_orientation=np.asarray(hand_orientation, dtype=float),
+            world_position=np.asarray(object_position, dtype=float),
+            world_orientation=np.asarray(object_orientation, dtype=float),
+        )
+        object_rigid_body.set_linear_velocity(np.zeros(3))
+        try:
+            object_rigid_body.unwrap().set_angular_velocity(np.zeros(3))
+        except Exception:
+            pass
+
+        try:
+            object_mass = float(object_rigid_body.get_mass())
+        except Exception:
+            object_mass = 1.0
+        drive_parameters = self._compliant_attachment_drive_parameters(
+            object_mass=object_mass,
+            grasp_lever_arm=float(np.linalg.norm(hand_relative_position)),
+            attach_spec=attach_spec,
+        )
+
+        try:
+            from pxr import UsdPhysics
+
+            locked_linear_world_direction = attach_spec.get(
+                'compliant_hold_locked_linear_world_direction'
+            )
+            if locked_linear_world_direction is None:
+                parent_frame_orientation = np.array(
+                    [1.0, 0.0, 0.0, 0.0],
+                    dtype=float,
+                )
+                child_frame_orientation = np.asarray(
+                    hand_relative_orientation,
+                    dtype=float,
+                )
+            else:
+                joint_world_orientation = self._quat_align_local_z(
+                    locked_linear_world_direction
+                )
+                parent_frame_orientation = normalize_quat(
+                    quat_multiply(
+                        quat_conjugate(object_orientation),
+                        joint_world_orientation,
+                    )
+                )
+                child_frame_orientation = normalize_quat(
+                    quat_multiply(
+                        quat_conjugate(hand_orientation),
+                        joint_world_orientation,
+                    )
+                )
+
+            joint_prim = create_joint(
+                prim_path=joint_path,
+                joint_type='Joint',
+                body0=object_rigid_body.unwrap().prim_path,
+                body1=hand_rigid_body.unwrap().prim_path,
+                enabled=True,
+                joint_frame_in_parent_frame_pos=np.zeros(3, dtype=float),
+                joint_frame_in_parent_frame_quat=parent_frame_orientation,
+                joint_frame_in_child_frame_pos=np.asarray(hand_relative_position, dtype=float),
+                joint_frame_in_child_frame_quat=child_frame_orientation,
+            )
+            linear_limit = drive_parameters['linear_limit']
+            locked_linear_limit = drive_parameters['locked_linear_limit']
+            angular_limit_degrees = drive_parameters['angular_limit_degrees']
+            linear_drive = {
+                'type': 'force',
+                'max_force': drive_parameters['linear_max_force'],
+                'target_position': 0.0,
+                'target_velocity': 0.0,
+                'damping': drive_parameters['linear_damping'],
+                'stiffness': drive_parameters['linear_stiffness'],
+            }
+            angular_drive = {
+                'type': 'force',
+                'max_force': drive_parameters['angular_max_force'],
+                'target_position': 0.0,
+                'target_velocity': 0.0,
+                'damping': drive_parameters['angular_damping'],
+                'stiffness': drive_parameters['angular_stiffness'],
+            }
+            for drive_name in ('transX', 'transY', 'transZ'):
+                axis_limit = (
+                    locked_linear_limit
+                    if locked_linear_world_direction is not None
+                    and drive_name == 'transZ'
+                    else linear_limit
+                )
+                limit_api = UsdPhysics.LimitAPI.Apply(joint_prim, drive_name)
+                limit_api.CreateLowAttr(-axis_limit)
+                limit_api.CreateHighAttr(axis_limit)
+                self._apply_configured_joint_drive(
+                    joint_prim,
+                    {'name': drive_name, **linear_drive},
+                )
+            for drive_name in ('rotX', 'rotY', 'rotZ'):
+                limit_api = UsdPhysics.LimitAPI.Apply(joint_prim, drive_name)
+                limit_api.CreateLowAttr(-angular_limit_degrees)
+                limit_api.CreateHighAttr(angular_limit_degrees)
+                self._apply_configured_joint_drive(
+                    joint_prim,
+                    {'name': drive_name, **angular_drive},
+                )
+        except Exception as exc:
+            print(
+                '[ur5e-insertion-compliance-error] '
+                f'object={object_name} robot={robot_name} error={exc!r}',
+                flush=True,
+            )
+            return None
+        self._attachment_joints[object_name] = joint_path
+        print(
+            '[ur5e-compliant-joint] '
+            f'object={object_name} robot={robot_name} mass={object_mass} '
+            f'lever_arm={float(np.linalg.norm(hand_relative_position))} '
+            f'linear_max_force={drive_parameters["linear_max_force"]} '
+            f'linear_stiffness={drive_parameters["linear_stiffness"]} '
+            f'linear_damping={drive_parameters["linear_damping"]} '
+            f'angular_max_force={drive_parameters["angular_max_force"]} '
+            f'angular_stiffness={drive_parameters["angular_stiffness"]} '
+            f'angular_damping={drive_parameters["angular_damping"]} '
+            f'locked_linear_world_direction={locked_linear_world_direction} '
+            f'locked_linear_limit={drive_parameters["locked_linear_limit"]}',
+            flush=True,
+        )
+        return joint_path
+
+    @staticmethod
+    def _quat_align_local_z(world_direction) -> np.ndarray:
+        direction = np.asarray(world_direction, dtype=float)
+        norm = float(np.linalg.norm(direction))
+        if (
+            direction.shape != (3,)
+            or not np.all(np.isfinite(direction))
+            or not np.isfinite(norm)
+            or norm <= 1e-9
+        ):
+            raise ValueError('Joint alignment direction must be a finite non-zero 3-vector.')
+        direction = direction / norm
+        local_z = np.asarray([0.0, 0.0, 1.0], dtype=float)
+        dot = float(np.clip(np.dot(local_z, direction), -1.0, 1.0))
+        if dot <= -1.0 + 1e-9:
+            return np.asarray([0.0, 1.0, 0.0, 0.0], dtype=float)
+        cross = np.cross(local_z, direction)
+        return normalize_quat([1.0 + dot, *cross])
+
+    @staticmethod
+    def _compliant_attachment_drive_parameters(
+        *,
+        object_mass: float,
+        grasp_lever_arm: float,
+        attach_spec: dict,
+    ) -> dict[str, float]:
+        mass = max(float(object_mass), 1e-3)
+        lever_arm = max(float(grasp_lever_arm), 0.02)
+        linear_limit = max(
+            float(attach_spec.get('compliant_hold_linear_limit', 0.006)),
+            1e-4,
+        )
+        locked_linear_limit = max(
+            float(attach_spec.get('compliant_hold_locked_linear_limit', 0.00025)),
+            0.0,
+        )
+        angular_limit_degrees = max(
+            float(attach_spec.get('compliant_hold_angular_limit_degrees', 6.0)),
+            0.1,
+        )
+        angular_limit = np.deg2rad(angular_limit_degrees)
+        gravity_multiplier = max(
+            float(attach_spec.get('compliant_hold_gravity_force_multiplier', 6.0)),
+            1.0,
+        )
+        damping_ratio = max(
+            float(attach_spec.get('compliant_hold_drive_damping_ratio', 1.0)),
+            0.0,
+        )
+        torque_force_fraction = max(
+            float(attach_spec.get('compliant_hold_torque_force_fraction', 0.5)),
+            0.0,
+        )
+
+        minimum_linear_force = float(
+            attach_spec.get('compliant_hold_linear_max_force', 20.0)
+        )
+        linear_force_cap = max(
+            float(attach_spec.get('compliant_hold_linear_force_cap', 120.0)),
+            minimum_linear_force,
+        )
+        linear_max_force = min(
+            max(minimum_linear_force, mass * 9.81 * gravity_multiplier),
+            linear_force_cap,
+        )
+        linear_stiffness = max(
+            float(attach_spec.get('compliant_hold_linear_stiffness', 500.0)),
+            linear_max_force / (2.0 * linear_limit),
+        )
+        linear_damping = max(
+            float(attach_spec.get('compliant_hold_linear_damping', 10.0)),
+            2.0 * damping_ratio * float(np.sqrt(linear_stiffness * mass)),
+        )
+
+        minimum_angular_force = float(
+            attach_spec.get('compliant_hold_angular_max_force', 2.0)
+        )
+        angular_force_cap = max(
+            float(attach_spec.get('compliant_hold_angular_force_cap', 12.0)),
+            minimum_angular_force,
+        )
+        angular_max_force = min(
+            max(
+                minimum_angular_force,
+                linear_max_force * lever_arm * torque_force_fraction,
+            ),
+            angular_force_cap,
+        )
+        angular_stiffness = max(
+            float(attach_spec.get('compliant_hold_angular_stiffness', 5.0)),
+            angular_max_force / (2.0 * angular_limit),
+        )
+        rotational_inertia = max(mass * lever_arm * lever_arm, 1e-4)
+        angular_damping = max(
+            float(attach_spec.get('compliant_hold_angular_damping', 0.2)),
+            2.0
+            * damping_ratio
+            * float(np.sqrt(angular_stiffness * rotational_inertia)),
+        )
+        return {
+            'linear_limit': linear_limit,
+            'locked_linear_limit': min(locked_linear_limit, linear_limit),
+            'angular_limit_degrees': angular_limit_degrees,
+            'linear_max_force': linear_max_force,
+            'linear_stiffness': linear_stiffness,
+            'linear_damping': linear_damping,
+            'angular_max_force': angular_max_force,
+            'angular_stiffness': angular_stiffness,
+            'angular_damping': angular_damping,
+        }
 
     def _create_attachment_joint(self, object_name: str, robot_name: str) -> str | None:
         object_rigid_body = self._resolve_object(object_name)
@@ -2991,6 +3675,34 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _lock_object(self, object_name: str, target_name: str, *, lock_spec: dict | None = None):
         lock_spec = lock_spec or {}
         current_position, current_orientation = self._resolve_object(object_name).get_pose()
+        rebase_targets = self._as_list(lock_spec.get('rebase_targets'))
+        if rebase_targets:
+            if target_name not in self.target_poses:
+                raise KeyError(f'Unknown lock anchor target: {target_name}')
+            anchor_target = self.target_poses[target_name]
+            anchor_target_position = np.asarray(anchor_target['position'], dtype=float).copy()
+            anchor_target_orientation = normalize_quat(anchor_target['orientation'])
+            rebased_names = list(dict.fromkeys([*rebase_targets, target_name]))
+            for rebased_name in rebased_names:
+                if rebased_name not in self.target_poses:
+                    raise KeyError(f'Unknown rebase target: {rebased_name}')
+                target_pose = self.target_poses[rebased_name]
+                local_position, local_orientation = relative_pose(
+                    base_position=anchor_target_position,
+                    base_orientation=anchor_target_orientation,
+                    world_position=target_pose['position'],
+                    world_orientation=target_pose['orientation'],
+                )
+                world_position, world_orientation = compose_pose(
+                    base_position=current_position,
+                    base_orientation=current_orientation,
+                    local_position=local_position,
+                    local_orientation=local_orientation,
+                )
+                self.target_poses[rebased_name] = {
+                    'position': np.asarray(world_position, dtype=float),
+                    'orientation': normalize_quat(world_orientation),
+                }
         self._clear_attachment_state(object_name, enable_collision=False)
         self._locked_targets[object_name] = target_name
         lock_pose_source = str(lock_spec.get('lock_pose_source', '')).strip().lower()
@@ -3026,6 +3738,127 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 handle.write(json.dumps(payload) + '\n')
         except Exception:
             return
+
+    def _strict_contact_target_refinement(
+        self,
+        *,
+        phase_spec: dict,
+        attach_spec: dict,
+        target_info: dict,
+        strict_contact: dict,
+    ) -> dict:
+        enabled = bool(attach_spec.get('allow_strict_contact_target_refinement', False))
+        detail = {
+            'enabled': enabled,
+            'ready': False,
+        }
+        if not enabled or not bool(strict_contact.get('physical_contact_ready')):
+            return detail
+
+        robot_name = str(attach_spec['robot'])
+        local_skill_spec = phase_spec.get('local_skill') or {}
+        local_skill_name = (
+            local_skill_spec.get('name')
+            if isinstance(local_skill_spec, dict)
+            else None
+        )
+        if local_skill_name is None:
+            detail['reason'] = 'missing_local_skill'
+            return detail
+        completion = self._local_skill_completions.get(
+            (
+                self.phase_index,
+                self.phase_entry_step,
+                robot_name,
+                str(local_skill_name),
+            )
+        )
+        if not isinstance(completion, dict):
+            detail['reason'] = 'local_skill_incomplete'
+            return detail
+        contact_detail = completion.get('contact_detail') or {}
+        if not bool(contact_detail.get('strict_contact_ready')):
+            detail['reason'] = 'local_skill_strict_contact_missing'
+            return detail
+
+        recenter_detail = completion.get('recenter') or {}
+        try:
+            recenter_offset = np.asarray(
+                recenter_detail.get('offset_world'),
+                dtype=float,
+            )
+        except (TypeError, ValueError):
+            recenter_offset = np.asarray([], dtype=float)
+        if recenter_offset.shape != (3,) or not np.all(np.isfinite(recenter_offset)):
+            detail['reason'] = 'invalid_refinement_offset'
+            return detail
+        refinement_distance = float(np.linalg.norm(recenter_offset))
+        max_refinement_distance = max(
+            float(attach_spec.get('strict_contact_target_refinement_max_distance', 0.0)),
+            0.0,
+        )
+        if refinement_distance <= 1e-12 or refinement_distance > max_refinement_distance:
+            detail.update(
+                {
+                    'reason': 'refinement_distance_out_of_bounds',
+                    'refinement_distance': refinement_distance,
+                    'max_refinement_distance': max_refinement_distance,
+                }
+            )
+            return detail
+
+        position_error = target_info.get('position_error')
+        position_tolerance = target_info.get(
+            'position_tolerance',
+            attach_spec.get('position_tolerance', attach_spec.get('tolerance')),
+        )
+        tracking_tolerance = max(
+            float(attach_spec.get('strict_contact_target_refinement_tracking_tolerance', 0.0)),
+            0.0,
+        )
+        try:
+            allowed_position_error = (
+                float(position_tolerance)
+                + refinement_distance
+                + tracking_tolerance
+            )
+            position_ready = bool(
+                position_error is not None
+                and np.isfinite(float(position_error))
+                and float(position_error) <= allowed_position_error
+            )
+        except (TypeError, ValueError):
+            allowed_position_error = None
+            position_ready = False
+
+        orientation_error = target_info.get('orientation_error')
+        orientation_tolerance = target_info.get(
+            'orientation_tolerance',
+            attach_spec.get('orientation_tolerance'),
+        )
+        orientation_ready = bool(
+            orientation_tolerance is None
+            or orientation_error is None
+            or (
+                np.isfinite(float(orientation_error))
+                and float(orientation_error) <= float(orientation_tolerance)
+            )
+        )
+        detail.update(
+            {
+                'ready': bool(position_ready and orientation_ready),
+                'refinement_distance': refinement_distance,
+                'max_refinement_distance': max_refinement_distance,
+                'tracking_tolerance': tracking_tolerance,
+                'position_error': position_error,
+                'allowed_position_error': allowed_position_error,
+                'position_ready': position_ready,
+                'orientation_error': orientation_error,
+                'orientation_tolerance': orientation_tolerance,
+                'orientation_ready': orientation_ready,
+            }
+        )
+        return detail
 
     def _attach_ready(self, phase_spec: dict, attach_spec: dict) -> bool:
         object_name = attach_spec['object']
@@ -3169,8 +4002,17 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             contact_metrics,
             attach_spec=attach_spec,
         )
+        target_refinement = self._strict_contact_target_refinement(
+            phase_spec=phase_spec,
+            attach_spec=attach_spec,
+            target_info=target_info,
+            strict_contact=strict_contact,
+        )
         debug_payload['contact_metrics'] = copy.deepcopy(contact_metrics)
         debug_payload['strict_contact'] = copy.deepcopy(strict_contact)
+        debug_payload['strict_contact_target_refinement'] = copy.deepcopy(
+            target_refinement
+        )
         gripper_opening_limit = self._gripper_opening_limit(
             object_name,
             attach_spec,
@@ -3284,21 +4126,29 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             enclosure_ready = False
             top_contact_ready = False
         elif uses_physical_joint and (slender_attach or require_physical_contact):
-            if bool(attach_spec.get('require_force_contact', attach_spec.get('require_contact_report', False))):
-                contact_ready = bool(strict_contact['physical_contact_ready'])
-            else:
-                contact_ready = strict_dual_finger_contact
+            # Use the same all-sample opposing-finger check as the local close
+            # skill. The single "best" point on each finger may lie on
+            # different faces even when another sampled pair forms a valid
+            # physical pinch.
+            contact_ready = bool(strict_contact['physical_contact_ready'])
         debug_payload['enclosure_ready'] = enclosure_ready
         debug_payload['contact_ready'] = contact_ready
         if bool(attach_spec.get('require_contact', True)) and not contact_ready:
             debug_payload['blocked_by'] = 'contact'
             self._maybe_write_attach_debug(debug_payload)
             return False
-        if require_target_reached and not target_info['target_reached']:
+        effective_target_reached = bool(
+            target_info['target_reached'] or target_refinement.get('ready')
+        )
+        debug_payload['effective_target_reached'] = effective_target_reached
+        if require_target_reached and not effective_target_reached:
             debug_payload['blocked_by'] = 'target'
             self._maybe_write_attach_debug(debug_payload)
             return False
-        attach_ready = bool(proximity_metrics['within_proximity'] and (target_info['target_reached'] or contact_ready))
+        attach_ready = bool(
+            proximity_metrics['within_proximity']
+            and (effective_target_reached or contact_ready)
+        )
         debug_payload['attach_ready'] = attach_ready
         if not attach_ready:
             debug_payload['blocked_by'] = 'proximity_or_target'
@@ -3600,7 +4450,12 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             self._set_object_pose(object_name, locked_pose['position'], locked_pose['orientation'])
 
         for object_name, attach_state in self._attachments.items():
-            if attach_state.get('mode') in {'fixed_joint', 'physical_hold', 'pure_physical_grasp'}:
+            if attach_state.get('mode') in {
+                'fixed_joint',
+                'compliant_joint',
+                'physical_hold',
+                'pure_physical_grasp',
+            }:
                 continue
             robot_pose = self._get_robot_task_pose(attach_state['robot_name'])
             position, orientation = compose_pose(
@@ -3744,14 +4599,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 if bool(normalized_contact_spec.get('allow_caging_contact_for_physical_grasp', False)):
                     contact_ready = bool(contact_ready or contact_metrics.get('contact_ready'))
             else:
-                strict_dual_finger_contact = self._strict_dual_finger_contact(
+                strict_contact = self._strict_physical_grasp_contact(
                     object_name,
-                    contact_metrics.get('left_finger') or {},
-                    contact_metrics.get('right_finger') or {},
+                    contact_metrics,
                     attach_spec=normalized_contact_spec,
                 )
                 if bool(normalized_contact_spec.get('require_physical_contact', False)):
-                    contact_ready = bool(strict_dual_finger_contact)
+                    contact_ready = bool(strict_contact.get('physical_contact_ready'))
                 else:
                     contact_ready = bool(contact_metrics.get('contact_ready'))
             if not contact_ready:
@@ -3797,21 +4651,38 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         linear_speed = float(np.linalg.norm(linear_velocity))
         angular_speed = float(np.linalg.norm(angular_velocity))
         pose_stable_override = False
+        pose_stability_position_drift = None
+        pose_stability_orientation_drift = None
         history = self._object_pose_history.get(object_name)
         if history is not None and len(history) >= int(pose_stability_min_samples):
             start_step, start_position, start_orientation = history[0]
             end_step, end_position, end_orientation = history[-1]
             if end_step > start_step:
-                position_drift = float(np.linalg.norm(np.asarray(end_position) - np.asarray(start_position)))
-                _, orientation_drift = pose_error(
-                    current_position=np.asarray(end_position, dtype=float),
-                    current_orientation=np.asarray(end_orientation, dtype=float),
-                    target_position=np.asarray(start_position, dtype=float),
-                    target_orientation=np.asarray(start_orientation, dtype=float),
-                )
+                position_drifts = []
+                orientation_drifts = []
+                for _, sample_position, sample_orientation in history:
+                    position_drifts.append(
+                        float(
+                            np.linalg.norm(
+                                np.asarray(sample_position, dtype=float)
+                                - np.asarray(end_position, dtype=float)
+                            )
+                        )
+                    )
+                    _, orientation_drift = pose_error(
+                        current_position=np.asarray(end_position, dtype=float),
+                        current_orientation=np.asarray(end_orientation, dtype=float),
+                        target_position=np.asarray(sample_position, dtype=float),
+                        target_orientation=np.asarray(sample_orientation, dtype=float),
+                    )
+                    orientation_drifts.append(float(orientation_drift or 0.0))
+                pose_stability_position_drift = max(position_drifts)
+                pose_stability_orientation_drift = max(orientation_drifts)
                 pose_stable_override = bool(
-                    position_drift <= float(pose_stability_position_tolerance)
-                    and orientation_drift <= float(pose_stability_orientation_tolerance)
+                    pose_stability_position_drift
+                    <= float(pose_stability_position_tolerance)
+                    and pose_stability_orientation_drift
+                    <= float(pose_stability_orientation_tolerance)
                 )
         is_static = bool(
             (linear_speed <= float(linear_threshold) and angular_speed <= float(angular_threshold))
@@ -3826,6 +4697,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'linear_threshold': float(linear_threshold),
             'angular_threshold': float(angular_threshold),
             'pose_stable_override': pose_stable_override,
+            'pose_stability_position_drift': pose_stability_position_drift,
+            'pose_stability_orientation_drift': pose_stability_orientation_drift,
             'is_static': is_static,
         }
 
@@ -4266,6 +5139,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'linear_speed': velocity_metrics.get('linear_speed'),
                 'angular_speed': velocity_metrics.get('angular_speed'),
                 'is_static': velocity_metrics.get('is_static'),
+                'pose_stable_override': velocity_metrics.get('pose_stable_override'),
                 'scale': self._get_object_scale(object_name).tolist(),
                 'attached_to': None if attachment_state is None else attachment_state.get('robot_name'),
                 'grasped_by': None if attachment_mode != 'pure_physical_grasp' else attachment_state.get('robot_name'),
@@ -4311,6 +5185,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def _update_task_state(self):
         if self.success or self.failed or not self.phase_specs:
+            return
+
+        if self.policy_evaluation_mode:
+            self._sync_object_states()
+            self._policy_evaluation_interactions()
+            self._sync_object_states()
+            self.phase = 'policy_evaluation'
+            self.phase_status = 'evaluating'
+            self.phase_step_counter += 1
             return
 
         self._initialize_phase()
@@ -4393,14 +5276,43 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def is_done(self) -> bool:
         self.step_counter += 1
+        if self.policy_evaluation_mode and not self.success and not self.failed:
+            success_now = self._check_success()
+            self._policy_success_stable_count = self._policy_success_stable_count + 1 if success_now else 0
+            if self._policy_success_stable_count >= self._policy_success_stable_steps:
+                self._set_terminal_state(
+                    'complete',
+                    reason='policy-success-detector-stable',
+                    status='success',
+                    detail={
+                        'stable_steps': int(self._policy_success_stable_count),
+                        'required_stable_steps': int(self._policy_success_stable_steps),
+                    },
+                )
+            elif self.step_counter >= self.max_steps:
+                self._set_terminal_state(
+                    'failed',
+                    reason='policy-evaluation-max-steps',
+                    status='failed',
+                    detail={'success_diagnostics': self._success_diagnostics()},
+                )
         return self.success or self.failed or self.step_counter >= self.max_steps
 
     def calculate_metrics(self) -> dict:
+        criteria_passed = bool(self._check_success())
+        reported_success = bool(
+            self.success
+            if self.policy_evaluation_mode
+            else self.success or criteria_passed
+        )
         return {
             'recipe': self.cfg.recipe,
             'seed': self.cfg.seed,
+            'layout_seed': int(
+                self.cfg.seed if getattr(self.cfg, 'layout_seed', None) is None else self.cfg.layout_seed
+            ),
             'episode_idx': self.cfg.episode_idx,
-            'success': self.success or self._check_success(),
+            'success': reported_success,
             'failed': self.failed,
             'phase_status': self.phase_status,
             'phase_history': self.phase_history,
@@ -4415,4 +5327,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'handoff_history': self._handoff_history,
             'recovery_history': self._recovery_history,
             'terminal_reason': self.terminal_reason,
+            'domain_randomization': copy.deepcopy(getattr(self.cfg, 'domain_randomization', {})),
+            'success_detector': {
+                'policy_evaluation_mode': bool(self.policy_evaluation_mode),
+                'passed': reported_success,
+                'criteria_passed': criteria_passed,
+                'stable_steps': int(self._policy_success_stable_count),
+                'required_stable_steps': int(self._policy_success_stable_steps),
+                'criteria': self._success_diagnostics(),
+            },
+            'policy_interaction_history': copy.deepcopy(self._policy_interaction_history),
         }

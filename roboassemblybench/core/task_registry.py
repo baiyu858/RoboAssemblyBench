@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +15,44 @@ from roboassemblybench.core.scene_profiles import DEFAULT_SCENE_PROFILE, deep_me
 
 TASK_SPEC_BASENAME = 'recipe.yaml'
 TASK_ANNOTATION_BASENAME = 'annotation.yaml'
+FINGERPRINT_ROOT_ENV = 'ROBOASSEMBLYBENCH_FINGERPRINT_REPO_ROOT'
+
+
+def _canonicalize_fingerprint_paths(value: Any, *, source_root: str, target_root: str) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _canonicalize_fingerprint_paths(item, source_root=source_root, target_root=target_root)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _canonicalize_fingerprint_paths(item, source_root=source_root, target_root=target_root)
+            for item in value
+        ]
+    if isinstance(value, str) and (value == source_root or value.startswith(f'{source_root}/')):
+        return f'{target_root}{value[len(source_root):]}'
+    return value
+
+
+def task_recipe_fingerprint(payload: dict) -> str:
+    canonical = copy.deepcopy(payload)
+    canonical.pop('recipe_fingerprint', None)
+    canonical.pop('qualification', None)
+    canonical.pop('collection', None)
+    fingerprint_root = os.environ.get(FINGERPRINT_ROOT_ENV)
+    if fingerprint_root:
+        canonical = _canonicalize_fingerprint_paths(
+            canonical,
+            source_root=str(BENCHMARK_ROOT.parent),
+            target_root=str(Path(fingerprint_root).expanduser()),
+        )
+    encoded = json.dumps(
+        canonical,
+        sort_keys=True,
+        separators=(',', ':'),
+        ensure_ascii=True,
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def list_task_recipes() -> list[str]:
@@ -325,6 +366,11 @@ def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None) -> d
     if scene_profile_payload:
         payload = deep_merge(scene_profile_payload, payload)
 
+    if payload.get('fabrica_canonical') is not None:
+        from roboassemblybench.core.fabrica_canonical import compile_fabrica_canonical_recipe
+
+        payload = compile_fabrica_canonical_recipe(payload)
+
     merged_metadata = deep_merge(scene_profile_metadata, task_metadata)
     merged_metadata = deep_merge(merged_metadata, annotation_metadata)
     payload['metadata'] = merged_metadata
@@ -350,4 +396,5 @@ def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None) -> d
     payload.setdefault('source_benchmark', payload.get('benchmark_family', 'robo_assembly_bench'))
     payload.setdefault('source_config_path', str(path))
     payload['asset_references'] = _collect_asset_references(payload=payload, metadata=merged_metadata)
+    payload['recipe_fingerprint'] = task_recipe_fingerprint(payload)
     return copy.deepcopy(payload)

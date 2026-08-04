@@ -60,3 +60,9 @@ class UsdObjCfg(ObjectCfg):
     static_friction: Optional[float] = None
     dynamic_friction: Optional[float] = None
     restitution: Optional[float] = None
+    linear_damping: Optional[float] = None
+    angular_damping: Optional[float] = None
+    sleep_threshold: Optional[float] = None
+    stabilization_threshold: Optional[float] = None
+    solver_position_iteration_count: Optional[int] = None
+    solver_velocity_iteration_count: Optional[int] = None

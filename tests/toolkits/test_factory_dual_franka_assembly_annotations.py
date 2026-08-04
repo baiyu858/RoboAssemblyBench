@@ -25,16 +25,16 @@ def test_annotation_loader_exposes_description_and_roles():
     assert annotation['metadata']['authoring_stack'] == 'RoboFactory/RoboTwin-style'
     assert annotation['metadata']['object_roles']['assembly_part']['role'] == 'workpiece'
     assert annotation['metadata']['target_roles']['screw_insert']['object'] == 'screw'
-    assert 'fasten the screw' in annotation['task_description']
+    assert 'insert the screw' in annotation['task_description']
 
 
 def test_recipe_loader_merges_annotation_metadata():
     recipe_spec = load_task_recipe('peg_insertion', scene_profile='taoyuan_tabletop')
     assert recipe_spec['annotation_name'] == 'peg_insertion'
-    assert recipe_spec['task_description'].startswith('Two Franka arms align the housing')
-    assert 'dual-arm' in recipe_spec['metadata']['tags']
-    assert recipe_spec['annotation_target_roles']['peg_insert']['object'] == 'peg'
-    assert recipe_spec['annotation_phase_notes'][0]['name'] == 'left_approach_housing'
+    assert recipe_spec['task_description'].startswith('A square socket block')
+    assert 'physical-grasp' in recipe_spec['metadata']['tags']
+    assert recipe_spec['annotation_target_roles']['right_insert_robot']['object'] == 'peg'
+    assert recipe_spec['annotation_phase_notes'][0]['name'] == 'right_approach_peg'
 
 
 def test_scene_builder_uses_annotation_targets():

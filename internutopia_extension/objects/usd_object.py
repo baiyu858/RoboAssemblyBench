@@ -42,7 +42,7 @@ class UsdObject(BaseObject):
         from omni.isaac.core.utils.prims import is_prim_path_valid
         from omni.isaac.core.utils.stage import add_reference_to_stage
         from omni.physx.scripts import utils
-        from pxr import UsdGeom, UsdPhysics
+        from pxr import PhysxSchema, UsdGeom, UsdPhysics
 
         def set_nested_collision_enabled(prim, enabled: bool) -> None:
             if prim is None or not prim.IsValid():
@@ -78,6 +78,37 @@ class UsdObject(BaseObject):
             for child in prim.GetChildren():
                 set_nested_colliders(child, dynamic_body=dynamic_body)
 
+        def prepare_dynamic_mesh_colliders(prim) -> None:
+            colliders = []
+
+            def collect(current_prim) -> None:
+                if current_prim is None or not current_prim.IsValid():
+                    return
+                if current_prim.IsA(UsdGeom.Mesh) and current_prim.HasAPI(UsdPhysics.CollisionAPI):
+                    mesh_collision_api = (
+                        UsdPhysics.MeshCollisionAPI(current_prim)
+                        if current_prim.HasAPI(UsdPhysics.MeshCollisionAPI)
+                        else UsdPhysics.MeshCollisionAPI.Apply(current_prim)
+                    )
+                    approximation = mesh_collision_api.GetApproximationAttr().Get()
+                    approximation_name = '' if approximation is None else str(approximation).strip().lower()
+                    colliders.append((current_prim, mesh_collision_api, approximation_name))
+                for child in current_prim.GetChildren():
+                    collect(child)
+
+            collect(prim)
+            unsupported = {'', 'none', 'meshsimplification', 'trianglemesh'}
+            has_supported_collider = any(name not in unsupported for _, _, name in colliders)
+            for collider_prim, mesh_collision_api, approximation_name in colliders:
+                if approximation_name not in unsupported:
+                    continue
+                if has_supported_collider:
+                    UsdPhysics.CollisionAPI(collider_prim).GetCollisionEnabledAttr().Set(False)
+                else:
+                    mesh_collision_api.GetApproximationAttr().Set(
+                        getattr(UsdPhysics.Tokens, 'convexHull', 'convexHull')
+                    )
+
         class RigidObject(RigidPrim):
             def __init__(
                 self,
@@ -98,6 +129,12 @@ class UsdObject(BaseObject):
                 static_friction: Optional[float] = None,
                 dynamic_friction: Optional[float] = None,
                 restitution: Optional[float] = None,
+                linear_damping: Optional[float] = None,
+                angular_damping: Optional[float] = None,
+                sleep_threshold: Optional[float] = None,
+                stabilization_threshold: Optional[float] = None,
+                solver_position_iteration_count: Optional[int] = None,
+                solver_velocity_iteration_count: Optional[int] = None,
             ) -> None:
                 if not is_prim_path_valid(prim_path):
                     if mass is None:
@@ -110,6 +147,8 @@ class UsdObject(BaseObject):
                     set_nested_colliders(prim, dynamic_body=True)
                 elif not collider:
                     set_nested_collision_enabled(prim, False)
+                if collider:
+                    prepare_dynamic_mesh_colliders(prim)
                 RigidPrim.__init__(
                     self,
                     prim_path=prim_path,
@@ -124,6 +163,18 @@ class UsdObject(BaseObject):
                     linear_velocity=linear_velocity,
                     angular_velocity=angular_velocity,
                 )
+                physx_rigid_body = PhysxSchema.PhysxRigidBodyAPI.Apply(prim)
+                optional_physics_values = (
+                    ('GetLinearDampingAttr', linear_damping),
+                    ('GetAngularDampingAttr', angular_damping),
+                    ('GetSleepThresholdAttr', sleep_threshold),
+                    ('GetStabilizationThresholdAttr', stabilization_threshold),
+                    ('GetSolverPositionIterationCountAttr', solver_position_iteration_count),
+                    ('GetSolverVelocityIterationCountAttr', solver_velocity_iteration_count),
+                )
+                for attribute_getter, value in optional_physics_values:
+                    if value is not None:
+                        getattr(physx_rigid_body, attribute_getter)().Set(value)
                 self._apply_optional_physics_material(
                     name=name,
                     static_friction=static_friction,
@@ -233,6 +284,12 @@ class UsdObject(BaseObject):
                     static_friction=self._config.static_friction,
                     dynamic_friction=self._config.dynamic_friction,
                     restitution=self._config.restitution,
+                    linear_damping=self._config.linear_damping,
+                    angular_damping=self._config.angular_damping,
+                    sleep_threshold=self._config.sleep_threshold,
+                    stabilization_threshold=self._config.stabilization_threshold,
+                    solver_position_iteration_count=self._config.solver_position_iteration_count,
+                    solver_velocity_iteration_count=self._config.solver_velocity_iteration_count,
                 )
             )
         else:

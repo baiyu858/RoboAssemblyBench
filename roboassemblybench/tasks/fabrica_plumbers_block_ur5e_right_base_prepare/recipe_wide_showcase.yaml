@@ -1,0 +1,18 @@
+extends: recipe.yaml
+
+task_name: fabrica_plumbers_block_ur5e_right_base_prepare_wide_showcase
+
+domain_randomization:
+  enabled: false
+  seed_namespace: fabrica_plumbers_block_ur5e_right_base_prepare_position_wide_v1
+  groups:
+    start_parts:
+      translation:
+        x: [0.0, 0.0]
+        y: [0.0, 0.0]
+        z: [0.0, 0.0]
+    assembly_base:
+      translation:
+        x: [-0.040, 0.040]
+        y: [-0.040, 0.040]
+        z: [0.0, 0.0]
