@@ -96,6 +96,12 @@ objects:
     dynamic_friction: 0.5
     restitution: 0.0
     mass: 0.01
+    linear_damping: 1.0
+    angular_damping: 2.0
+    sleep_threshold: 0.01
+    stabilization_threshold: 0.001
+    solver_position_iteration_count: 16
+    solver_velocity_iteration_count: 4
   - name: fabrica_plumbers_block_1
     kind: usd
     prim_path: /fabrica_plumbers_block_1
@@ -110,6 +116,12 @@ objects:
     dynamic_friction: 0.5
     restitution: 0.0
     mass: 0.01
+    linear_damping: 1.0
+    angular_damping: 2.0
+    sleep_threshold: 0.01
+    stabilization_threshold: 0.001
+    solver_position_iteration_count: 16
+    solver_velocity_iteration_count: 4
   - name: fabrica_plumbers_block_2
     kind: usd
     prim_path: /fabrica_plumbers_block_2
@@ -124,6 +136,12 @@ objects:
     dynamic_friction: 0.5
     restitution: 0.0
     mass: 0.01
+    linear_damping: 1.0
+    angular_damping: 2.0
+    sleep_threshold: 0.01
+    stabilization_threshold: 0.001
+    solver_position_iteration_count: 16
+    solver_velocity_iteration_count: 4
     tracked: false
   - name: fabrica_plumbers_block_3
     kind: usd
@@ -139,6 +157,12 @@ objects:
     dynamic_friction: 0.5
     restitution: 0.0
     mass: 0.01
+    linear_damping: 1.0
+    angular_damping: 2.0
+    sleep_threshold: 0.01
+    stabilization_threshold: 0.001
+    solver_position_iteration_count: 16
+    solver_velocity_iteration_count: 4
   - name: fabrica_plumbers_block_4
     kind: usd
     prim_path: /fabrica_plumbers_block_4
@@ -153,6 +177,12 @@ objects:
     dynamic_friction: 0.5
     restitution: 0.0
     mass: 0.01
+    linear_damping: 1.0
+    angular_damping: 2.0
+    sleep_threshold: 0.01
+    stabilization_threshold: 0.001
+    solver_position_iteration_count: 16
+    solver_velocity_iteration_count: 4
   - name: optical_board
     kind: usd
     prim_path: /optical_board

@@ -1,0 +1,23 @@
+[Unit]
+Description=RoboAssemblyBench Fabrica 2k ACT pipeline
+After=graphical-session.target
+StartLimitIntervalSec=1800
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO_ROOT@
+ExecStart=/usr/bin/bash @REPO_ROOT@/roboassemblybench/scripts/run_fabrica_plumbers_block_act_pipeline.sh
+Restart=on-failure
+RestartSec=60
+KillMode=control-group
+TimeoutStopSec=90
+OOMPolicy=stop
+MemoryHigh=10G
+MemoryMax=12G
+MemorySwapMax=2G
+Nice=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

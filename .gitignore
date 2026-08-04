@@ -123,9 +123,15 @@ work_dirs/
 # internutopia assets
 /asset
 assets
-roboassemblybench/assets/
+!roboassemblybench/assets/
+roboassemblybench/assets/*
 !roboassemblybench/assets/robofactory_native/
 !roboassemblybench/assets/robofactory_native/**
+!roboassemblybench/assets/Fabrica/
+roboassemblybench/assets/Fabrica/*
+!roboassemblybench/assets/Fabrica/canonical_7_bundles/
+roboassemblybench/assets/Fabrica/canonical_7_bundles/*
+!roboassemblybench/assets/Fabrica/canonical_7_bundles/canonical_tasks.json
 
 # user scripts
 /scripts
@@ -145,6 +151,9 @@ third_part/RoboFactory/robofactory/logs/
 third_part/RoboFactory/robofactory/assets/assets.zip
 roboassemblybench/outputs
 
-outputs/
+outputs/*
+!outputs/README.md
 checkpoints/
 recordings/
+ppt/
+/tests/*.png

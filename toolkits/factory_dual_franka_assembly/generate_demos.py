@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -17,12 +18,22 @@ from internutopia.core.config import Config, SimConfig
 from internutopia.core.util import has_display
 from internutopia.core.vec_env import Env
 from internutopia_extension import import_extensions
-
-from toolkits.factory_dual_franka_assembly.demo_policy import DualFrankaAssemblyDemoPolicy
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_batch
-from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_PROFILE, list_scene_profiles
-from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes, load_task_recipe
+from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
+from toolkits.factory_dual_franka_assembly.demo_policy import (
+    DualFrankaAssemblyDemoPolicy,
+)
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_batch,
+)
+from toolkits.factory_dual_franka_assembly.scene_profiles import (
+    DEFAULT_SCENE_PROFILE,
+    list_scene_profiles,
+)
+from toolkits.factory_dual_franka_assembly.task_specs import (
+    list_task_recipes,
+    load_task_recipe,
+)
 
 
 def _to_jsonable(value: Any):
@@ -88,6 +99,8 @@ def _task_export_metadata(task) -> dict:
         'camera_metadata': _to_jsonable(getattr(config, 'camera_metadata', [])),
         'robot_metadata': _to_jsonable(getattr(config, 'robot_metadata', [])),
         'object_metadata': _to_jsonable(getattr(config, 'object_metadata', [])),
+        'domain_randomization': _to_jsonable(getattr(config, 'domain_randomization', {})),
+        'layout_seed': int(config.seed if getattr(config, 'layout_seed', None) is None else config.layout_seed),
     }
 
 
@@ -130,10 +143,14 @@ class EpisodeRecorder:
         recorded_frames: dict[str, str] | None = None,
         recorded_frame_summaries: dict[str, dict] | None = None,
         recorded_frame_mode: str | None = None,
+        recorded_dataset: dict | None = None,
     ):
         payload = {
             'episode_idx': episode_idx,
             'seed': task.config.seed,
+            'layout_seed': int(
+                task.config.seed if getattr(task.config, 'layout_seed', None) is None else task.config.layout_seed
+            ),
             'recipe': task.config.recipe,
             'prompt': task.config.prompt,
             'task_description': getattr(task.config, 'task_description', '') or task.config.prompt,
@@ -152,6 +169,7 @@ class EpisodeRecorder:
             'recorded_frames': _to_jsonable(recorded_frames or {}),
             'recorded_frame_summaries': _to_jsonable(recorded_frame_summaries or {}),
             'recorded_frame_mode': recorded_frame_mode,
+            'recorded_dataset': _to_jsonable(recorded_dataset or {}),
             'steps': self.steps,
         }
         path = self.output_dir / f'episode_{episode_idx:04d}.json'
@@ -178,7 +196,10 @@ class LiveRolloutVideoRecorder:
         self.frames_root_dir = self.output_dir / f'episode_{self.episode_idx:04d}_live_frames'
         self.frames_root_dir.mkdir(parents=True, exist_ok=True)
 
-        from toolkits.factory_dual_franka_assembly.export_lerobot import RunningImageStats, _episode_camera_specs
+        from toolkits.factory_dual_franka_assembly.export_lerobot import (
+            RunningImageStats,
+            _episode_camera_specs,
+        )
 
         self._running_image_stats_cls = RunningImageStats
         self.camera_specs = _episode_camera_specs(
@@ -272,7 +293,9 @@ class LiveRolloutVideoRecorder:
             self._sampled_steps.append(step_payload)
 
     def finalize(self):
-        from toolkits.factory_dual_franka_assembly.export_lerobot import _encode_mp4_from_pngs
+        from toolkits.factory_dual_franka_assembly.export_lerobot import (
+            _encode_mp4_from_pngs,
+        )
 
         videos = {}
         summaries = {}
@@ -327,11 +350,21 @@ def _runtime_failed_results(results: list[dict]) -> list[dict]:
     return failed_results
 
 
-def _build_env(task_configs, headless: bool):
+def _build_env(
+    task_configs,
+    headless: bool,
+    *,
+    rendering_fps: int | None = None,
+    rendering_interval: int | None = None,
+):
+    rendering_dt = 1 / 240 if rendering_fps is None else 1 / max(int(rendering_fps), 1)
+    if rendering_interval is not None and int(rendering_interval) < 0:
+        raise ValueError('rendering_interval must be non-negative.')
     config = Config(
         simulator=SimConfig(
             physics_dt=1 / 240,
-            rendering_dt=1 / 240,
+            rendering_dt=rendering_dt,
+            rendering_interval=None if rendering_interval is None else int(rendering_interval),
             use_fabric=False,
             headless=headless,
             native=False,
@@ -363,8 +396,25 @@ def _run_task_sequence(
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
     record_episode_steps: bool = True,
+    record_lerobot_raw: bool = False,
+    dataset_fps: int = 30,
+    dataset_frame_stride: int = 8,
+    rendering_fps: int | None = None,
 ):
-    env = _build_env(task_configs=task_configs, headless=headless)
+    simulation_fps = 240 if rendering_fps is None else max(int(rendering_fps), 1)
+    dataset_rendering_interval = max(int(dataset_frame_stride), 1) - 1 if record_lerobot_raw else None
+    requires_runtime_rendering = bool(
+        record_live_video or record_lerobot_raw or (runtime_robochecker and runtime_capture_rgb)
+    )
+    rollout_rendering_interval = (
+        dataset_rendering_interval if record_lerobot_raw else (None if requires_runtime_rendering else 239)
+    )
+    env = _build_env(
+        task_configs=task_configs,
+        headless=headless,
+        rendering_fps=rendering_fps,
+        rendering_interval=rollout_rendering_interval,
+    )
     policy = DualFrankaAssemblyDemoPolicy()
     obs_list, task_cfgs = env.reset()
     results = []
@@ -374,13 +424,17 @@ def _run_task_sequence(
     recorder = None
     video_recorder = None
     runtime_checker = None
+    dataset_recorder = None
     last_task = None
+    rollout_started_at = time.monotonic()
+    rollout_loop_entered = False
     initial_tasks = getattr(env.runner, 'current_tasks', {})
     if initial_tasks:
         last_task = next(iter(initial_tasks.values()))
     if runtime_robochecker:
         runtime_checker = RuntimeRoboChecker(
-            output_dir=runtime_observation_dir or ((output_dir / 'runtime_observations') if output_dir is not None else None),
+            output_dir=runtime_observation_dir
+            or ((output_dir / 'runtime_observations') if output_dir is not None else None),
             feedback_path=runtime_feedback_path,
             check_stride=runtime_checker_stride,
             capture_rgb=runtime_capture_rgb,
@@ -396,6 +450,12 @@ def _run_task_sequence(
             task_name = next(iter(env.runner.current_tasks.keys()))
             task = env.runner.current_tasks[task_name]
             last_task = task
+            if not rollout_loop_entered:
+                print(
+                    '[rollout-progress] event=loop_enter ' f'task={task_name} step={int(task.step_counter)}',
+                    flush=True,
+                )
+                rollout_loop_entered = True
             if output_dir is not None and recorder is None:
                 recorder = EpisodeRecorder(
                     output_dir=output_dir,
@@ -410,9 +470,35 @@ def _run_task_sequence(
                     frame_stride=live_video_frame_stride,
                     keep_frames=keep_video_frames,
                 )
+            if record_lerobot_raw and dataset_recorder is None:
+                dataset_recorder = CompactCartesianEpisodeRecorder(
+                    output_dir=output_dir or Path.cwd(),
+                    episode_idx=episode_idx,
+                    task=task,
+                    fps=dataset_fps,
+                    frame_stride=dataset_frame_stride,
+                    simulation_fps=simulation_fps,
+                    rendering_interval=dataset_rendering_interval,
+                )
 
+            step_started_at = time.monotonic()
             env_actions = policy.act(task)
+            if dataset_recorder is not None:
+                dataset_recorder.record(task=task, obs=obs_list[0], actions=env_actions)
             obs_list, _, terminated, _, _ = env.step([env_actions])
+            completed_step = int(task.step_counter)
+            if completed_step <= 5 or completed_step % 60 == 0:
+                elapsed = max(time.monotonic() - rollout_started_at, 1e-9)
+                print(
+                    '[rollout-progress] event=step_complete '
+                    f'task={task_name} step={completed_step} '
+                    f'phase={getattr(task, "phase", None)} '
+                    f'phase_index={int(getattr(task, "phase_index", -1))} '
+                    f'phase_step={int(getattr(task, "phase_step_counter", -1))} '
+                    f'step_wall_seconds={time.monotonic() - step_started_at:.3f} '
+                    f'average_steps_per_second={completed_step / elapsed:.3f}',
+                    flush=True,
+                )
 
             if recorder is not None:
                 recorder.record(task, obs_list[0], env_actions)
@@ -457,6 +543,7 @@ def _run_task_sequence(
                 recorded_frames = {}
                 recorded_frame_summaries = {}
                 recorded_frame_mode = None
+                recorded_dataset = {}
                 if video_recorder is not None:
                     live_video_output = video_recorder.finalize()
                     recorded_videos = live_video_output.get('videos', {})
@@ -465,6 +552,8 @@ def _run_task_sequence(
                     recorded_frames = live_video_output.get('frames', {})
                     recorded_frame_summaries = live_video_output.get('frame_summaries', {})
                     recorded_frame_mode = live_video_output.get('frame_mode')
+                if dataset_recorder is not None:
+                    recorded_dataset = dataset_recorder.finalize(task=task, metrics=metrics)
                 if recorder is not None:
                     recorder.save(
                         task=task,
@@ -476,10 +565,12 @@ def _run_task_sequence(
                         recorded_frames=recorded_frames,
                         recorded_frame_summaries=recorded_frame_summaries,
                         recorded_frame_mode=recorded_frame_mode,
+                        recorded_dataset=recorded_dataset,
                     )
                 episode_idx += 1
                 recorder = None
                 video_recorder = None
+                dataset_recorder = None
                 obs_list, task_cfgs = env.reset([0])
                 if not task_cfgs or task_cfgs[0] is None:
                     break
@@ -506,9 +597,18 @@ def _run_task_sequence(
             except Exception:
                 pass
         live_video_output = None
+        raw_dataset_output = None
         if video_recorder is not None:
             try:
                 live_video_output = video_recorder.finalize()
+            except Exception:
+                pass
+        if dataset_recorder is not None and last_task is not None:
+            try:
+                interrupted_metrics = _attach_policy_diagnostics(last_task.calculate_metrics(), policy)
+                interrupted_metrics['success'] = False
+                interrupted_metrics.setdefault('terminal_reason', 'rollout-interrupted-before-normal-termination')
+                raw_dataset_output = dataset_recorder.finalize(task=last_task, metrics=interrupted_metrics)
             except Exception:
                 pass
         if recorder is not None and last_task is not None:
@@ -521,7 +621,7 @@ def _run_task_sequence(
             if not metrics.get('terminal_reason'):
                 metrics['terminal_reason'] = 'rollout-interrupted-before-normal-termination'
             if exc_value is not None:
-                print("[demo-debug] rollout interrupted by exception:", flush=True)
+                print('[demo-debug] rollout interrupted by exception:', flush=True)
                 traceback.print_exception(exc_type, exc_value, exc_value.__traceback__)
                 metrics['exception'] = {
                     'type': exc_type.__name__ if exc_type is not None else type(exc_value).__name__,
@@ -551,6 +651,7 @@ def _run_task_sequence(
                     recorded_frames=recorded_frames,
                     recorded_frame_summaries=recorded_frame_summaries,
                     recorded_frame_mode=recorded_frame_mode,
+                    recorded_dataset=raw_dataset_output or {},
                 )
                 if results_output_path is not None and not results:
                     _write_json(results_output_path, [metrics])
@@ -601,7 +702,10 @@ def _worker_mode(args, *, headless: bool):
                 recipe=args.worker_recipe,
                 seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
                 scene_profile=scene_profile,
-                attach_runtime_cameras=bool(args.record_live_video or args.runtime_capture_rgb),
+                attach_runtime_cameras=bool(
+                    args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb
+                ),
+                domain_randomization_enabled=True if args.domain_randomization else None,
             ),
             headless=headless,
             results_output_path=Path(args.worker_results_path).resolve(),
@@ -621,7 +725,15 @@ def _worker_mode(args, *, headless: bool):
             runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
             runtime_capture_rgb=bool(args.runtime_capture_rgb),
             runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
-            record_episode_steps=not bool(args.skip_episode_steps),
+            record_episode_steps=not bool(args.skip_episode_steps or args.record_lerobot_raw),
+            record_lerobot_raw=bool(args.record_lerobot_raw),
+            dataset_fps=max(int(args.dataset_fps), 1),
+            dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
+            rendering_fps=(
+                max(int(args.rendering_fps), 1)
+                if int(args.rendering_fps) > 0
+                else (240 if args.record_lerobot_raw else None)
+            ),
         )
         return
 
@@ -630,13 +742,20 @@ def _worker_mode(args, *, headless: bool):
 
     if not args.worker_seeds:
         raise ValueError('Collect worker requires at least one seed.')
+    worker_layout_seeds = None
+    if args.worker_layout_seeds:
+        worker_layout_seeds = [int(seed) for seed in args.worker_layout_seeds]
+        if len(worker_layout_seeds) != len(args.worker_seeds):
+            raise ValueError('Collect worker requires one --worker-layout-seeds value per worker seed.')
 
     _run_task_sequence(
         task_configs=build_dual_franka_assembly_batch(
             recipe=args.worker_recipe,
             seeds=[int(seed) for seed in args.worker_seeds],
+            layout_seeds=worker_layout_seeds,
             scene_profile=scene_profile,
-            attach_runtime_cameras=bool(args.record_live_video or args.runtime_capture_rgb),
+            attach_runtime_cameras=bool(args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb),
+            domain_randomization_enabled=True if args.domain_randomization else None,
         ),
         headless=headless,
         output_dir=Path(args.output_dir).resolve(),
@@ -646,7 +765,9 @@ def _worker_mode(args, *, headless: bool):
         live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
         keep_video_frames=bool(args.keep_video_frames),
         runtime_robochecker=bool(args.runtime_robochecker),
-        runtime_feedback_path=None if args.runtime_feedback_path is None else Path(args.runtime_feedback_path).resolve(),
+        runtime_feedback_path=None
+        if args.runtime_feedback_path is None
+        else Path(args.runtime_feedback_path).resolve(),
         runtime_observation_dir=None
         if args.runtime_observation_dir is None
         else Path(args.runtime_observation_dir).resolve(),
@@ -654,7 +775,15 @@ def _worker_mode(args, *, headless: bool):
         runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
         runtime_capture_rgb=bool(args.runtime_capture_rgb),
         runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
-        record_episode_steps=not bool(args.skip_episode_steps),
+        record_episode_steps=not bool(args.skip_episode_steps or args.record_lerobot_raw),
+        record_lerobot_raw=bool(args.record_lerobot_raw),
+        dataset_fps=max(int(args.dataset_fps), 1),
+        dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
+        rendering_fps=(
+            max(int(args.rendering_fps), 1)
+            if int(args.rendering_fps) > 0
+            else (240 if args.record_lerobot_raw else None)
+        ),
     )
 
 
@@ -681,6 +810,11 @@ def _invoke_worker(
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
     skip_episode_steps: bool = False,
+    record_lerobot_raw: bool = False,
+    dataset_fps: int = 30,
+    dataset_frame_stride: int = 8,
+    rendering_fps: int = 0,
+    domain_randomization: bool = False,
 ):
     command = [
         sys.executable,
@@ -708,6 +842,14 @@ def _invoke_worker(
         command.append('--keep-video-frames')
     if skip_episode_steps:
         command.append('--skip-episode-steps')
+    if record_lerobot_raw:
+        command.append('--record-lerobot-raw')
+        command.extend(['--dataset-fps', str(int(dataset_fps))])
+        command.extend(['--dataset-frame-stride', str(int(dataset_frame_stride))])
+    if int(rendering_fps) > 0:
+        command.extend(['--rendering-fps', str(int(rendering_fps))])
+    if domain_randomization:
+        command.append('--domain-randomization')
     if runtime_robochecker:
         command.append('--runtime-robochecker')
         command.extend(['--runtime-checker-stride', str(int(runtime_checker_stride))])
@@ -750,6 +892,11 @@ def _results_from_worker(
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
     skip_episode_steps: bool = False,
+    record_lerobot_raw: bool = False,
+    dataset_fps: int = 30,
+    dataset_frame_stride: int = 8,
+    rendering_fps: int = 0,
+    domain_randomization: bool = False,
 ) -> list[dict]:
     worker_dir.mkdir(parents=True, exist_ok=True)
     results_path = worker_dir / (
@@ -780,6 +927,11 @@ def _results_from_worker(
         runtime_capture_rgb=runtime_capture_rgb,
         runtime_rgb_frame_stride=runtime_rgb_frame_stride,
         skip_episode_steps=skip_episode_steps,
+        record_lerobot_raw=record_lerobot_raw,
+        dataset_fps=dataset_fps,
+        dataset_frame_stride=dataset_frame_stride,
+        rendering_fps=rendering_fps,
+        domain_randomization=domain_randomization,
     )
     if not results_path.exists():
         raise RuntimeError(
@@ -831,10 +983,16 @@ def main():
     parser.add_argument('--worker-scene-profile', type=str, default=None)
     parser.add_argument('--worker-results-path', type=str, default=None)
     parser.add_argument('--worker-seeds', nargs='*', default=None)
+    parser.add_argument('--worker-layout-seeds', nargs='*', default=None)
     parser.add_argument('--record-live-video', action='store_true')
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)
     parser.add_argument('--keep-video-frames', action='store_true')
+    parser.add_argument('--record-lerobot-raw', action='store_true')
+    parser.add_argument('--dataset-fps', type=int, default=30)
+    parser.add_argument('--dataset-frame-stride', type=int, default=8)
+    parser.add_argument('--rendering-fps', type=int, default=0)
+    parser.add_argument('--domain-randomization', action='store_true')
     parser.add_argument(
         '--skip-episode-steps',
         action='store_true',
@@ -913,6 +1071,7 @@ def main():
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
                 skip_episode_steps=bool(args.skip_episode_steps),
+                domain_randomization=bool(args.domain_randomization),
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
             if not successful_seeds:
@@ -948,6 +1107,11 @@ def main():
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
                 skip_episode_steps=bool(args.skip_episode_steps),
+                record_lerobot_raw=bool(args.record_lerobot_raw),
+                dataset_fps=max(int(args.dataset_fps), 1),
+                dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
+                rendering_fps=max(int(args.rendering_fps), 0),
+                domain_randomization=bool(args.domain_randomization),
             )
             runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
             if runtime_failed_results:
@@ -992,6 +1156,10 @@ def main():
                 'runtime_stop_on_violation': bool(args.runtime_stop_on_violation),
                 'runtime_capture_rgb': bool(args.runtime_capture_rgb),
                 'runtime_rgb_frame_stride': max(int(args.runtime_rgb_frame_stride), 1),
+                'record_lerobot_raw': bool(args.record_lerobot_raw),
+                'dataset_fps': max(int(args.dataset_fps), 1),
+                'dataset_frame_stride': max(int(args.dataset_frame_stride), 1),
+                'domain_randomization': bool(args.domain_randomization),
                 'successful_seeds': successful_seeds,
                 'asset_references': _to_jsonable(recipe_spec.get('asset_references', [])),
                 'metadata': _to_jsonable(recipe_spec.get('metadata', {})),
