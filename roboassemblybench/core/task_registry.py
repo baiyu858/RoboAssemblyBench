@@ -11,7 +11,11 @@ import yaml
 
 from internutopia.macros import gm
 from roboassemblybench.core.paths import BENCHMARK_ROOT, SHARED_TASK_DIR, TASKS_DIR
-from roboassemblybench.core.scene_profiles import DEFAULT_SCENE_PROFILE, deep_merge, load_scene_profile
+from roboassemblybench.core.scene_profiles import (
+    DEFAULT_SCENE_PROFILE,
+    deep_merge,
+    load_scene_profile,
+)
 
 TASK_SPEC_BASENAME = 'recipe.yaml'
 TASK_ANNOTATION_BASENAME = 'annotation.yaml'
@@ -26,8 +30,7 @@ def _canonicalize_fingerprint_paths(value: Any, *, source_root: str, target_root
         }
     if isinstance(value, list):
         return [
-            _canonicalize_fingerprint_paths(item, source_root=source_root, target_root=target_root)
-            for item in value
+            _canonicalize_fingerprint_paths(item, source_root=source_root, target_root=target_root) for item in value
         ]
     if isinstance(value, str) and (value == source_root or value.startswith(f'{source_root}/')):
         return f'{target_root}{value[len(source_root):]}'
@@ -367,7 +370,9 @@ def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None) -> d
         payload = deep_merge(scene_profile_payload, payload)
 
     if payload.get('fabrica_canonical') is not None:
-        from roboassemblybench.core.fabrica_canonical import compile_fabrica_canonical_recipe
+        from roboassemblybench.core.fabrica_canonical import (
+            compile_fabrica_canonical_recipe,
+        )
 
         payload = compile_fabrica_canonical_recipe(payload)
 

@@ -1027,11 +1027,8 @@ phases:
       close_ramp_steps: 240
       require_grasp_contact: true
       require_dual_finger_contact: true
-      require_strict_physical_contact: true
       require_force_contact: false
       finger_contact_distance: 0.006
-      physical_attach_surface_gap: 0.006
-      physical_contact_interior_scale: 0.9
       contact_force_threshold: 0.05
     attach:
       - object: fabrica_plumbers_block_3

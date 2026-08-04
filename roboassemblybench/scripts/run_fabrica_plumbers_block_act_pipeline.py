@@ -3,15 +3,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from typing import Any
 
-from roboassemblybench.core.process_lock import exclusive_process_lock, process_lock_is_held
+from roboassemblybench.core.process_lock import (
+    exclusive_process_lock,
+    process_lock_is_held,
+)
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RECIPE = 'fabrica_plumbers_block_ur5e_right_base_prepare'
@@ -123,14 +125,10 @@ class Pipeline:
         configured_qualification_seeds = getattr(args, 'qualification_seeds', None)
         configured_layout_seeds = getattr(args, 'collection_layout_seeds', None)
         self.qualification_seeds = (
-            None
-            if configured_qualification_seeds is None
-            else [int(seed) for seed in configured_qualification_seeds]
+            None if configured_qualification_seeds is None else [int(seed) for seed in configured_qualification_seeds]
         )
         self.collection_layout_seeds = (
-            None
-            if configured_layout_seeds is None
-            else [int(seed) for seed in configured_layout_seeds]
+            None if configured_layout_seeds is None else [int(seed) for seed in configured_layout_seeds]
         )
         if configured_fingerprint:
             self.recipe_fingerprint = str(configured_fingerprint)
@@ -146,9 +144,7 @@ class Pipeline:
                 self.qualification_seeds = required_seeds[:qualification_count]
             if self.collection_layout_seeds is None:
                 collection_spec = recipe_spec.get('collection') or {}
-                self.collection_layout_seeds = [
-                    int(seed) for seed in collection_spec.get('layout_seeds', [])
-                ] or None
+                self.collection_layout_seeds = [int(seed) for seed in collection_spec.get('layout_seeds', [])] or None
         self._collector_process: subprocess.Popen | None = None
 
     def _set_stage(self, name: str, status: str, *, replace: bool = False, **details: Any) -> None:
@@ -215,9 +211,7 @@ class Pipeline:
             str(self.raw_dir),
         ]
         if self.collection_layout_seeds is not None:
-            command.extend(
-                ['--layout-seeds', *[str(seed) for seed in self.collection_layout_seeds]]
-            )
+            command.extend(['--layout-seeds', *[str(seed) for seed in self.collection_layout_seeds]])
         return command
 
     def _start_collector(self) -> subprocess.Popen:
@@ -261,8 +255,7 @@ class Pipeline:
                 current_qualification = qualification_fingerprint == self.recipe_fingerprint
                 qualification_seeds = [int(seed) for seed in qualification.get('selected_seeds') or []]
                 current_seed_contract = (
-                    self.qualification_seeds is None
-                    or qualification_seeds == self.qualification_seeds
+                    self.qualification_seeds is None or qualification_seeds == self.qualification_seeds
                 )
                 if not current_qualification:
                     self._set_stage(
@@ -317,11 +310,7 @@ class Pipeline:
                         recipe_fingerprint=qualification.get('recipe_fingerprint'),
                         selected_seeds=qualification.get('selected_seeds') or [],
                     )
-                elif (
-                    current_qualification
-                    and current_seed_contract
-                    and not bool(qualification.get('failed', False))
-                ):
+                elif current_qualification and current_seed_contract and not bool(qualification.get('failed', False)):
                     self._set_stage(
                         'qualification',
                         'running',
@@ -372,9 +361,7 @@ class Pipeline:
                         'waiting_for_external_collector',
                         replace=True,
                         successful_episodes=(
-                            len(manifest.get('successful_episodes') or {})
-                            if manifest_path.is_file()
-                            else 0
+                            len(manifest.get('successful_episodes') or {}) if manifest_path.is_file() else 0
                         ),
                         target_episodes=int(self.args.expected_episodes),
                         manifest_path=str(manifest_path),
@@ -455,12 +442,13 @@ class Pipeline:
         summary_path = self.eval_dir / 'success_rate.json'
         if summary_path.is_file():
             summary = _load_json(summary_path)
-            if bool(summary.get('complete')) and int(summary.get('num_episodes', -1)) == int(
-                self.args.eval_episodes
-            ) and (
-                self.collection_layout_seeds is None
-                or [int(seed) for seed in summary.get('layout_seeds') or []]
-                == self.collection_layout_seeds
+            if (
+                bool(summary.get('complete'))
+                and int(summary.get('num_episodes', -1)) == int(self.args.eval_episodes)
+                and (
+                    self.collection_layout_seeds is None
+                    or [int(seed) for seed in summary.get('layout_seeds') or []] == self.collection_layout_seeds
+                )
             ):
                 self._set_stage('evaluation', 'completed', summary_path=str(summary_path), resumed=True)
                 return
@@ -473,16 +461,12 @@ class Pipeline:
                 'OUTPUT_DIR': str(self.eval_dir),
                 'NUM_EPISODES': str(int(self.args.eval_episodes)),
                 'START_SEED': str(int(self.args.eval_start_seed)),
-                'LAYOUT_SEEDS': ' '.join(
-                    str(seed) for seed in (self.collection_layout_seeds or [])
-                ),
+                'LAYOUT_SEEDS': ' '.join(str(seed) for seed in (self.collection_layout_seeds or [])),
             }
         )
         self._run('evaluation', ['bash', 'roboassemblybench/scripts/evaluate_fabrica_plumbers_block_act.sh'], env=env)
         summary = _load_json(summary_path)
-        if not bool(summary.get('complete')) or int(summary.get('num_episodes', -1)) != int(
-            self.args.eval_episodes
-        ):
+        if not bool(summary.get('complete')) or int(summary.get('num_episodes', -1)) != int(self.args.eval_episodes):
             raise RuntimeError('Online evaluation did not complete the requested episode count.')
 
     def run(self) -> None:

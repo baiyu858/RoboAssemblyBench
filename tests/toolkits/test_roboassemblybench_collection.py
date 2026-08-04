@@ -1,6 +1,6 @@
 import json
-from pathlib import Path
 import socket
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,7 +8,10 @@ import pytest
 
 from roboassemblybench.core import task_registry
 from roboassemblybench.core.paths import BENCHMARK_ROOT
-from roboassemblybench.core.process_lock import exclusive_process_lock, process_lock_is_held
+from roboassemblybench.core.process_lock import (
+    exclusive_process_lock,
+    process_lock_is_held,
+)
 from roboassemblybench.core.task_registry import task_recipe_fingerprint
 from roboassemblybench.datasets.cartesian_episode import (
     ACTION_NAMES,
@@ -247,12 +250,8 @@ def _write_quality_fixture(tmp_path: Path, *, rendering_interval: int) -> Path:
 
 
 def test_quality_check_rejects_stale_camera_timing(tmp_path: Path):
-    assert collector._quality_check_episode(
-        _write_quality_fixture(tmp_path / 'aligned', rendering_interval=7)
-    )['valid']
-    quality = collector._quality_check_episode(
-        _write_quality_fixture(tmp_path / 'stale', rendering_interval=5)
-    )
+    assert collector._quality_check_episode(_write_quality_fixture(tmp_path / 'aligned', rendering_interval=7))['valid']
+    quality = collector._quality_check_episode(_write_quality_fixture(tmp_path / 'stale', rendering_interval=5))
     assert not quality['valid']
     assert quality['errors'] == ['timing_contract']
 
@@ -393,9 +392,7 @@ def test_recipe_fingerprint_can_use_a_canonical_cross_machine_root(monkeypatch):
         'objects': [{'usd_path': str(remote_root / 'assets' / 'part.usd')}],
         'empty_scene': str(remote_repo_root / 'internutopia' / 'assets' / 'scenes' / 'empty.usd'),
     }
-    local_payload['empty_scene'] = str(
-        local_repo_root / 'internutopia' / 'assets' / 'scenes' / 'empty.usd'
-    )
+    local_payload['empty_scene'] = str(local_repo_root / 'internutopia' / 'assets' / 'scenes' / 'empty.usd')
     local_fingerprint = task_recipe_fingerprint(local_payload)
 
     monkeypatch.setattr(task_registry, 'BENCHMARK_ROOT', remote_root)

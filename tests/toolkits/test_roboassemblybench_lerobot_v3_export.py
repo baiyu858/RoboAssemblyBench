@@ -8,8 +8,13 @@ pytest.importorskip('lerobot')
 
 from lerobot.datasets.lerobot_dataset import CODEBASE_VERSION, LeRobotDataset
 
-from roboassemblybench.datasets.cartesian_episode import CAMERA_KEYS, CompactCartesianEpisodeRecorder
-from roboassemblybench.scripts.export_fabrica_plumbers_block_lerobot_v3 import export_dataset
+from roboassemblybench.datasets.cartesian_episode import (
+    CAMERA_KEYS,
+    CompactCartesianEpisodeRecorder,
+)
+from roboassemblybench.scripts.export_fabrica_plumbers_block_lerobot_v3 import (
+    export_dataset,
+)
 
 
 def _task():
@@ -121,7 +126,5 @@ def test_compact_episode_exports_and_resumes_as_lerobot_v3(tmp_path):
     assert tuple(sample['action'].shape) == (16,)
     assert {tuple(sample[key].shape) for key in CAMERA_KEYS} == {(3, 48, 64)}
 
-    manifest = json.loads(
-        (dataset_dir / 'roboassemblybench_conversion_manifest.json').read_text(encoding='utf-8')
-    )
+    manifest = json.loads((dataset_dir / 'roboassemblybench_conversion_manifest.json').read_text(encoding='utf-8'))
     assert manifest['total_episodes'] == 1

@@ -1,5 +1,7 @@
 from toolkits.factory_dual_franka_assembly.convert_dataset import build_dataset_entries
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_episode
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_episode,
+)
 from toolkits.factory_dual_franka_assembly.task_specs import (
     list_task_annotations,
     load_task_annotation,
@@ -76,7 +78,9 @@ def test_dataset_entries_preserve_annotation_metadata():
                 'annotation_object_roles': {'bracket': {'role': 'workpiece'}},
                 'annotation_target_roles': {'latch_insert': {'object': 'latch'}},
                 'annotation_phase_notes': [{'name': 'left_approach_bracket'}],
-                'target_annotations': {'latch_insert': {'object': 'latch', 'pose': {'position': [0, 0, 0], 'orientation': [1, 0, 0, 0]}}},
+                'target_annotations': {
+                    'latch_insert': {'object': 'latch', 'pose': {'position': [0, 0, 0], 'orientation': [1, 0, 0, 0]}}
+                },
                 'phase_annotations': [{'name': 'left_approach_bracket'}],
                 'metrics': {'success': True},
                 'steps': [

@@ -18,13 +18,22 @@ from internutopia.core.config import Config, SimConfig
 from internutopia.core.util import has_display
 from internutopia.core.vec_env import Env
 from internutopia_extension import import_extensions
-
-from toolkits.factory_dual_franka_assembly.demo_policy import DualFrankaAssemblyDemoPolicy
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_batch
-from toolkits.factory_dual_franka_assembly.scene_profiles import DEFAULT_SCENE_PROFILE, list_scene_profiles
-from toolkits.factory_dual_franka_assembly.task_specs import list_task_recipes, load_task_recipe
-from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
 from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
+from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
+from toolkits.factory_dual_franka_assembly.demo_policy import (
+    DualFrankaAssemblyDemoPolicy,
+)
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_batch,
+)
+from toolkits.factory_dual_franka_assembly.scene_profiles import (
+    DEFAULT_SCENE_PROFILE,
+    list_scene_profiles,
+)
+from toolkits.factory_dual_franka_assembly.task_specs import (
+    list_task_recipes,
+    load_task_recipe,
+)
 
 
 def _to_jsonable(value: Any):
@@ -91,9 +100,7 @@ def _task_export_metadata(task) -> dict:
         'robot_metadata': _to_jsonable(getattr(config, 'robot_metadata', [])),
         'object_metadata': _to_jsonable(getattr(config, 'object_metadata', [])),
         'domain_randomization': _to_jsonable(getattr(config, 'domain_randomization', {})),
-        'layout_seed': int(
-            config.seed if getattr(config, 'layout_seed', None) is None else config.layout_seed
-        ),
+        'layout_seed': int(config.seed if getattr(config, 'layout_seed', None) is None else config.layout_seed),
     }
 
 
@@ -142,9 +149,7 @@ class EpisodeRecorder:
             'episode_idx': episode_idx,
             'seed': task.config.seed,
             'layout_seed': int(
-                task.config.seed
-                if getattr(task.config, 'layout_seed', None) is None
-                else task.config.layout_seed
+                task.config.seed if getattr(task.config, 'layout_seed', None) is None else task.config.layout_seed
             ),
             'recipe': task.config.recipe,
             'prompt': task.config.prompt,
@@ -191,7 +196,10 @@ class LiveRolloutVideoRecorder:
         self.frames_root_dir = self.output_dir / f'episode_{self.episode_idx:04d}_live_frames'
         self.frames_root_dir.mkdir(parents=True, exist_ok=True)
 
-        from toolkits.factory_dual_franka_assembly.export_lerobot import RunningImageStats, _episode_camera_specs
+        from toolkits.factory_dual_franka_assembly.export_lerobot import (
+            RunningImageStats,
+            _episode_camera_specs,
+        )
 
         self._running_image_stats_cls = RunningImageStats
         self.camera_specs = _episode_camera_specs(
@@ -285,7 +293,9 @@ class LiveRolloutVideoRecorder:
             self._sampled_steps.append(step_payload)
 
     def finalize(self):
-        from toolkits.factory_dual_franka_assembly.export_lerobot import _encode_mp4_from_pngs
+        from toolkits.factory_dual_franka_assembly.export_lerobot import (
+            _encode_mp4_from_pngs,
+        )
 
         videos = {}
         summaries = {}
@@ -394,14 +404,10 @@ def _run_task_sequence(
     simulation_fps = 240 if rendering_fps is None else max(int(rendering_fps), 1)
     dataset_rendering_interval = max(int(dataset_frame_stride), 1) - 1 if record_lerobot_raw else None
     requires_runtime_rendering = bool(
-        record_live_video
-        or record_lerobot_raw
-        or (runtime_robochecker and runtime_capture_rgb)
+        record_live_video or record_lerobot_raw or (runtime_robochecker and runtime_capture_rgb)
     )
     rollout_rendering_interval = (
-        dataset_rendering_interval
-        if record_lerobot_raw
-        else (None if requires_runtime_rendering else 239)
+        dataset_rendering_interval if record_lerobot_raw else (None if requires_runtime_rendering else 239)
     )
     env = _build_env(
         task_configs=task_configs,
@@ -427,7 +433,8 @@ def _run_task_sequence(
         last_task = next(iter(initial_tasks.values()))
     if runtime_robochecker:
         runtime_checker = RuntimeRoboChecker(
-            output_dir=runtime_observation_dir or ((output_dir / 'runtime_observations') if output_dir is not None else None),
+            output_dir=runtime_observation_dir
+            or ((output_dir / 'runtime_observations') if output_dir is not None else None),
             feedback_path=runtime_feedback_path,
             check_stride=runtime_checker_stride,
             capture_rgb=runtime_capture_rgb,
@@ -445,8 +452,7 @@ def _run_task_sequence(
             last_task = task
             if not rollout_loop_entered:
                 print(
-                    '[rollout-progress] event=loop_enter '
-                    f'task={task_name} step={int(task.step_counter)}',
+                    '[rollout-progress] event=loop_enter ' f'task={task_name} step={int(task.step_counter)}',
                     flush=True,
                 )
                 rollout_loop_entered = True
@@ -615,7 +621,7 @@ def _run_task_sequence(
             if not metrics.get('terminal_reason'):
                 metrics['terminal_reason'] = 'rollout-interrupted-before-normal-termination'
             if exc_value is not None:
-                print("[demo-debug] rollout interrupted by exception:", flush=True)
+                print('[demo-debug] rollout interrupted by exception:', flush=True)
                 traceback.print_exception(exc_type, exc_value, exc_value.__traceback__)
                 metrics['exception'] = {
                     'type': exc_type.__name__ if exc_type is not None else type(exc_value).__name__,
@@ -748,9 +754,7 @@ def _worker_mode(args, *, headless: bool):
             seeds=[int(seed) for seed in args.worker_seeds],
             layout_seeds=worker_layout_seeds,
             scene_profile=scene_profile,
-            attach_runtime_cameras=bool(
-                args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb
-            ),
+            attach_runtime_cameras=bool(args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb),
             domain_randomization_enabled=True if args.domain_randomization else None,
         ),
         headless=headless,
@@ -761,7 +765,9 @@ def _worker_mode(args, *, headless: bool):
         live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
         keep_video_frames=bool(args.keep_video_frames),
         runtime_robochecker=bool(args.runtime_robochecker),
-        runtime_feedback_path=None if args.runtime_feedback_path is None else Path(args.runtime_feedback_path).resolve(),
+        runtime_feedback_path=None
+        if args.runtime_feedback_path is None
+        else Path(args.runtime_feedback_path).resolve(),
         runtime_observation_dir=None
         if args.runtime_observation_dir is None
         else Path(args.runtime_observation_dir).resolve(),

@@ -46,9 +46,7 @@ def _write_shard_manifest(shard: dict, *, fingerprint: str, duplicate_seed: int 
     successful = {
         str(start_seed + offset): {
             'seed': start_seed + offset,
-            'layout_seed': shard['layout_seeds'][
-                (start_seed + offset) % len(shard['layout_seeds'])
-            ],
+            'layout_seed': shard['layout_seeds'][(start_seed + offset) % len(shard['layout_seeds'])],
             'recipe_fingerprint': fingerprint,
             'metadata_path': f'/data/episode_{start_seed + offset}/metadata.json',
         }

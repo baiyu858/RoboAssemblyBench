@@ -14,10 +14,7 @@ from roboassemblybench.core.paths import BENCHMARK_ROOT
 from roboassemblybench.core.scene_profiles import deep_merge
 from toolkits.factory_dual_franka_assembly.ur5e_skill_api import UR5eAssemblySkillAPI
 
-
-CANONICAL_METADATA_PATH = (
-    BENCHMARK_ROOT / 'assets/Fabrica/canonical_7_bundles/canonical_tasks.json'
-)
+CANONICAL_METADATA_PATH = BENCHMARK_ROOT / 'assets/Fabrica/canonical_7_bundles/canonical_tasks.json'
 CANONICAL_SCHEMA_VERSION = 'roboassemblybench.fabrica_canonical/v3'
 PICKUP_TCP_ORIENTATION_REFERENCE_WXYZ = [0.0, 1.0, 0.0, 0.0]
 DEFAULT_PICKUP_YAW_CANDIDATES_DEGREES = [0.0, 90.0, -90.0, 180.0]
@@ -137,10 +134,7 @@ def _projected_box_minimum_lateral_extent(
     if not lateral_directions:
         raise ValueError('Cannot derive a lateral direction for the oriented box.')
     return min(
-        sum(
-            float(size) * abs(float(np.dot(world_axis, direction)))
-            for size, world_axis in zip(bbox_size, world_axes)
-        )
+        sum(float(size) * abs(float(np.dot(world_axis, direction))) for size, world_axis in zip(bbox_size, world_axes))
         for direction in lateral_directions
     )
 
@@ -149,10 +143,7 @@ def _projected_box_minimum_lateral_extent(
 def _load_metadata_cached(path: str) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding='utf-8'))
     if payload.get('schema_version') != CANONICAL_SCHEMA_VERSION:
-        raise ValueError(
-            f'Unsupported canonical Fabrica metadata schema '
-            f'{payload.get("schema_version")!r}.'
-        )
+        raise ValueError(f'Unsupported canonical Fabrica metadata schema ' f'{payload.get("schema_version")!r}.')
     tasks = payload.get('tasks')
     if not isinstance(tasks, dict) or not tasks:
         raise ValueError('Canonical Fabrica metadata does not define any tasks.')
@@ -166,9 +157,7 @@ def load_fabrica_canonical_metadata(path: str | Path | None = None) -> dict[str,
 
 def _merge_named_entries(generated: list[dict], existing: list[dict]) -> list[dict]:
     existing_by_name = {
-        str(entry['name']): entry
-        for entry in existing
-        if isinstance(entry, dict) and entry.get('name') is not None
+        str(entry['name']): entry for entry in existing if isinstance(entry, dict) and entry.get('name') is not None
     }
     result = []
     generated_names = set()
@@ -179,9 +168,7 @@ def _merge_named_entries(generated: list[dict], existing: list[dict]) -> list[di
     result.extend(
         copy.deepcopy(entry)
         for entry in existing
-        if not isinstance(entry, dict)
-        or entry.get('name') is None
-        or str(entry['name']) not in generated_names
+        if not isinstance(entry, dict) or entry.get('name') is None or str(entry['name']) not in generated_names
     )
     return result
 
@@ -266,25 +253,16 @@ def _pickup_fixture_body_clearance(
     clearance = math.inf
     for sample_index in range(body_sample_count):
         interpolation = body_start_fraction + (
-            (1.0 - body_start_fraction)
-            * sample_index
-            / max(body_sample_count - 1, 1)
+            (1.0 - body_start_fraction) * sample_index / max(body_sample_count - 1, 1)
         )
-        sample = [
-            center + interpolation * (tcp - center)
-            for center, tcp in zip(grasp_center, tcp_position)
-        ]
+        sample = [center + interpolation * (tcp - center) for center, tcp in zip(grasp_center, tcp_position)]
         fixture_local = _quat_rotate(
             inverse_pickup_orientation,
             [value - origin for value, origin in zip(sample, pickup_origin)],
         )
         if (
-            fixture_bbox_min[0] - footprint_margin
-            <= fixture_local[0]
-            <= fixture_bbox_max[0] + footprint_margin
-            and fixture_bbox_min[1] - footprint_margin
-            <= fixture_local[1]
-            <= fixture_bbox_max[1] + footprint_margin
+            fixture_bbox_min[0] - footprint_margin <= fixture_local[0] <= fixture_bbox_max[0] + footprint_margin
+            and fixture_bbox_min[1] - footprint_margin <= fixture_local[1] <= fixture_bbox_max[1] + footprint_margin
         ):
             clearance = min(clearance, fixture_local[2] - fixture_bbox_max[2])
     return 1.0 if not math.isfinite(clearance) else clearance
@@ -408,9 +386,7 @@ def _ur5e_jacobian_metrics(
         shifted = np.asarray(configuration, dtype=float).copy()
         shifted[link_index] += finite_difference_step
         pose = np.asarray(chain.forward_kinematics(shifted), dtype=float)
-        jacobian[:3, column] = (
-            pose[:3, 3] - current[:3, 3]
-        ) / finite_difference_step
+        jacobian[:3, column] = (pose[:3, 3] - current[:3, 3]) / finite_difference_step
         rotation_delta = pose[:3, :3] @ current[:3, :3].T
         jacobian[3:, column] = np.asarray(
             [
@@ -423,9 +399,7 @@ def _ur5e_jacobian_metrics(
     singular_values = np.linalg.svd(jacobian, compute_uv=False)
     minimum_singular_value = float(singular_values[-1])
     condition_number = (
-        math.inf
-        if minimum_singular_value <= 1e-12
-        else float(singular_values[0] / minimum_singular_value)
+        math.inf if minimum_singular_value <= 1e-12 else float(singular_values[0] / minimum_singular_value)
     )
     return minimum_singular_value, condition_number
 
@@ -494,12 +468,10 @@ def _move_grasp_ik_metrics(
         grasp=candidate,
         tcp_height=transport_tcp_height,
     )
-    assembly_clearance_tcp_position, assembly_clearance_tcp_orientation = (
-        _tcp_pose_for_object_pose(
-            object_position=assembly_clearance_object_position,
-            object_orientation=first_object_orientation,
-            grasp=candidate,
-        )
+    assembly_clearance_tcp_position, assembly_clearance_tcp_orientation = _tcp_pose_for_object_pose(
+        object_position=assembly_clearance_object_position,
+        object_orientation=first_object_orientation,
+        grasp=candidate,
     )
     targets = [
         (
@@ -526,18 +498,14 @@ def _move_grasp_ik_metrics(
             assembly_clearance_tcp_orientation,
         ),
     ]
-    for waypoint_index, (object_position, object_orientation) in enumerate(
-        assembly_waypoints
-    ):
+    for waypoint_index, (object_position, object_orientation) in enumerate(assembly_waypoints):
         tcp_position, tcp_orientation = _tcp_pose_for_object_pose(
             object_position=object_position,
             object_orientation=object_orientation,
             grasp=candidate,
         )
         target_name = (
-            'insertion_final'
-            if waypoint_index == len(assembly_waypoints) - 1
-            else f'insertion_{waypoint_index:02d}'
+            'insertion_final' if waypoint_index == len(assembly_waypoints) - 1 else f'insertion_{waypoint_index:02d}'
         )
         targets.append(
             (
@@ -662,12 +630,7 @@ def _move_grasp_candidate_metrics(
         _add(pickup_tcp_position, [0.0, 0.0, approach_height]),
         workspace_offset,
     )
-    pickup_reach = math.sqrt(
-        sum(
-            (pickup_approach_position[axis] - robot_position[axis]) ** 2
-            for axis in range(3)
-        )
-    )
+    pickup_reach = math.sqrt(sum((pickup_approach_position[axis] - robot_position[axis]) ** 2 for axis in range(3)))
     pickup_orientation_continuity = _orientation_continuity(
         pickup_tcp_orientation,
         orientation_reference,
@@ -692,10 +655,7 @@ def _move_grasp_candidate_metrics(
         )
         for waypoint in path
     ]
-    insertion_delta = [
-        final - initial
-        for initial, final in zip(local_positions[0], local_positions[-1])
-    ]
+    insertion_delta = [final - initial for initial, final in zip(local_positions[0], local_positions[-1])]
     if math.sqrt(sum(value * value for value in insertion_delta)) <= 1e-9:
         insertion_axis = _normalized_direction(
             candidate['assembly_approach_direction'],
@@ -714,8 +674,7 @@ def _move_grasp_candidate_metrics(
         ),
     )
     insertion_axis_alignment = -sum(
-        direction * axis
-        for direction, axis in zip(final_approach_direction, insertion_axis)
+        direction * axis for direction, axis in zip(final_approach_direction, insertion_axis)
     )
 
     tcp_in_assembly_position = _vector(
@@ -774,22 +733,14 @@ def _move_grasp_candidate_metrics(
         )
         world_tcp_position = _add(world_tcp_position, workspace_offset)
         assembly_reaches.append(
-            math.sqrt(
-                sum(
-                    (world_tcp_position[axis] - robot_position[axis]) ** 2
-                    for axis in range(3)
-                )
-            )
+            math.sqrt(sum((world_tcp_position[axis] - robot_position[axis]) ** 2 for axis in range(3)))
         )
         for sample_index in range(body_sample_count):
             interpolation = body_start_fraction + (
-                (1.0 - body_start_fraction)
-                * sample_index
-                / max(body_sample_count - 1, 1)
+                (1.0 - body_start_fraction) * sample_index / max(body_sample_count - 1, 1)
             )
             sample = [
-                center + interpolation * (tcp - center)
-                for center, tcp in zip(local_grasp_center, local_tcp_position)
+                center + interpolation * (tcp - center) for center, tcp in zip(local_grasp_center, local_tcp_position)
             ]
             for lower, upper in obstacle_boxes:
                 insertion_body_clearance = min(
@@ -806,9 +757,7 @@ def _move_grasp_candidate_metrics(
         + 0.04 * insertion_axis_alignment
         + 0.01 * pickup_orientation_continuity
         + 0.02 * min(max(interior_clearance_score, 0.0), 1.0)
-        + 0.02
-        * min(max(pickup_fixture_body_clearance, 0.0), 0.10)
-        / 0.10
+        + 0.02 * min(max(pickup_fixture_body_clearance, 0.0), 0.10) / 0.10
         - 0.005 * maximum_reach
         - 0.001 * min(source_collision_count, 3)
     )
@@ -900,51 +849,42 @@ def _select_move_grasps_for_layout(
         kinematically_feasible = [
             entry
             for entry in evaluated
-            if entry['metrics']['pickup_orientation_continuity']
-            >= minimum_orientation_continuity
+            if entry['metrics']['pickup_orientation_continuity'] >= minimum_orientation_continuity
             and entry['metrics']['maximum_tcp_reach'] <= maximum_tcp_reach
         ]
         if kinematically_feasible:
             minimum_source_collision_count = min(
-                entry['metrics']['source_collision_count']
-                for entry in kinematically_feasible
+                entry['metrics']['source_collision_count'] for entry in kinematically_feasible
             )
             source_collision_feasible = [
                 entry
                 for entry in kinematically_feasible
-                if entry['metrics']['source_collision_count']
-                == minimum_source_collision_count
+                if entry['metrics']['source_collision_count'] == minimum_source_collision_count
             ]
             maximum_fixture_clearance = max(
-                entry['metrics']['pickup_fixture_body_clearance']
-                for entry in source_collision_feasible
+                entry['metrics']['pickup_fixture_body_clearance'] for entry in source_collision_feasible
             )
             required_fixture_clearance = minimum_fixture_clearance
             fixture_feasible = [
                 entry
                 for entry in source_collision_feasible
-                if entry['metrics']['pickup_fixture_body_clearance']
-                >= required_fixture_clearance
+                if entry['metrics']['pickup_fixture_body_clearance'] >= required_fixture_clearance
             ]
             if fixture_feasible:
                 maximum_orientation_continuity = max(
-                    entry['metrics']['pickup_orientation_continuity']
-                    for entry in fixture_feasible
+                    entry['metrics']['pickup_orientation_continuity'] for entry in fixture_feasible
                 )
                 required_orientation_continuity = max(
                     minimum_orientation_continuity,
-                    maximum_orientation_continuity
-                    * minimum_relative_orientation_continuity,
+                    maximum_orientation_continuity * minimum_relative_orientation_continuity,
                 )
                 orientation_feasible = [
                     entry
                     for entry in fixture_feasible
-                    if entry['metrics']['pickup_orientation_continuity']
-                    >= required_orientation_continuity
+                    if entry['metrics']['pickup_orientation_continuity'] >= required_orientation_continuity
                 ]
                 maximum_interior_clearance = max(
-                    entry['metrics']['interior_clearance_score']
-                    for entry in orientation_feasible
+                    entry['metrics']['interior_clearance_score'] for entry in orientation_feasible
                 )
                 required_interior_clearance = min(
                     preferred_interior_clearance,
@@ -953,8 +893,7 @@ def _select_move_grasps_for_layout(
                 feasible = [
                     entry
                     for entry in orientation_feasible
-                    if entry['metrics']['interior_clearance_score']
-                    >= required_interior_clearance
+                    if entry['metrics']['interior_clearance_score'] >= required_interior_clearance
                 ]
             else:
                 maximum_orientation_continuity = 0.0
@@ -979,25 +918,17 @@ def _select_move_grasps_for_layout(
             all_steps_feasible = False
             diagnostics_by_part[part_id] = {
                 'candidate_count': len(evaluated),
-                'kinematically_feasible_candidate_count': len(
-                    kinematically_feasible
-                ),
+                'kinematically_feasible_candidate_count': len(kinematically_feasible),
                 'minimum_source_collision_count': minimum_source_collision_count,
-                'source_collision_feasible_candidate_count': len(
-                    source_collision_feasible
-                ),
+                'source_collision_feasible_candidate_count': len(source_collision_feasible),
                 'fixture_feasible_candidate_count': len(fixture_feasible),
                 'feasible_candidate_count': 0,
                 'minimum_orientation_continuity': minimum_orientation_continuity,
                 'maximum_tcp_reach': maximum_tcp_reach,
                 'required_fixture_clearance': required_fixture_clearance,
                 'maximum_fixture_clearance': maximum_fixture_clearance,
-                'required_orientation_continuity': (
-                    required_orientation_continuity
-                ),
-                'maximum_orientation_continuity': (
-                    maximum_orientation_continuity
-                ),
+                'required_orientation_continuity': (required_orientation_continuity),
+                'maximum_orientation_continuity': (maximum_orientation_continuity),
                 'required_interior_clearance': required_interior_clearance,
                 'maximum_interior_clearance': maximum_interior_clearance,
                 'ik_evaluated_candidate_count': 0,
@@ -1018,11 +949,7 @@ def _select_move_grasps_for_layout(
             reverse=True,
         )
         planner = next(
-            (
-                entry
-                for entry in feasible
-                if entry['metrics']['is_planner_grasp']
-            ),
+            (entry for entry in feasible if entry['metrics']['is_planner_grasp']),
             None,
         )
 
@@ -1058,23 +985,15 @@ def _select_move_grasps_for_layout(
         if planner is not None:
             evaluate_ik(planner)
 
-        ik_evaluated = [
-            entry for entry in feasible if 'ik_feasible' in entry['metrics']
-        ]
-        ik_feasible = [
-            entry for entry in ik_evaluated if entry['metrics']['ik_feasible']
-        ]
+        ik_evaluated = [entry for entry in feasible if 'ik_feasible' in entry['metrics']]
+        ik_feasible = [entry for entry in ik_evaluated if entry['metrics']['ik_feasible']]
         if best is None:
             all_steps_feasible = False
             diagnostics_by_part[part_id] = {
                 'candidate_count': len(evaluated),
-                'kinematically_feasible_candidate_count': len(
-                    kinematically_feasible
-                ),
+                'kinematically_feasible_candidate_count': len(kinematically_feasible),
                 'minimum_source_collision_count': minimum_source_collision_count,
-                'source_collision_feasible_candidate_count': len(
-                    source_collision_feasible
-                ),
+                'source_collision_feasible_candidate_count': len(source_collision_feasible),
                 'fixture_feasible_candidate_count': len(fixture_feasible),
                 'geometry_feasible_candidate_count': len(feasible),
                 'feasible_candidate_count': 0,
@@ -1082,12 +1001,8 @@ def _select_move_grasps_for_layout(
                 'maximum_tcp_reach': maximum_tcp_reach,
                 'required_fixture_clearance': required_fixture_clearance,
                 'maximum_fixture_clearance': maximum_fixture_clearance,
-                'required_orientation_continuity': (
-                    required_orientation_continuity
-                ),
-                'maximum_orientation_continuity': (
-                    maximum_orientation_continuity
-                ),
+                'required_orientation_continuity': (required_orientation_continuity),
+                'maximum_orientation_continuity': (maximum_orientation_continuity),
                 'required_interior_clearance': required_interior_clearance,
                 'maximum_interior_clearance': maximum_interior_clearance,
                 'ik_position_tolerance': ik_position_tolerance,
@@ -1095,9 +1010,7 @@ def _select_move_grasps_for_layout(
                 'ik_minimum_manipulability': ik_minimum_manipulability,
                 'ik_evaluated_candidate_count': len(ik_evaluated),
                 'ik_feasible_candidate_count': 0,
-                'ik_rejections': [
-                    copy.deepcopy(entry['metrics']) for entry in ik_evaluated
-                ],
+                'ik_rejections': [copy.deepcopy(entry['metrics']) for entry in ik_evaluated],
             }
             assembled_parts.append(parts_by_id[part_id])
             continue
@@ -1106,9 +1019,7 @@ def _select_move_grasps_for_layout(
         if (
             planner is not None
             and planner['metrics']['ik_feasible']
-            and best['metrics']['physical_score']
-            - planner['metrics']['physical_score']
-            < reselection_minimum_gain
+            and best['metrics']['physical_score'] - planner['metrics']['physical_score'] < reselection_minimum_gain
         ):
             selected = planner
         selected_grasp = copy.deepcopy(selected['candidate'])
@@ -1121,13 +1032,9 @@ def _select_move_grasps_for_layout(
         selected_by_part[part_id] = selected_grasp
         diagnostics_by_part[part_id] = {
             'candidate_count': len(evaluated),
-            'kinematically_feasible_candidate_count': len(
-                kinematically_feasible
-            ),
+            'kinematically_feasible_candidate_count': len(kinematically_feasible),
             'minimum_source_collision_count': minimum_source_collision_count,
-            'source_collision_feasible_candidate_count': len(
-                source_collision_feasible
-            ),
+            'source_collision_feasible_candidate_count': len(source_collision_feasible),
             'fixture_feasible_candidate_count': len(fixture_feasible),
             'geometry_feasible_candidate_count': len(feasible),
             'feasible_candidate_count': len(ik_feasible),
@@ -1137,9 +1044,7 @@ def _select_move_grasps_for_layout(
             'ik_orientation_tolerance': ik_orientation_tolerance,
             'ik_minimum_manipulability': ik_minimum_manipulability,
             'selected_grasp_id': int(selected_grasp['grasp_id']),
-            'planner_grasp_id': int(
-                selected_grasp.get('planner_grasp_id', selected_grasp['grasp_id'])
-            ),
+            'planner_grasp_id': int(selected_grasp.get('planner_grasp_id', selected_grasp['grasp_id'])),
             'reselection_minimum_gain': reselection_minimum_gain,
             'required_fixture_clearance': required_fixture_clearance,
             'maximum_fixture_clearance': maximum_fixture_clearance,
@@ -1149,9 +1054,7 @@ def _select_move_grasps_for_layout(
             'maximum_interior_clearance': maximum_interior_clearance,
             'selected': copy.deepcopy(selected['metrics']),
             'best': copy.deepcopy(best['metrics']),
-            'planner': (
-                copy.deepcopy(planner['metrics']) if planner is not None else None
-            ),
+            'planner': (copy.deepcopy(planner['metrics']) if planner is not None else None),
         }
         assembled_parts.append(parts_by_id[part_id])
     return selected_by_part, diagnostics_by_part, all_steps_feasible
@@ -1169,13 +1072,7 @@ def _resolve_pickup_layout_and_grasps(
     assembly_orientation: list[float],
     workspace_offset: list[float],
     robots: list[dict[str, Any]],
-) -> tuple[
-    list[float],
-    list[float],
-    dict[str, Any],
-    dict[str, dict[str, Any]],
-    dict[str, Any],
-]:
+) -> tuple[list[float], list[float], dict[str, Any], dict[str, dict[str, Any]], dict[str, Any]]:
     raw_yaw_candidates = spec.get(
         'pickup_yaw_candidates_degrees',
         DEFAULT_PICKUP_YAW_CANDIDATES_DEGREES,
@@ -1186,58 +1083,28 @@ def _resolve_pickup_layout_and_grasps(
     if not all(math.isfinite(value) for value in yaw_candidates):
         raise ValueError('pickup_yaw_candidates_degrees must contain finite numbers.')
 
-    minimum_vertical_clearance = float(
-        spec.get('base_grasp_minimum_vertical_clearance', 0.70)
-    )
-    minimum_interior_clearance = float(
-        spec.get('base_grasp_minimum_interior_clearance', 0.20)
-    )
-    minimum_support_clearance_ratio = float(
-        spec.get('base_grasp_minimum_support_clearance_ratio', 0.70)
-    )
-    minimum_orientation_continuity = float(
-        spec.get('minimum_pickup_orientation_continuity', 0.50)
-    )
+    minimum_vertical_clearance = float(spec.get('base_grasp_minimum_vertical_clearance', 0.70))
+    minimum_interior_clearance = float(spec.get('base_grasp_minimum_interior_clearance', 0.20))
+    minimum_support_clearance_ratio = float(spec.get('base_grasp_minimum_support_clearance_ratio', 0.70))
+    minimum_orientation_continuity = float(spec.get('minimum_pickup_orientation_continuity', 0.50))
     maximum_pickup_tcp_reach = float(spec.get('pickup_tcp_maximum_reach', 0.82))
-    move_grasp_body_start_fraction = float(
-        spec.get('move_grasp_body_start_fraction', 0.30)
-    )
-    move_grasp_body_sample_count = int(
-        spec.get('move_grasp_body_sample_count', 24)
-    )
-    move_grasp_reselection_minimum_gain = float(
-        spec.get('move_grasp_reselection_minimum_gain', 0.015)
-    )
-    move_grasp_preferred_interior_clearance = float(
-        spec.get('move_grasp_preferred_interior_clearance', 0.40)
-    )
+    move_grasp_body_start_fraction = float(spec.get('move_grasp_body_start_fraction', 0.30))
+    move_grasp_body_sample_count = int(spec.get('move_grasp_body_sample_count', 24))
+    move_grasp_reselection_minimum_gain = float(spec.get('move_grasp_reselection_minimum_gain', 0.015))
+    move_grasp_preferred_interior_clearance = float(spec.get('move_grasp_preferred_interior_clearance', 0.40))
     move_grasp_minimum_relative_interior_clearance = float(
         spec.get('move_grasp_minimum_relative_interior_clearance', 0.75)
     )
-    move_grasp_fixture_footprint_margin = float(
-        spec.get('move_grasp_fixture_footprint_margin', 0.035)
-    )
-    move_grasp_minimum_fixture_clearance = float(
-        spec.get('move_grasp_minimum_fixture_clearance', 0.001)
-    )
+    move_grasp_fixture_footprint_margin = float(spec.get('move_grasp_fixture_footprint_margin', 0.035))
+    move_grasp_minimum_fixture_clearance = float(spec.get('move_grasp_minimum_fixture_clearance', 0.001))
     move_grasp_minimum_relative_orientation_continuity = float(
         spec.get('move_grasp_minimum_relative_orientation_continuity', 0.90)
     )
-    move_grasp_ik_position_tolerance = float(
-        spec.get('move_grasp_ik_position_tolerance', 0.01)
-    )
-    move_grasp_ik_orientation_tolerance = float(
-        spec.get('move_grasp_ik_orientation_tolerance', 0.03)
-    )
-    move_grasp_ik_max_iterations = int(
-        spec.get('move_grasp_ik_max_iterations', 200)
-    )
-    move_grasp_ik_minimum_manipulability = float(
-        spec.get('move_grasp_ik_minimum_manipulability', 0.08)
-    )
-    move_grasp_ik_lift_distance = float(
-        spec.get('move_grasp_ik_lift_distance', spec.get('approach_height', 0.10))
-    )
+    move_grasp_ik_position_tolerance = float(spec.get('move_grasp_ik_position_tolerance', 0.01))
+    move_grasp_ik_orientation_tolerance = float(spec.get('move_grasp_ik_orientation_tolerance', 0.03))
+    move_grasp_ik_max_iterations = int(spec.get('move_grasp_ik_max_iterations', 200))
+    move_grasp_ik_minimum_manipulability = float(spec.get('move_grasp_ik_minimum_manipulability', 0.08))
+    move_grasp_ik_lift_distance = float(spec.get('move_grasp_ik_lift_distance', spec.get('approach_height', 0.10)))
     orientation_reference = _vector(
         spec.get(
             'pickup_tcp_orientation_reference',
@@ -1268,9 +1135,7 @@ def _resolve_pickup_layout_and_grasps(
         or move_grasp_fixture_footprint_margin < 0.0
         or not math.isfinite(move_grasp_minimum_fixture_clearance)
         or move_grasp_minimum_fixture_clearance < 0.0
-        or not 0.0
-        <= move_grasp_minimum_relative_orientation_continuity
-        <= 1.0
+        or not 0.0 <= move_grasp_minimum_relative_orientation_continuity <= 1.0
         or not math.isfinite(move_grasp_ik_position_tolerance)
         or move_grasp_ik_position_tolerance <= 0.0
         or not math.isfinite(move_grasp_ik_orientation_tolerance)
@@ -1318,10 +1183,7 @@ def _resolve_pickup_layout_and_grasps(
 
     fixture_bbox_min = _vector(task['fixture']['bbox_min'], size=3, name='fixture bbox_min')
     fixture_bbox_max = _vector(task['fixture']['bbox_max'], size=3, name='fixture bbox_max')
-    default_rotation_pivot = [
-        (lower + upper) * 0.5
-        for lower, upper in zip(fixture_bbox_min, fixture_bbox_max)
-    ]
+    default_rotation_pivot = [(lower + upper) * 0.5 for lower, upper in zip(fixture_bbox_min, fixture_bbox_max)]
     rotation_pivot = _vector(
         spec.get('pickup_rotation_pivot', default_rotation_pivot),
         size=3,
@@ -1346,9 +1208,7 @@ def _resolve_pickup_layout_and_grasps(
     )
 
     robots_by_name = {
-        str(robot['name']): robot
-        for robot in robots
-        if isinstance(robot, dict) and robot.get('name') is not None
+        str(robot['name']): robot for robot in robots if isinstance(robot, dict) and robot.get('name') is not None
     }
     base_robot = str(spec.get('base_robot', 'franka_right'))
     assembly_robot = str(spec.get('assembly_robot', 'franka_left'))
@@ -1386,17 +1246,11 @@ def _resolve_pickup_layout_and_grasps(
             for z in (fixture_bbox_min[2], fixture_bbox_max[2])
         ]
         fixture_on_board = all(
-            board_bbox_min[axis] - 1e-9
-            <= corner[axis]
-            <= board_bbox_max[axis] + 1e-9
+            board_bbox_min[axis] - 1e-9 <= corner[axis] <= board_bbox_max[axis] + 1e-9
             for corner in fixture_corners
             for axis in (0, 1)
         )
-        (
-            selected_move_grasps,
-            move_grasp_diagnostics,
-            move_grasps_feasible,
-        ) = _select_move_grasps_for_layout(
+        (selected_move_grasps, move_grasp_diagnostics, move_grasps_feasible,) = _select_move_grasps_for_layout(
             assembly=assembly,
             task=task,
             pickup_origin=pickup_origin,
@@ -1416,16 +1270,10 @@ def _resolve_pickup_layout_and_grasps(
             body_start_fraction=move_grasp_body_start_fraction,
             body_sample_count=move_grasp_body_sample_count,
             reselection_minimum_gain=move_grasp_reselection_minimum_gain,
-            preferred_interior_clearance=(
-                move_grasp_preferred_interior_clearance
-            ),
-            minimum_relative_interior_clearance=(
-                move_grasp_minimum_relative_interior_clearance
-            ),
+            preferred_interior_clearance=(move_grasp_preferred_interior_clearance),
+            minimum_relative_interior_clearance=(move_grasp_minimum_relative_interior_clearance),
             minimum_fixture_clearance=move_grasp_minimum_fixture_clearance,
-            minimum_relative_orientation_continuity=(
-                move_grasp_minimum_relative_orientation_continuity
-            ),
+            minimum_relative_orientation_continuity=(move_grasp_minimum_relative_orientation_continuity),
             transport_tcp_height=_transport_tcp_height(
                 spec,
                 pickup_origin=pickup_origin,
@@ -1480,10 +1328,7 @@ def _resolve_pickup_layout_and_grasps(
                                 _vector(
                                     grasp['object_in_tcp_position'],
                                     size=3,
-                                    name=(
-                                        f'{assembly} part {part_id} '
-                                        'object_in_tcp_position'
-                                    ),
+                                    name=(f'{assembly} part {part_id} ' 'object_in_tcp_position'),
                                 ),
                             )
                         ],
@@ -1494,10 +1339,7 @@ def _resolve_pickup_layout_and_grasps(
                 robot_role = 'base' if part_id == base_part else 'assembly'
                 robot_position = robot_position_by_role[robot_role]
                 pickup_tcp_reach_by_part[part_id] = math.sqrt(
-                    sum(
-                        (tcp_position[axis] - robot_position[axis]) ** 2
-                        for axis in range(3)
-                    )
+                    sum((tcp_position[axis] - robot_position[axis]) ** 2 for axis in range(3))
                 )
 
             approach_direction = _vector(
@@ -1544,17 +1386,11 @@ def _resolve_pickup_layout_and_grasps(
                 if diagnostics.get('selected') is not None
             ]
             maximum_move_tcp_reach = max(
-                (
-                    float(metrics['maximum_tcp_reach'])
-                    for metrics in selected_move_metrics
-                ),
+                (float(metrics['maximum_tcp_reach']) for metrics in selected_move_metrics),
                 default=worst_pickup_tcp_reach,
             )
             minimum_move_physical_score = min(
-                (
-                    float(metrics['physical_score'])
-                    for metrics in selected_move_metrics
-                ),
+                (float(metrics['physical_score']) for metrics in selected_move_metrics),
                 default=-math.inf,
             )
             evaluated.append(
@@ -1571,9 +1407,7 @@ def _resolve_pickup_layout_and_grasps(
                     'support_clearance': support_clearance,
                     'support_clearance_ratio': support_clearance_ratio,
                     'orientation_continuity_score': worst_continuity,
-                    'base_orientation_continuity_score': (
-                        base_orientation_continuity
-                    ),
+                    'base_orientation_continuity_score': (base_orientation_continuity),
                     'orientation_continuity_by_part': continuity_by_part,
                     'pickup_tcp_orientation_by_part': pickup_tcp_orientation_by_part,
                     'maximum_pickup_tcp_reach': worst_pickup_tcp_reach,
@@ -1678,27 +1512,15 @@ def _resolve_pickup_layout_and_grasps(
         'move_grasp_body_start_fraction': move_grasp_body_start_fraction,
         'move_grasp_body_sample_count': move_grasp_body_sample_count,
         'move_grasp_reselection_minimum_gain': move_grasp_reselection_minimum_gain,
-        'move_grasp_preferred_interior_clearance': (
-            move_grasp_preferred_interior_clearance
-        ),
-        'move_grasp_minimum_relative_interior_clearance': (
-            move_grasp_minimum_relative_interior_clearance
-        ),
-        'move_grasp_fixture_footprint_margin': (
-            move_grasp_fixture_footprint_margin
-        ),
+        'move_grasp_preferred_interior_clearance': (move_grasp_preferred_interior_clearance),
+        'move_grasp_minimum_relative_interior_clearance': (move_grasp_minimum_relative_interior_clearance),
+        'move_grasp_fixture_footprint_margin': (move_grasp_fixture_footprint_margin),
         'move_grasp_minimum_fixture_clearance': move_grasp_minimum_fixture_clearance,
-        'move_grasp_minimum_relative_orientation_continuity': (
-            move_grasp_minimum_relative_orientation_continuity
-        ),
+        'move_grasp_minimum_relative_orientation_continuity': (move_grasp_minimum_relative_orientation_continuity),
         'move_grasp_ik_position_tolerance': move_grasp_ik_position_tolerance,
-        'move_grasp_ik_orientation_tolerance': (
-            move_grasp_ik_orientation_tolerance
-        ),
+        'move_grasp_ik_orientation_tolerance': (move_grasp_ik_orientation_tolerance),
         'move_grasp_ik_max_iterations': move_grasp_ik_max_iterations,
-        'move_grasp_ik_minimum_manipulability': (
-            move_grasp_ik_minimum_manipulability
-        ),
+        'move_grasp_ik_minimum_manipulability': (move_grasp_ik_minimum_manipulability),
         'move_grasp_ik_lift_distance': move_grasp_ik_lift_distance,
         'move_grasp_selection': copy.deepcopy(selected['move_grasp_diagnostics']),
         'fixture_on_optical_board': selected['fixture_on_optical_board'],
@@ -1707,9 +1529,7 @@ def _resolve_pickup_layout_and_grasps(
         'support_clearance': selected['support_clearance'],
         'support_clearance_ratio': selected['support_clearance_ratio'],
         'orientation_continuity_score': selected['orientation_continuity_score'],
-        'base_orientation_continuity_score': selected[
-            'base_orientation_continuity_score'
-        ],
+        'base_orientation_continuity_score': selected['base_orientation_continuity_score'],
         'orientation_continuity_by_part': selected['orientation_continuity_by_part'],
     }
     return (
@@ -1823,14 +1643,10 @@ def _transport_tcp_height(
     else:
         clearance_height = None
         value = float(configured_height)
-    if clearance_height is not None and (
-        not math.isfinite(clearance_height) or clearance_height <= 0.0
-    ):
+    if clearance_height is not None and (not math.isfinite(clearance_height) or clearance_height <= 0.0):
         raise ValueError('transport_clearance_height must be finite and positive.')
     if not math.isfinite(value) or value <= work_surface_height:
-        raise ValueError(
-            'transport_tcp_height must be finite and above both pickup and assembly origins.'
-        )
+        raise ValueError('transport_tcp_height must be finite and above both pickup and assembly origins.')
     return value
 
 
@@ -1964,9 +1780,7 @@ def _append_pick_and_attach_phases(
             move_above_parameters.update(
                 {
                     'prealign_steps': int(prealign_steps),
-                    'prealign_joint_positions': copy.deepcopy(
-                        prealign_joint_positions
-                    ),
+                    'prealign_joint_positions': copy.deepcopy(prealign_joint_positions),
                     'prealign_max_joint_step': 0.035,
                 }
             )
@@ -1998,9 +1812,7 @@ def _append_pick_and_attach_phases(
                 'gripper_openness': preclose_openness,
                 'hold_steps': 36,
                 'preshape_timeout_steps': preshape_timeout_steps,
-                'gripper_position_tolerance': float(
-                    preshape_gripper_position_tolerance
-                ),
+                'gripper_position_tolerance': float(preshape_gripper_position_tolerance),
             },
         )
     )
@@ -2185,9 +1997,7 @@ def _append_transport_phase(
     if insertion:
         relaxed_parameters = {
             'relaxed_position_tolerance': float(insertion_relaxed_position_tolerance),
-            'relaxed_target_object_position_tolerance': float(
-                insertion_relaxed_position_tolerance
-            ),
+            'relaxed_target_object_position_tolerance': float(insertion_relaxed_position_tolerance),
             'relaxed_position_tolerance_after_steps': int(insertion_relaxed_after_steps),
         }
         if insertion_axis is not None:
@@ -2196,27 +2006,19 @@ def _append_transport_phase(
                 name=f'{phase_name} insertion axis',
             )
         if insertion_lateral_position_tolerance is not None:
-            relaxed_parameters['target_object_lateral_position_tolerance'] = float(
-                insertion_lateral_position_tolerance
+            relaxed_parameters['target_object_lateral_position_tolerance'] = float(insertion_lateral_position_tolerance)
+            relaxed_parameters['target_object_lateral_alignment_cartesian_position_step'] = float(
+                insertion_lateral_alignment_cartesian_position_step
             )
-            relaxed_parameters[
-                'target_object_lateral_alignment_cartesian_position_step'
-            ] = float(insertion_lateral_alignment_cartesian_position_step)
-            relaxed_parameters[
-                'target_object_lateral_alignment_axial_clearance'
-            ] = float(insertion_lateral_alignment_axial_clearance)
-            relaxed_parameters['target_object_insertion_path_depth'] = float(
-                insertion_path_depth
+            relaxed_parameters['target_object_lateral_alignment_axial_clearance'] = float(
+                insertion_lateral_alignment_axial_clearance
             )
-            relaxed_parameters['target_object_lateral_alignment_stable_steps'] = (
-                8 if settle_at_target else 1
+            relaxed_parameters['target_object_insertion_path_depth'] = float(insertion_path_depth)
+            relaxed_parameters['target_object_lateral_alignment_stable_steps'] = 8 if settle_at_target else 1
+            relaxed_parameters['target_object_axial_recovery_cartesian_position_step'] = float(
+                insertion_axial_recovery_cartesian_position_step
             )
-            relaxed_parameters[
-                'target_object_axial_recovery_cartesian_position_step'
-            ] = float(insertion_axial_recovery_cartesian_position_step)
-            relaxed_parameters['target_object_axial_recovery_deadband'] = float(
-                insertion_axial_recovery_deadband
-            )
+            relaxed_parameters['target_object_axial_recovery_deadband'] = float(insertion_axial_recovery_deadband)
             alignment_enter_tolerance = (
                 0.5 * float(insertion_lateral_position_tolerance)
                 if insertion_lateral_alignment_enter_tolerance is None
@@ -2227,12 +2029,8 @@ def _append_transport_phase(
                 if insertion_lateral_alignment_exit_tolerance is None
                 else float(insertion_lateral_alignment_exit_tolerance)
             )
-            relaxed_parameters[
-                'target_object_lateral_alignment_enter_tolerance'
-            ] = alignment_enter_tolerance
-            relaxed_parameters[
-                'target_object_lateral_alignment_exit_tolerance'
-            ] = alignment_exit_tolerance
+            relaxed_parameters['target_object_lateral_alignment_enter_tolerance'] = alignment_enter_tolerance
+            relaxed_parameters['target_object_lateral_alignment_exit_tolerance'] = alignment_exit_tolerance
     phases.append(
         _skill_phase(
             skill='move_part_to_target',
@@ -2258,11 +2056,7 @@ def _append_transport_phase(
                 'max_command_tracking_error': 0.12 if insertion else 0.24,
                 'max_wrist_command_tracking_error': 0.10 if insertion else 0.24,
                 'cartesian_position_step': (
-                    float(insertion_cartesian_position_step)
-                    if insertion
-                    else 0.003
-                    if strict_alignment
-                    else 0.006
+                    float(insertion_cartesian_position_step) if insertion else 0.003 if strict_alignment else 0.006
                 ),
                 'cartesian_orientation_step': 0.012 if insertion else 0.025,
                 'target_object_servo_position_command_warm_start': bool(insertion),
@@ -2273,9 +2067,7 @@ def _append_transport_phase(
                 'max_object_tcp_slip': 0.04,
                 'position_tolerance': position_tolerance,
                 **relaxed_parameters,
-                'orientation_tolerance': (
-                    0.08 if insertion else 0.10 if strict_alignment else 0.12
-                ),
+                'orientation_tolerance': (0.08 if insertion else 0.10 if strict_alignment else 0.12),
                 'require_target_object_pose_convergence': True,
                 'target_object_position_tolerance': target_object_position_tolerance,
                 'target_object_orientation_tolerance': 0.10 if insertion else 0.15,
@@ -2293,9 +2085,7 @@ def _append_transport_phase(
                         'relax_fixed_attachment_within_final_position_tolerance': float(
                             insertion_compliance_position_tolerance
                         ),
-                        'relax_fixed_attachment_after_steps': int(
-                            insertion_compliance_after_steps
-                        ),
+                        'relax_fixed_attachment_after_steps': int(insertion_compliance_after_steps),
                         'relax_fixed_attachment_require_waypoint_proximity': bool(
                             insertion_compliance_require_waypoint_proximity
                         ),
@@ -2317,22 +2107,16 @@ def _append_transport_phase(
                                     insertion_compliance_waypoint_lateral_position_tolerance
                                 ),
                             }
-                            if insertion_compliance_waypoint_axial_position_tolerance
-                            is not None
-                            and insertion_compliance_waypoint_lateral_position_tolerance
-                            is not None
+                            if insertion_compliance_waypoint_axial_position_tolerance is not None
+                            and insertion_compliance_waypoint_lateral_position_tolerance is not None
                             else {}
                         ),
                         'relax_fixed_attachment_final_orientation_tolerance': 0.15,
-                        'relax_fixed_attachment_max_linear_speed': float(
-                            insertion_compliance_capture_max_linear_speed
-                        ),
+                        'relax_fixed_attachment_max_linear_speed': float(insertion_compliance_capture_max_linear_speed),
                         'relax_fixed_attachment_max_angular_speed': float(
                             insertion_compliance_capture_max_angular_speed
                         ),
-                        'relax_fixed_attachment_stable_steps': int(
-                            insertion_compliance_capture_stable_steps
-                        ),
+                        'relax_fixed_attachment_stable_steps': int(insertion_compliance_capture_stable_steps),
                         'relax_fixed_attachment_allow_pose_stable_override': True,
                         'compliant_servo_pause_linear_speed': 0.20,
                         'compliant_servo_pause_angular_speed': 5.0,
@@ -2343,9 +2127,7 @@ def _append_transport_phase(
                         'target_object_allow_pose_history_velocity_override': True,
                         'pose_history_velocity_override_position_tolerance': 0.0005,
                         'pose_history_velocity_override_orientation_tolerance': 0.01,
-                        'compliant_servo_settle_max_linear_speed': float(
-                            insertion_compliance_capture_max_linear_speed
-                        ),
+                        'compliant_servo_settle_max_linear_speed': float(insertion_compliance_capture_max_linear_speed),
                         'compliant_servo_settle_max_angular_speed': min(
                             float(insertion_compliance_capture_max_angular_speed),
                             2.0,
@@ -2365,19 +2147,13 @@ def _append_transport_phase(
                         'compliant_servo_max_orientation_step': 0.002,
                         'compliant_servo_orientation_correction_deadband': 0.005,
                         'compliant_servo_hold_orientation_during_lateral_alignment': True,
-                        'compliant_servo_track_object_orientation': bool(
-                            insertion_compliant_track_object_orientation
-                        ),
+                        'compliant_servo_track_object_orientation': bool(insertion_compliant_track_object_orientation),
                     }
                     if insertion and final_target_name is not None
                     else {}
                 ),
                 **(
-                    {
-                        'target_object_entry_capture_max_steps': int(
-                            target_object_entry_capture_max_steps
-                        )
-                    }
+                    {'target_object_entry_capture_max_steps': int(target_object_entry_capture_max_steps)}
                     if insertion and target_object_entry_capture_max_steps > 0
                     else {}
                 ),
@@ -2450,9 +2226,7 @@ def _append_release_and_retreat(
                 'offset': copy.deepcopy(park_offset),
                 'offset_frame': 'world',
                 'workspace_center': copy.deepcopy(park_workspace_center),
-                'workspace_minimum_planar_radius': float(
-                    park_minimum_planar_radius
-                ),
+                'workspace_minimum_planar_radius': float(park_minimum_planar_radius),
                 'lock_target_position': True,
                 'lock_target_orientation': False,
                 'gripper_command': 'open',
@@ -2484,12 +2258,8 @@ def _compile_targets_and_phases(
     assembly_robot = str(spec.get('assembly_robot', 'franka_left'))
     release_retreat_distance = float(spec.get('release_retreat_distance', 0.06))
     post_release_park_distance = float(spec.get('post_release_park_distance', 0.35))
-    post_release_park_vertical_offset = float(
-        spec.get('post_release_park_vertical_offset', 0.02)
-    )
-    post_release_park_minimum_planar_radius = float(
-        spec.get('post_release_park_minimum_planar_radius', 0.28)
-    )
+    post_release_park_vertical_offset = float(spec.get('post_release_park_vertical_offset', 0.02))
+    post_release_park_minimum_planar_radius = float(spec.get('post_release_park_minimum_planar_radius', 0.28))
     if (
         not math.isfinite(release_retreat_distance)
         or release_retreat_distance <= 0.0
@@ -2506,9 +2276,7 @@ def _compile_targets_and_phases(
             'radius must be finite and positive.'
         )
     robots_by_name = {
-        str(robot['name']): robot
-        for robot in robots
-        if isinstance(robot, dict) and robot.get('name') is not None
+        str(robot['name']): robot for robot in robots if isinstance(robot, dict) and robot.get('name') is not None
     }
 
     def post_release_park_offset(robot_name: str) -> list[float]:
@@ -2526,9 +2294,7 @@ def _compile_targets_and_phases(
         ]
         direction_norm = math.hypot(*direction)
         if direction_norm <= 1e-9:
-            raise ValueError(
-                f'Cannot derive a post-release parking direction for {robot_name!r}.'
-            )
+            raise ValueError(f'Cannot derive a post-release parking direction for {robot_name!r}.')
         return [
             post_release_park_distance * direction[0] / direction_norm,
             post_release_park_distance * direction[1] / direction_norm,
@@ -2548,37 +2314,22 @@ def _compile_targets_and_phases(
     def release_retreat_offset(insertion_axis: list[float]) -> list[float]:
         direction = _normalized_direction(insertion_axis, name='release retreat axis')
         return [-release_retreat_distance * value for value in direction]
+
     approach_height = float(spec.get('approach_height', 0.10))
     transport_hover_height = float(spec.get('transport_hover_height', 0.12))
     move_above_timeout_steps = int(spec.get('move_above_timeout_steps', 2200))
-    move_above_orientation_first = bool(
-        spec.get('move_above_orientation_first', True)
-    )
-    move_above_orientation_first_steps = int(
-        spec.get('move_above_orientation_first_steps', 720)
-    )
-    move_above_orientation_first_tolerance = float(
-        spec.get('move_above_orientation_first_tolerance', 0.08)
-    )
+    move_above_orientation_first = bool(spec.get('move_above_orientation_first', True))
+    move_above_orientation_first_steps = int(spec.get('move_above_orientation_first_steps', 720))
+    move_above_orientation_first_tolerance = float(spec.get('move_above_orientation_first_tolerance', 0.08))
     preshape_timeout_steps = int(spec.get('preshape_timeout_steps', 720))
     preshape_open_margin = float(spec.get('preshape_open_margin', 0.20))
-    preshape_gripper_position_tolerance = float(
-        spec.get('preshape_gripper_position_tolerance', 0.025)
-    )
+    preshape_gripper_position_tolerance = float(spec.get('preshape_gripper_position_tolerance', 0.025))
     descend_position_tolerance = float(spec.get('descend_position_tolerance', 0.007))
-    descend_relaxed_position_tolerance = float(
-        spec.get('descend_relaxed_position_tolerance', 0.012)
-    )
+    descend_relaxed_position_tolerance = float(spec.get('descend_relaxed_position_tolerance', 0.012))
     descend_relaxed_after_steps = int(spec.get('descend_relaxed_after_steps', 600))
-    insertion_relaxed_position_tolerance = float(
-        spec.get('insertion_relaxed_position_tolerance', 0.018)
-    )
-    base_support_release_position_tolerance = float(
-        spec.get('base_support_release_position_tolerance', 0.012)
-    )
-    base_support_lateral_position_tolerance = float(
-        spec.get('base_support_lateral_position_tolerance', 0.015)
-    )
+    insertion_relaxed_position_tolerance = float(spec.get('insertion_relaxed_position_tolerance', 0.018))
+    base_support_release_position_tolerance = float(spec.get('base_support_release_position_tolerance', 0.012))
+    base_support_lateral_position_tolerance = float(spec.get('base_support_lateral_position_tolerance', 0.015))
     base_support_lateral_alignment_enter_tolerance = float(
         spec.get('base_support_lateral_alignment_enter_tolerance', 0.002)
     )
@@ -2592,9 +2343,7 @@ def _compile_targets_and_phases(
         )
     )
     insertion_relaxed_after_steps = int(spec.get('insertion_relaxed_after_steps', 600))
-    insertion_lateral_position_tolerance = float(
-        spec.get('insertion_lateral_position_tolerance', 0.001)
-    )
+    insertion_lateral_position_tolerance = float(spec.get('insertion_lateral_position_tolerance', 0.001))
     insertion_lateral_tolerance_object_extent_scale = float(
         spec.get('insertion_lateral_tolerance_object_extent_scale', 0.04)
     )
@@ -2607,15 +2356,11 @@ def _compile_targets_and_phases(
             0.001,
         )
     )
-    insertion_cartesian_position_step = float(
-        spec.get('insertion_cartesian_position_step', 0.00025)
-    )
+    insertion_cartesian_position_step = float(spec.get('insertion_cartesian_position_step', 0.00025))
     insertion_lateral_alignment_cartesian_position_step = float(
         spec.get('insertion_lateral_alignment_cartesian_position_step', 0.00025)
     )
-    insertion_lateral_alignment_entry_clearance = float(
-        spec.get('insertion_lateral_alignment_entry_clearance', 0.01)
-    )
+    insertion_lateral_alignment_entry_clearance = float(spec.get('insertion_lateral_alignment_entry_clearance', 0.01))
     insertion_lateral_alignment_clearance_object_extent_scale = float(
         spec.get(
             'insertion_lateral_alignment_clearance_object_extent_scale',
@@ -2625,18 +2370,14 @@ def _compile_targets_and_phases(
     insertion_axial_recovery_cartesian_position_step = float(
         spec.get('insertion_axial_recovery_cartesian_position_step', 0.001)
     )
-    insertion_axial_recovery_deadband = float(
-        spec.get('insertion_axial_recovery_deadband', 0.0005)
-    )
+    insertion_axial_recovery_deadband = float(spec.get('insertion_axial_recovery_deadband', 0.0005))
     insertion_compliance_capture_max_linear_speed = float(
         spec.get('insertion_compliance_capture_max_linear_speed', 0.10)
     )
     insertion_compliance_capture_max_angular_speed = float(
         spec.get('insertion_compliance_capture_max_angular_speed', 2.0)
     )
-    insertion_compliance_capture_stable_steps = int(
-        spec.get('insertion_compliance_capture_stable_steps', 8)
-    )
+    insertion_compliance_capture_stable_steps = int(spec.get('insertion_compliance_capture_stable_steps', 8))
     insertion_compliance_geometric_capture_after_steps = int(
         spec.get('insertion_compliance_geometric_capture_after_steps', 1200)
     )
@@ -2646,16 +2387,12 @@ def _compile_targets_and_phases(
     insertion_compliant_alignment_retraction_limit = float(
         spec.get('insertion_compliant_alignment_retraction_limit', 0.006)
     )
-    insertion_compliant_track_object_orientation = bool(
-        spec.get('insertion_compliant_track_object_orientation', False)
-    )
+    insertion_compliant_track_object_orientation = bool(spec.get('insertion_compliant_track_object_orientation', False))
     transport_timeout_steps = int(spec.get('transport_timeout_steps', 4800))
     insertion_timeout_steps = int(spec.get('insertion_timeout_steps', 3600))
     base_place_timeout_steps = int(spec.get('base_place_timeout_steps', 4800))
     move_above_prealign_steps = int(spec.get('move_above_prealign_steps', 0))
-    prealign_joint_positions_by_robot = (
-        spec.get('prealign_joint_positions_by_robot') or {}
-    )
+    prealign_joint_positions_by_robot = spec.get('prealign_joint_positions_by_robot') or {}
     if not isinstance(prealign_joint_positions_by_robot, dict):
         raise ValueError('prealign_joint_positions_by_robot must be a mapping.')
     for robot_name, positions in prealign_joint_positions_by_robot.items():
@@ -2693,24 +2430,17 @@ def _compile_targets_and_phases(
         or base_support_release_position_tolerance < 0.008
         or base_support_release_position_tolerance > 0.015
         or not math.isfinite(base_support_lateral_position_tolerance)
-        or base_support_lateral_position_tolerance
-        < base_support_release_position_tolerance
+        or base_support_lateral_position_tolerance < base_support_release_position_tolerance
         or base_support_lateral_position_tolerance > 0.02
         or not math.isfinite(base_support_lateral_alignment_enter_tolerance)
         or base_support_lateral_alignment_enter_tolerance <= 0.0
-        or base_support_lateral_alignment_enter_tolerance
-        > base_support_release_position_tolerance
+        or base_support_lateral_alignment_enter_tolerance > base_support_release_position_tolerance
         or not math.isfinite(base_support_lateral_alignment_exit_tolerance)
-        or base_support_lateral_alignment_exit_tolerance
-        < base_support_lateral_alignment_enter_tolerance
-        or base_support_lateral_alignment_exit_tolerance
-        > base_support_lateral_position_tolerance
-        or not math.isfinite(
-            base_support_lateral_alignment_cartesian_position_step
-        )
+        or base_support_lateral_alignment_exit_tolerance < base_support_lateral_alignment_enter_tolerance
+        or base_support_lateral_alignment_exit_tolerance > base_support_lateral_position_tolerance
+        or not math.isfinite(base_support_lateral_alignment_cartesian_position_step)
         or base_support_lateral_alignment_cartesian_position_step <= 0.0
-        or base_support_lateral_alignment_cartesian_position_step
-        > base_support_lateral_alignment_enter_tolerance
+        or base_support_lateral_alignment_cartesian_position_step > base_support_lateral_alignment_enter_tolerance
         or not math.isfinite(insertion_lateral_position_tolerance)
         or insertion_lateral_position_tolerance <= 0.0
         or insertion_lateral_position_tolerance > insertion_relaxed_position_tolerance
@@ -2718,12 +2448,9 @@ def _compile_targets_and_phases(
         or insertion_lateral_tolerance_object_extent_scale < 0.0
         or insertion_lateral_tolerance_object_extent_scale > 0.25
         or not math.isfinite(intermediate_insertion_lateral_position_tolerance)
-        or intermediate_insertion_lateral_position_tolerance
-        < insertion_lateral_position_tolerance
+        or intermediate_insertion_lateral_position_tolerance < insertion_lateral_position_tolerance
         or intermediate_insertion_lateral_position_tolerance > 0.005
-        or not math.isfinite(
-            intermediate_insertion_lateral_alignment_cartesian_position_step
-        )
+        or not math.isfinite(intermediate_insertion_lateral_alignment_cartesian_position_step)
         or intermediate_insertion_lateral_alignment_cartesian_position_step <= 0.0
         or intermediate_insertion_lateral_alignment_cartesian_position_step
         > intermediate_insertion_lateral_position_tolerance
@@ -2732,14 +2459,11 @@ def _compile_targets_and_phases(
         or insertion_cartesian_position_step > 0.002
         or not math.isfinite(insertion_lateral_alignment_cartesian_position_step)
         or insertion_lateral_alignment_cartesian_position_step <= 0.0
-        or insertion_lateral_alignment_cartesian_position_step
-        > insertion_lateral_position_tolerance
+        or insertion_lateral_alignment_cartesian_position_step > insertion_lateral_position_tolerance
         or not math.isfinite(insertion_lateral_alignment_entry_clearance)
         or insertion_lateral_alignment_entry_clearance < 0.0
         or insertion_lateral_alignment_entry_clearance > 0.05
-        or not math.isfinite(
-            insertion_lateral_alignment_clearance_object_extent_scale
-        )
+        or not math.isfinite(insertion_lateral_alignment_clearance_object_extent_scale)
         or insertion_lateral_alignment_clearance_object_extent_scale < 0.0
         or insertion_lateral_alignment_clearance_object_extent_scale > 2.0
         or not math.isfinite(insertion_axial_recovery_cartesian_position_step)
@@ -2747,16 +2471,14 @@ def _compile_targets_and_phases(
         or insertion_axial_recovery_cartesian_position_step > 0.002
         or not math.isfinite(insertion_axial_recovery_deadband)
         or insertion_axial_recovery_deadband < 0.0
-        or insertion_axial_recovery_deadband
-        >= insertion_axial_recovery_cartesian_position_step
+        or insertion_axial_recovery_deadband >= insertion_axial_recovery_cartesian_position_step
         or not math.isfinite(insertion_compliance_capture_max_linear_speed)
         or insertion_compliance_capture_max_linear_speed <= 0.0
         or not math.isfinite(insertion_compliance_capture_max_angular_speed)
         or insertion_compliance_capture_max_angular_speed <= 0.0
         or insertion_compliance_capture_stable_steps <= 0
         or insertion_compliance_geometric_capture_after_steps < 0
-        or insertion_compliance_geometric_capture_after_steps
-        >= insertion_timeout_steps
+        or insertion_compliance_geometric_capture_after_steps >= insertion_timeout_steps
         or not math.isfinite(insertion_compliance_minimum_gravity_alignment)
         or insertion_compliance_minimum_gravity_alignment < 0.0
         or insertion_compliance_minimum_gravity_alignment > 1.0
@@ -2958,22 +2680,12 @@ def _compile_targets_and_phases(
             assembly_orientation,
             [0.0, 0.0, -1.0],
         ),
-        insertion_lateral_position_tolerance=(
-            base_support_lateral_position_tolerance
-        ),
+        insertion_lateral_position_tolerance=(base_support_lateral_position_tolerance),
         insertion_cartesian_position_step=insertion_cartesian_position_step,
-        insertion_lateral_alignment_cartesian_position_step=(
-            base_support_lateral_alignment_cartesian_position_step
-        ),
-        insertion_lateral_alignment_enter_tolerance=(
-            base_support_lateral_alignment_enter_tolerance
-        ),
-        insertion_lateral_alignment_exit_tolerance=(
-            base_support_lateral_alignment_exit_tolerance
-        ),
-        insertion_axial_recovery_cartesian_position_step=(
-            insertion_axial_recovery_cartesian_position_step
-        ),
+        insertion_lateral_alignment_cartesian_position_step=(base_support_lateral_alignment_cartesian_position_step),
+        insertion_lateral_alignment_enter_tolerance=(base_support_lateral_alignment_enter_tolerance),
+        insertion_lateral_alignment_exit_tolerance=(base_support_lateral_alignment_exit_tolerance),
+        insertion_axial_recovery_cartesian_position_step=(insertion_axial_recovery_cartesian_position_step),
         insertion_axial_recovery_deadband=insertion_axial_recovery_deadband,
     )
     assembled_objects = [base_object]
@@ -2984,9 +2696,7 @@ def _compile_targets_and_phases(
         object_name=base_object,
         final_target=final_targets[base_part_id],
         assembled_objects=assembled_objects,
-        retreat_offset=release_retreat_offset(
-            _quat_rotate(assembly_orientation, [0.0, 0.0, -1.0])
-        ),
+        retreat_offset=release_retreat_offset(_quat_rotate(assembly_orientation, [0.0, 0.0, -1.0])),
         park_offset=post_release_park_offset(base_robot),
         park_workspace_center=post_release_park_workspace_center(base_robot),
         park_minimum_planar_radius=post_release_park_minimum_planar_radius,
@@ -3057,9 +2767,7 @@ def _compile_targets_and_phases(
             descend_relaxed_position_tolerance=descend_relaxed_position_tolerance,
             descend_relaxed_after_steps=descend_relaxed_after_steps,
             prealign_steps=move_above_prealign_steps,
-            prealign_joint_positions=prealign_joint_positions_by_robot.get(
-                assembly_robot
-            ),
+            prealign_joint_positions=prealign_joint_positions_by_robot.get(assembly_robot),
             prealign_shoulder_pan=prealign_shoulder_pan_by_robot.get(assembly_robot),
         )
         _append_transport_phase(
@@ -3099,19 +2807,13 @@ def _compile_targets_and_phases(
         for waypoint_index, waypoint_name in enumerate(waypoint_names):
             is_final_waypoint = waypoint_name == final_targets[part_id]
             is_entry_waypoint = waypoint_index == 0
-            is_pre_final_waypoint = (
-                len(waypoint_names) > 1
-                and waypoint_index == len(waypoint_names) - 2
-            )
+            is_pre_final_waypoint = len(waypoint_names) > 1 and waypoint_index == len(waypoint_names) - 2
             if len(waypoint_positions) > 1:
                 previous_index = max(waypoint_index - 1, 0)
                 next_index = min(waypoint_index + 1, len(waypoint_positions) - 1)
                 segment_start = waypoint_positions[previous_index]
                 segment_end = waypoint_positions[next_index]
-                insertion_axis = [
-                    segment_end[axis] - segment_start[axis]
-                    for axis in range(3)
-                ]
+                insertion_axis = [segment_end[axis] - segment_start[axis] for axis in range(3)]
             else:
                 insertion_axis = _quat_rotate(
                     assembly_orientation,
@@ -3126,9 +2828,7 @@ def _compile_targets_and_phases(
                 name=f'{prefix}_insert_{waypoint_index:02d} insertion axis',
             )
             insertion_entry_delta = [
-                waypoint_positions[waypoint_index][axis]
-                - waypoint_positions[0][axis]
-                for axis in range(3)
+                waypoint_positions[waypoint_index][axis] - waypoint_positions[0][axis] for axis in range(3)
             ]
             part_bbox_size = _vector(
                 parts_by_id[part_id]['bbox_size'],
@@ -3145,8 +2845,7 @@ def _compile_targets_and_phases(
             projected_object_extent = sum(
                 abs(
                     sum(
-                        part_world_axes[axis][world_axis]
-                        * normalized_insertion_axis[world_axis]
+                        part_world_axes[axis][world_axis] * normalized_insertion_axis[world_axis]
                         for world_axis in range(3)
                     )
                 )
@@ -3162,36 +2861,24 @@ def _compile_targets_and_phases(
                 intermediate_insertion_lateral_position_tolerance,
                 max(
                     insertion_lateral_position_tolerance,
-                    minimum_lateral_extent
-                    * insertion_lateral_tolerance_object_extent_scale,
+                    minimum_lateral_extent * insertion_lateral_tolerance_object_extent_scale,
                 ),
             )
             gravity_axis_alignment = abs(normalized_insertion_axis[2])
-            if (
-                gravity_axis_alignment
-                < insertion_compliance_minimum_gravity_alignment
-            ):
-                geometry_lateral_tolerance = (
-                    intermediate_insertion_lateral_position_tolerance
-                )
+            if gravity_axis_alignment < insertion_compliance_minimum_gravity_alignment:
+                geometry_lateral_tolerance = intermediate_insertion_lateral_position_tolerance
             compliance_waypoint_axial_tolerance = min(
                 insertion_relaxed_position_tolerance,
                 0.010,
             )
-            compliance_waypoint_lateral_tolerance = (
-                intermediate_insertion_lateral_position_tolerance
-            )
+            compliance_waypoint_lateral_tolerance = intermediate_insertion_lateral_position_tolerance
             insertion_path_depth = max(
-                sum(
-                    insertion_entry_delta[axis] * normalized_insertion_axis[axis]
-                    for axis in range(3)
-                ),
+                sum(insertion_entry_delta[axis] * normalized_insertion_axis[axis] for axis in range(3)),
                 0.0,
             )
             lateral_alignment_axial_clearance = insertion_path_depth + max(
                 insertion_lateral_alignment_entry_clearance,
-                projected_object_extent
-                * insertion_lateral_alignment_clearance_object_extent_scale,
+                projected_object_extent * insertion_lateral_alignment_clearance_object_extent_scale,
             )
             compliance_position_tolerance = max(
                 0.015,
@@ -3219,82 +2906,43 @@ def _compile_targets_and_phases(
                 insertion_axis=insertion_axis,
                 insertion_lateral_position_tolerance=(
                     geometry_lateral_tolerance
-                    if is_entry_waypoint
-                    or is_pre_final_waypoint
-                    or is_final_waypoint
+                    if is_entry_waypoint or is_pre_final_waypoint or is_final_waypoint
                     else intermediate_insertion_lateral_position_tolerance
                 ),
-                insertion_cartesian_position_step=(
-                    insertion_cartesian_position_step
-                ),
+                insertion_cartesian_position_step=(insertion_cartesian_position_step),
                 insertion_lateral_alignment_cartesian_position_step=(
                     insertion_lateral_alignment_cartesian_position_step
                     if is_final_waypoint
                     else intermediate_insertion_lateral_alignment_cartesian_position_step
                 ),
                 insertion_lateral_alignment_exit_tolerance=(
-                    intermediate_insertion_lateral_position_tolerance
-                    if is_pre_final_waypoint
-                    else None
+                    intermediate_insertion_lateral_position_tolerance if is_pre_final_waypoint else None
                 ),
-                insertion_lateral_alignment_axial_clearance=(
-                    lateral_alignment_axial_clearance
-                ),
+                insertion_lateral_alignment_axial_clearance=(lateral_alignment_axial_clearance),
                 insertion_path_depth=(
                     insertion_path_depth
-                    if gravity_axis_alignment
-                    < insertion_compliance_minimum_gravity_alignment
+                    if gravity_axis_alignment < insertion_compliance_minimum_gravity_alignment
                     else 0.0
                 ),
-                insertion_axial_recovery_cartesian_position_step=(
-                    insertion_axial_recovery_cartesian_position_step
-                ),
+                insertion_axial_recovery_cartesian_position_step=(insertion_axial_recovery_cartesian_position_step),
                 insertion_axial_recovery_deadband=insertion_axial_recovery_deadband,
-                insertion_compliance_capture_max_linear_speed=(
-                    insertion_compliance_capture_max_linear_speed
-                ),
-                insertion_compliance_capture_max_angular_speed=(
-                    insertion_compliance_capture_max_angular_speed
-                ),
-                insertion_compliance_capture_stable_steps=(
-                    insertion_compliance_capture_stable_steps
-                ),
-                insertion_compliance_position_tolerance=(
-                    compliance_position_tolerance
-                ),
-                insertion_compliance_after_steps=(
-                    0
-                ),
+                insertion_compliance_capture_max_linear_speed=(insertion_compliance_capture_max_linear_speed),
+                insertion_compliance_capture_max_angular_speed=(insertion_compliance_capture_max_angular_speed),
+                insertion_compliance_capture_stable_steps=(insertion_compliance_capture_stable_steps),
+                insertion_compliance_position_tolerance=(compliance_position_tolerance),
+                insertion_compliance_after_steps=(0),
                 insertion_compliance_require_waypoint_proximity=True,
-                insertion_compliance_waypoint_position_tolerance=(
-                    min(insertion_relaxed_position_tolerance, 0.010)
-                ),
-                insertion_compliance_waypoint_axial_position_tolerance=(
-                    compliance_waypoint_axial_tolerance
-                ),
-                insertion_compliance_waypoint_lateral_position_tolerance=(
-                    compliance_waypoint_lateral_tolerance
-                ),
-                insertion_compliance_geometric_capture_after_steps=(
-                    insertion_compliance_geometric_capture_after_steps
-                ),
-                insertion_compliance_minimum_gravity_alignment=(
-                    insertion_compliance_minimum_gravity_alignment
-                ),
-                insertion_compliant_alignment_retraction_limit=(
-                    insertion_compliant_alignment_retraction_limit
-                ),
-                insertion_compliant_track_object_orientation=(
-                    insertion_compliant_track_object_orientation
-                ),
+                insertion_compliance_waypoint_position_tolerance=(min(insertion_relaxed_position_tolerance, 0.010)),
+                insertion_compliance_waypoint_axial_position_tolerance=(compliance_waypoint_axial_tolerance),
+                insertion_compliance_waypoint_lateral_position_tolerance=(compliance_waypoint_lateral_tolerance),
+                insertion_compliance_geometric_capture_after_steps=(insertion_compliance_geometric_capture_after_steps),
+                insertion_compliance_minimum_gravity_alignment=(insertion_compliance_minimum_gravity_alignment),
+                insertion_compliant_alignment_retraction_limit=(insertion_compliant_alignment_retraction_limit),
+                insertion_compliant_track_object_orientation=(insertion_compliant_track_object_orientation),
                 target_object_entry_capture_max_steps=(
-                    max(4, insertion_compliance_capture_stable_steps + 4)
-                    if is_final_waypoint
-                    else 0
+                    max(4, insertion_compliance_capture_stable_steps + 4) if is_final_waypoint else 0
                 ),
-                final_target_name=(
-                    final_targets[part_id]
-                ),
+                final_target_name=(final_targets[part_id]),
                 settle_at_target=is_final_waypoint,
             )
         assembled_objects.append(object_name)
@@ -3307,20 +2955,12 @@ def _compile_targets_and_phases(
             assembled_objects=assembled_objects,
             retreat_offset=release_retreat_offset(insertion_axis),
             park_offset=post_release_park_offset(assembly_robot),
-            park_workspace_center=post_release_park_workspace_center(
-                assembly_robot
-            ),
+            park_workspace_center=post_release_park_workspace_center(assembly_robot),
             park_minimum_planar_radius=post_release_park_minimum_planar_radius,
         )
 
-    base_release_phase = next(
-        phase
-        for phase in phases
-        if phase.get('name') == f'base_{base_part_id}_release_and_lock'
-    )
-    base_release_phase['lock'][0]['rebase_targets'] = list(
-        dict.fromkeys(assembly_target_names)
-    )
+    base_release_phase = next(phase for phase in phases if phase.get('name') == f'base_{base_part_id}_release_and_lock')
+    base_release_phase['lock'][0]['rebase_targets'] = list(dict.fromkeys(assembly_target_names))
 
     stabilize_fixture_parts = bool(spec.get('stabilize_fixture_parts', True))
     if stabilize_fixture_parts:
@@ -3370,18 +3010,10 @@ def _default_domain_randomization(
         'assembly_translation_range',
         {'x': [-0.03, 0.03], 'y': [-0.03, 0.03], 'z': [0.0, 0.0]},
     )
-    pickup_minimum_planar_distance = float(
-        spec.get('pickup_translation_minimum_planar_distance', 0.0)
-    )
-    pickup_maximum_planar_distance = float(
-        spec.get('pickup_translation_maximum_planar_distance', math.inf)
-    )
-    assembly_minimum_planar_distance = float(
-        spec.get('assembly_translation_minimum_planar_distance', 0.0)
-    )
-    assembly_maximum_planar_distance = float(
-        spec.get('assembly_translation_maximum_planar_distance', math.inf)
-    )
+    pickup_minimum_planar_distance = float(spec.get('pickup_translation_minimum_planar_distance', 0.0))
+    pickup_maximum_planar_distance = float(spec.get('pickup_translation_maximum_planar_distance', math.inf))
+    assembly_minimum_planar_distance = float(spec.get('assembly_translation_minimum_planar_distance', 0.0))
+    assembly_maximum_planar_distance = float(spec.get('assembly_translation_maximum_planar_distance', math.inf))
     return {
         'enabled': False,
         'seed_namespace': f'fabrica_{assembly}_canonical_ur5e_domain_v1',
@@ -3399,9 +3031,7 @@ def _default_domain_randomization(
                     if math.isfinite(pickup_maximum_planar_distance)
                     else {}
                 ),
-                'translation_constraints': copy.deepcopy(
-                    translation_constraints.get('start_parts', [])
-                ),
+                'translation_constraints': copy.deepcopy(translation_constraints.get('start_parts', [])),
                 'objects': ['fabrica_fixture', *part_names],
                 'targets': copy.deepcopy(pickup_target_names),
             },
@@ -3417,9 +3047,7 @@ def _default_domain_randomization(
                     if math.isfinite(assembly_maximum_planar_distance)
                     else {}
                 ),
-                'translation_constraints': copy.deepcopy(
-                    translation_constraints.get('assembly_base', [])
-                ),
+                'translation_constraints': copy.deepcopy(translation_constraints.get('assembly_base', [])),
                 'objects': [],
                 'targets': copy.deepcopy(assembly_target_names),
             },
@@ -3541,12 +3169,8 @@ def _canonical_translation_constraints(
             _bbox_corners(
                 position=final_target['position'],
                 orientation=final_target['orientation'],
-                bbox_min=_vector(
-                    part['bbox_min'], size=3, name=f'{assembly} part {part_id} bbox_min'
-                ),
-                bbox_max=_vector(
-                    part['bbox_max'], size=3, name=f'{assembly} part {part_id} bbox_max'
-                ),
+                bbox_min=_vector(part['bbox_min'], size=3, name=f'{assembly} part {part_id} bbox_min'),
+                bbox_max=_vector(part['bbox_max'], size=3, name=f'{assembly} part {part_id} bbox_max'),
             )
         )
     constraints['assembly_base'].append(
@@ -3562,10 +3186,7 @@ def _canonical_translation_constraints(
     base_part = str(task['base_part'])
     grasp_by_part = {
         base_part: task['base_grasp'],
-        **{
-            str(step['move_part']): step['move_grasp']
-            for step in task['assembly_steps']
-        },
+        **{str(step['move_part']): step['move_grasp'] for step in task['assembly_steps']},
     }
     robot_name_by_part = {
         part_id: str(
@@ -3576,9 +3197,7 @@ def _canonical_translation_constraints(
         for part_id in grasp_by_part
     }
     robots_by_name = {
-        str(robot['name']): robot
-        for robot in robots
-        if isinstance(robot, dict) and robot.get('name') is not None
+        str(robot['name']): robot for robot in robots if isinstance(robot, dict) and robot.get('name') is not None
     }
     maximum_reach = float(spec.get('pickup_tcp_maximum_reach', 0.82))
 
@@ -3598,9 +3217,7 @@ def _canonical_translation_constraints(
                 object_orientation=target['orientation'],
                 grasp=grasp_by_part[part_id],
             )
-            tcp_points_by_robot.setdefault(robot_name_by_part[part_id], []).append(
-                _add(tcp_position, workspace_offset)
-            )
+            tcp_points_by_robot.setdefault(robot_name_by_part[part_id], []).append(_add(tcp_position, workspace_offset))
 
         if group_name == 'start_parts':
             for part_id, grasp in grasp_by_part.items():
@@ -3617,9 +3234,7 @@ def _canonical_translation_constraints(
         for robot_name, points in tcp_points_by_robot.items():
             robot = robots_by_name.get(robot_name)
             if robot is None:
-                raise ValueError(
-                    f'Domain randomization references missing robot {robot_name!r}.'
-                )
+                raise ValueError(f'Domain randomization references missing robot {robot_name!r}.')
             robot_position = _vector(
                 robot.get('position', [0.0, 0.0, 0.0]),
                 size=3,
@@ -3653,8 +3268,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     task = metadata['tasks'].get(assembly)
     if task is None:
         raise ValueError(
-            f'Unknown canonical Fabrica assembly {assembly!r}; '
-            f'available tasks: {sorted(metadata["tasks"])}.'
+            f'Unknown canonical Fabrica assembly {assembly!r}; ' f'available tasks: {sorted(metadata["tasks"])}.'
         )
 
     configured_pickup_origin = _vector(
@@ -3697,19 +3311,17 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         selected_base_grasp,
         selected_move_grasps,
         grasp_selection,
-    ) = (
-        _resolve_pickup_layout_and_grasps(
-            assembly=assembly,
-            task=task,
-            spec=spec,
-            configured_pickup_origin=configured_pickup_origin,
-            configured_pickup_orientation=configured_pickup_orientation,
-            board_origin=board_origin,
-            assembly_origin=assembly_origin,
-            assembly_orientation=assembly_orientation,
-            workspace_offset=workspace_offset,
-            robots=robots,
-        )
+    ) = _resolve_pickup_layout_and_grasps(
+        assembly=assembly,
+        task=task,
+        spec=spec,
+        configured_pickup_origin=configured_pickup_origin,
+        configured_pickup_orientation=configured_pickup_orientation,
+        board_origin=board_origin,
+        assembly_origin=assembly_origin,
+        assembly_orientation=assembly_orientation,
+        workspace_offset=workspace_offset,
+        robots=robots,
     )
     task['base_grasp'] = selected_base_grasp
     for step in task['assembly_steps']:
@@ -3741,13 +3353,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         for part in task['parts']
     )
 
-    (
-        targets,
-        phases,
-        success,
-        pickup_target_names,
-        assembly_target_names,
-    ) = _compile_targets_and_phases(
+    (targets, phases, success, pickup_target_names, assembly_target_names,) = _compile_targets_and_phases(
         assembly=assembly,
         task=task,
         spec=spec,
@@ -3787,16 +3393,12 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         generated_randomization,
         resolved.get('domain_randomization', {}),
     )
-    fixed_objects = {
-        str(name) for name in resolved['domain_randomization'].get('fixed_objects', [])
-    }
+    fixed_objects = {str(name) for name in resolved['domain_randomization'].get('fixed_objects', [])}
     fixed_objects.add('optical_board')
     resolved['domain_randomization']['fixed_objects'] = sorted(fixed_objects)
     for group_name, group in resolved['domain_randomization'].get('groups', {}).items():
         if 'optical_board' in (group.get('objects') or []):
-            raise ValueError(
-                f'Optical board is fixed and cannot belong to position group {group_name!r}.'
-            )
+            raise ValueError(f'Optical board is fixed and cannot belong to position group {group_name!r}.')
 
     resolved['max_steps'] = max(
         int(resolved.get('max_steps', 0)),
@@ -3818,9 +3420,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         'transport_timeout_steps': int(spec.get('transport_timeout_steps', 4800)),
         'insertion_timeout_steps': int(spec.get('insertion_timeout_steps', 3600)),
         'base_place_timeout_steps': int(spec.get('base_place_timeout_steps', 4800)),
-        'insertion_lateral_position_tolerance': float(
-            spec.get('insertion_lateral_position_tolerance', 0.001)
-        ),
+        'insertion_lateral_position_tolerance': float(spec.get('insertion_lateral_position_tolerance', 0.001)),
         'insertion_lateral_tolerance_object_extent_scale': float(
             spec.get('insertion_lateral_tolerance_object_extent_scale', 0.04)
         ),
@@ -3833,9 +3433,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
                 0.001,
             )
         ),
-        'insertion_cartesian_position_step': float(
-            spec.get('insertion_cartesian_position_step', 0.00025)
-        ),
+        'insertion_cartesian_position_step': float(spec.get('insertion_cartesian_position_step', 0.00025)),
         'insertion_lateral_alignment_cartesian_position_step': float(
             spec.get('insertion_lateral_alignment_cartesian_position_step', 0.00025)
         ),
@@ -3851,18 +3449,14 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         'insertion_axial_recovery_cartesian_position_step': float(
             spec.get('insertion_axial_recovery_cartesian_position_step', 0.001)
         ),
-        'insertion_axial_recovery_deadband': float(
-            spec.get('insertion_axial_recovery_deadband', 0.0005)
-        ),
+        'insertion_axial_recovery_deadband': float(spec.get('insertion_axial_recovery_deadband', 0.0005)),
         'insertion_compliance_capture_max_linear_speed': float(
             spec.get('insertion_compliance_capture_max_linear_speed', 0.10)
         ),
         'insertion_compliance_capture_max_angular_speed': float(
             spec.get('insertion_compliance_capture_max_angular_speed', 2.0)
         ),
-        'insertion_compliance_capture_stable_steps': int(
-            spec.get('insertion_compliance_capture_stable_steps', 8)
-        ),
+        'insertion_compliance_capture_stable_steps': int(spec.get('insertion_compliance_capture_stable_steps', 8)),
         'insertion_compliance_geometric_capture_after_steps': int(
             spec.get('insertion_compliance_geometric_capture_after_steps', 1200)
         ),
@@ -3875,12 +3469,8 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         'insertion_compliant_track_object_orientation': bool(
             spec.get('insertion_compliant_track_object_orientation', False)
         ),
-        'base_support_release_position_tolerance': float(
-            spec.get('base_support_release_position_tolerance', 0.012)
-        ),
-        'base_support_lateral_position_tolerance': float(
-            spec.get('base_support_lateral_position_tolerance', 0.015)
-        ),
+        'base_support_release_position_tolerance': float(spec.get('base_support_release_position_tolerance', 0.012)),
+        'base_support_lateral_position_tolerance': float(spec.get('base_support_lateral_position_tolerance', 0.015)),
         'base_support_lateral_alignment_enter_tolerance': float(
             spec.get('base_support_lateral_alignment_enter_tolerance', 0.002)
         ),
@@ -3893,18 +3483,10 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
                 0.002,
             )
         ),
-        'release_retreat_distance': float(
-            spec.get('release_retreat_distance', 0.06)
-        ),
-        'post_release_park_distance': float(
-            spec.get('post_release_park_distance', 0.35)
-        ),
-        'post_release_park_vertical_offset': float(
-            spec.get('post_release_park_vertical_offset', 0.02)
-        ),
-        'post_release_park_minimum_planar_radius': float(
-            spec.get('post_release_park_minimum_planar_radius', 0.28)
-        ),
+        'release_retreat_distance': float(spec.get('release_retreat_distance', 0.06)),
+        'post_release_park_distance': float(spec.get('post_release_park_distance', 0.35)),
+        'post_release_park_vertical_offset': float(spec.get('post_release_park_vertical_offset', 0.02)),
+        'post_release_park_minimum_planar_radius': float(spec.get('post_release_park_minimum_planar_radius', 0.28)),
         'assembly_order': [
             {
                 'move_part': str(step['move_part']),
@@ -3913,9 +3495,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             }
             for step in task['assembly_steps']
         ],
-        'stabilize_fixture_parts': bool(
-            spec.get('stabilize_fixture_parts', True)
-        ),
+        'stabilize_fixture_parts': bool(spec.get('stabilize_fixture_parts', True)),
         'configured_pickup_origin': configured_pickup_origin,
         'selected_pickup_origin': pickup_origin,
         'configured_pickup_orientation': configured_pickup_orientation,

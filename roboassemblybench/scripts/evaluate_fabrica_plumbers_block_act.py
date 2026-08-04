@@ -19,9 +19,10 @@ from roboassemblybench.datasets.cartesian_episode import (
 )
 from roboassemblybench.policies.act_rpc import PolicyRPCClient
 from toolkits.factory_dual_franka_assembly.generate_demos import _build_env
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_batch
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_batch,
+)
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
-
 
 DEFAULT_RECIPE = 'fabrica_plumbers_block_ur5e_right_base_prepare'
 DEFAULT_SCENE_PROFILE = 'taoyuan_grscenes_tabletop'
@@ -98,9 +99,8 @@ def sanitize_absolute_cartesian_action(
         delta = bounded[offset : offset + 3] - current_state[offset : offset + 3]
         distance = float(np.linalg.norm(delta))
         if distance > float(max_translation_step) > 0.0:
-            bounded[offset : offset + 3] = (
-                current_state[offset : offset + 3]
-                + delta * (float(max_translation_step) / distance)
+            bounded[offset : offset + 3] = current_state[offset : offset + 3] + delta * (
+                float(max_translation_step) / distance
             )
         bounded[offset + 3 : offset + 7] = _bounded_quaternion(
             bounded[offset + 3 : offset + 7],
@@ -126,11 +126,7 @@ def _env_action(action: np.ndarray) -> dict[str, dict[str, list]]:
 
 def _task_description(task) -> str:
     config = getattr(task, 'config', None)
-    return str(
-        getattr(config, 'task_description', None)
-        or getattr(config, 'prompt', None)
-        or DEFAULT_RECIPE
-    )
+    return str(getattr(config, 'task_description', None) or getattr(config, 'prompt', None) or DEFAULT_RECIPE)
 
 
 def apply_max_steps_override(task_configs, max_steps: int | None) -> None:
@@ -174,15 +170,10 @@ def main() -> None:
     seeds = list(range(int(args.start_seed), int(args.start_seed) + int(args.num_episodes)))
     if args.layout_seeds is None:
         recipe_spec = load_task_recipe(str(args.recipe), scene_profile=str(args.scene_profile))
-        args.layout_seeds = [
-            int(seed) for seed in (recipe_spec.get('collection') or {}).get('layout_seeds', [])
-        ]
+        args.layout_seeds = [int(seed) for seed in (recipe_spec.get('collection') or {}).get('layout_seeds', [])]
     if not args.layout_seeds:
         parser.error('--layout-seeds requires at least one seed or recipe collection.layout_seeds.')
-    layout_seeds = [
-        int(args.layout_seeds[index % len(args.layout_seeds)])
-        for index in range(int(args.num_episodes))
-    ]
+    layout_seeds = [int(args.layout_seeds[index % len(args.layout_seeds)]) for index in range(int(args.num_episodes))]
 
     client = PolicyRPCClient(host=args.host, port=args.port)
     server_info = client.ping()

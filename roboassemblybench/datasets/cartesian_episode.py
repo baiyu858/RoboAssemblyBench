@@ -7,7 +7,6 @@ from typing import Any
 import cv2
 import numpy as np
 
-
 ROBOT_NAMES = ('franka_left', 'franka_right')
 CAMERA_KEYS = (
     'observation.images.front',
@@ -31,8 +30,7 @@ def _cartesian_names(prefix: str) -> list[str]:
 
 STATE_NAMES = tuple(_cartesian_names('left') + _cartesian_names('right'))
 ACTION_NAMES = tuple(
-    name.replace('_eef_', '_target_').replace('_gripper_open', '_gripper_target')
-    for name in STATE_NAMES
+    name.replace('_eef_', '_target_').replace('_gripper_open', '_gripper_target') for name in STATE_NAMES
 )
 ACTION_SEMANTICS = 'next_sample_dual_arm_absolute_cartesian_pose_and_gripper_target'
 
@@ -266,16 +264,10 @@ class CartesianObservationEncoder:
         return state
 
     def encode(self, *, task, obs: dict[str, Any]) -> dict[str, np.ndarray] | None:
-        frames = {
-            key: self.rgb_frame(obs, self.camera_bindings[key])
-            for key in CAMERA_KEYS
-        }
+        frames = {key: self.rgb_frame(obs, self.camera_bindings[key]) for key in CAMERA_KEYS}
         if not all(frame is not None for frame in frames.values()):
             return None
-        encoded = {
-            key: self.letterbox_frame(frame)
-            for key, frame in frames.items()
-        }
+        encoded = {key: self.letterbox_frame(frame) for key, frame in frames.items()}
         encoded['observation.state'] = self.state(task, obs)
         return encoded
 
@@ -305,12 +297,8 @@ class CompactCartesianEpisodeRecorder:
         self.episode_idx = int(episode_idx)
         self.fps = max(int(fps), 1)
         self.frame_stride = max(int(frame_stride), 1)
-        self.simulation_fps = (
-            self.fps * self.frame_stride if simulation_fps is None else max(int(simulation_fps), 1)
-        )
-        self.rendering_interval = (
-            self.frame_stride - 1 if rendering_interval is None else int(rendering_interval)
-        )
+        self.simulation_fps = self.fps * self.frame_stride if simulation_fps is None else max(int(simulation_fps), 1)
+        self.rendering_interval = self.frame_stride - 1 if rendering_interval is None else int(rendering_interval)
         if self.rendering_interval < 0:
             raise ValueError('rendering_interval must be non-negative.')
         if self.simulation_fps != self.fps * self.frame_stride:
@@ -382,10 +370,7 @@ class CompactCartesianEpisodeRecorder:
         if int(task.step_counter) % self.frame_stride != 0:
             return False
 
-        frames = {
-            key: self._rgb_frame(obs, self._camera_bindings[key])
-            for key in CAMERA_KEYS
-        }
+        frames = {key: self._rgb_frame(obs, self._camera_bindings[key]) for key in CAMERA_KEYS}
         if not all(frame is not None for frame in frames.values()):
             return False
         for camera_key, frame in frames.items():
@@ -404,9 +389,7 @@ class CompactCartesianEpisodeRecorder:
             writer = self._writers.get(camera_key) or self._open_writer(camera_key, frame)
             expected_shape = self._video_shapes[camera_key]
             if tuple(frame.shape) != expected_shape:
-                raise ValueError(
-                    f'Camera {camera_key} changed shape from {expected_shape} to {tuple(frame.shape)}.'
-                )
+                raise ValueError(f'Camera {camera_key} changed shape from {expected_shape} to {tuple(frame.shape)}.')
             writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
             self._frame_counts[camera_key] += 1
 
@@ -463,9 +446,7 @@ class CompactCartesianEpisodeRecorder:
             'episode_idx': self.episode_idx,
             'seed': int(task.config.seed),
             'layout_seed': int(
-                task.config.seed
-                if getattr(task.config, 'layout_seed', None) is None
-                else task.config.layout_seed
+                task.config.seed if getattr(task.config, 'layout_seed', None) is None else task.config.layout_seed
             ),
             'recipe': str(task.config.recipe),
             'recipe_fingerprint': str(getattr(task.config, 'recipe_fingerprint', '')),

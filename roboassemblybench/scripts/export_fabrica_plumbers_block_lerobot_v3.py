@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
 
 import cv2
@@ -21,7 +21,6 @@ from roboassemblybench.datasets.cartesian_episode import (
     STATE_NAMES,
     cartesian_trajectory_errors,
 )
-
 
 DEFAULT_REPO_ID = 'baiyu858/roboassemblybench_fabrica_plumbers_block_ur5e_2k'
 CONVERSION_MANIFEST = 'roboassemblybench_conversion_manifest.json'
@@ -48,7 +47,9 @@ def _discover_successful_episodes(input_dir: Path) -> list[dict[str, Any]]:
         metadata_paths = [Path(item['metadata_path']) for item in successful.values()]
 
     episodes = []
-    candidates = metadata_paths if metadata_paths is not None else input_dir.rglob('episode_*_cartesian_raw/metadata.json')
+    candidates = (
+        metadata_paths if metadata_paths is not None else input_dir.rglob('episode_*_cartesian_raw/metadata.json')
+    )
     for metadata_path in candidates:
         if not metadata_path.is_file():
             raise FileNotFoundError(f'Collection manifest references missing metadata: {metadata_path}.')
@@ -118,9 +119,7 @@ def _conversion_entry(metadata: dict[str, Any], episode_index: int) -> dict[str,
     return {
         'episode_index': int(episode_index),
         'seed': int(metadata['seed']),
-        'layout_seed': int(
-            metadata.get('layout_seed', domain_randomization.get('seed', metadata['seed']))
-        ),
+        'layout_seed': int(metadata.get('layout_seed', domain_randomization.get('seed', metadata['seed']))),
         'source_metadata': str(Path(metadata['metadata_path']).resolve()),
         'frame_count': int(metadata['frame_count']),
         'domain_randomization': domain_randomization,
@@ -143,10 +142,7 @@ def _reconcile_conversion_manifest(
         raise RuntimeError(
             f'LeRobot has {dataset_episode_count} episodes but only {len(episodes)} authoritative sources exist.'
         )
-    expected_prefix = [
-        str(Path(metadata['metadata_path']).resolve())
-        for metadata in episodes[:manifest_count]
-    ]
+    expected_prefix = [str(Path(metadata['metadata_path']).resolve()) for metadata in episodes[:manifest_count]]
     actual_prefix = [str(item.get('source_metadata')) for item in manifest_entries]
     if actual_prefix != expected_prefix:
         raise RuntimeError('Conversion manifest is not a prefix of the authoritative source episode order.')
@@ -175,10 +171,7 @@ def _features(first_episode: dict[str, Any]) -> dict[str, dict[str, Any]]:
         },
     }
     video_shapes = first_episode.get('video_shapes') or {}
-    common_shapes = {
-        tuple(int(value) for value in video_shapes[camera_key])
-        for camera_key in CAMERA_KEYS
-    }
+    common_shapes = {tuple(int(value) for value in video_shapes[camera_key]) for camera_key in CAMERA_KEYS}
     if len(common_shapes) != 1:
         raise ValueError(
             'ACT requires all camera streams to have one common shape; got '
@@ -228,9 +221,7 @@ def _append_episode(dataset, metadata: dict[str, Any]) -> int:
         frame_stride=int(metadata['frame_stride']),
     )
     if trajectory_errors:
-        raise ValueError(
-            f"Invalid Cartesian trajectory in {metadata['trajectory_path']}: {trajectory_errors}."
-        )
+        raise ValueError(f"Invalid Cartesian trajectory in {metadata['trajectory_path']}: {trajectory_errors}.")
 
     captures = _open_video_captures(metadata)
     try:
@@ -272,8 +263,7 @@ def export_dataset(
         from lerobot.datasets.lerobot_dataset import CODEBASE_VERSION, LeRobotDataset
     except ImportError as exc:
         raise RuntimeError(
-            'LeRobot with v3 dataset support is required. Run this script in the '
-            'roboassemblybench-act environment.'
+            'LeRobot with v3 dataset support is required. Run this script in the ' 'roboassemblybench-act environment.'
         ) from exc
     if str(CODEBASE_VERSION) != 'v3.0':
         raise RuntimeError(f'Expected LeRobot dataset codebase v3.0, got {CODEBASE_VERSION!r}.')
@@ -289,8 +279,7 @@ def export_dataset(
     for metadata in episodes[1:]:
         if (metadata.get('video_shapes') or {}) != expected_video_shapes:
             raise ValueError(
-                f"Camera shape mismatch between {episodes[0]['metadata_path']} and "
-                f"{metadata['metadata_path']}."
+                f"Camera shape mismatch between {episodes[0]['metadata_path']} and " f"{metadata['metadata_path']}."
             )
 
     fps_values = {int(metadata['fps']) for metadata in episodes}

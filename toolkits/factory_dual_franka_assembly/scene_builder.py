@@ -6,8 +6,6 @@ from typing import Iterable
 
 import numpy as np
 
-from roboassemblybench.core.domain_randomization import apply_domain_randomization
-
 from internutopia_extension.configs.objects import (
     DynamicCompoundCuboidCfg,
     DynamicCubeCfg,
@@ -15,23 +13,25 @@ from internutopia_extension.configs.objects import (
     UsdObjCfg,
     VisualCubeCfg,
 )
+from internutopia_extension.configs.robots.franka import FrankaRobotCfg
+from internutopia_extension.configs.robots.franka import arm_ik_cfg as franka_arm_ik_cfg
 from internutopia_extension.configs.robots.franka import (
-    FrankaRobotCfg,
-    arm_ik_cfg as franka_arm_ik_cfg,
     arm_joint_cfg as franka_arm_joint_cfg,
+)
+from internutopia_extension.configs.robots.franka import (
     gripper_cfg as franka_gripper_cfg,
 )
+from internutopia_extension.configs.robots.ur5e import UR5eRobotCfg
+from internutopia_extension.configs.robots.ur5e import arm_ik_cfg as ur5e_arm_ik_cfg
 from internutopia_extension.configs.robots.ur5e import (
-    UR5eRobotCfg,
-    arm_ik_cfg as ur5e_arm_ik_cfg,
     arm_joint_cfg as ur5e_arm_joint_cfg,
-    gripper_cfg as ur5e_gripper_cfg,
 )
+from internutopia_extension.configs.robots.ur5e import gripper_cfg as ur5e_gripper_cfg
 from internutopia_extension.configs.sensors import RepCameraCfg
 from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task import (
     FactoryDualFrankaAssemblyTaskCfg,
 )
-
+from roboassemblybench.core.domain_randomization import apply_domain_randomization
 from toolkits.factory_dual_franka_assembly.planner_primitives import (
     compose_pose,
     euler_xyz_intrinsic_to_quat,
@@ -153,13 +153,17 @@ def _build_camera_cfg(camera_spec: dict) -> RepCameraCfg:
         depth=bool(normalized_spec.get('depth', False)),
         pointcloud=bool(normalized_spec.get('pointcloud', False)),
         camera_params=bool(normalized_spec.get('camera_params', False)),
-        position=None if normalized_spec.get('position') is None else tuple(float(value) for value in normalized_spec['position']),
-        translation=None if normalized_spec.get('translation') is None else tuple(float(value) for value in normalized_spec['translation']),
+        position=None
+        if normalized_spec.get('position') is None
+        else tuple(float(value) for value in normalized_spec['position']),
+        translation=None
+        if normalized_spec.get('translation') is None
+        else tuple(float(value) for value in normalized_spec['translation']),
         orientation=orientation,
-        look_at=None if normalized_spec.get('look_at') is None else tuple(float(value) for value in normalized_spec['look_at']),
-        focal_length=None
-        if normalized_spec.get('focal_length') is None
-        else float(normalized_spec['focal_length']),
+        look_at=None
+        if normalized_spec.get('look_at') is None
+        else tuple(float(value) for value in normalized_spec['look_at']),
+        focal_length=None if normalized_spec.get('focal_length') is None else float(normalized_spec['focal_length']),
         horizontal_aperture=None
         if normalized_spec.get('horizontal_aperture') is None
         else float(normalized_spec['horizontal_aperture']),
@@ -245,9 +249,7 @@ def _sample_objects(recipe_spec: dict, rng: random.Random, workspace_offset: np.
         position = sample_position(object_spec['position'], object_spec.get('random_xy'), rng)
         spawn_clearance = float(object_spec.get('spawn_clearance', 0.0))
         if not np.isfinite(spawn_clearance) or spawn_clearance < 0.0:
-            raise ValueError(
-                f"Object {object_spec['name']!r} spawn_clearance must be a finite non-negative value."
-            )
+            raise ValueError(f"Object {object_spec['name']!r} spawn_clearance must be a finite non-negative value.")
         position[2] += spawn_clearance
         if object_spec.get('apply_workspace_offset', True):
             position = position + workspace_offset
@@ -326,8 +328,13 @@ def _build_annotation_target_metadata(recipe_spec: dict, target_poses: dict) -> 
 
 
 def _build_annotation_phase_metadata(recipe_spec: dict) -> list[dict]:
-    note_map = {entry.get('name'): entry for entry in recipe_spec.get('annotation_phase_notes', []) if entry.get('name')}
-    return [copy.deepcopy(note_map.get(phase_spec['name'], {'name': phase_spec['name']})) for phase_spec in recipe_spec.get('phases', [])]
+    note_map = {
+        entry.get('name'): entry for entry in recipe_spec.get('annotation_phase_notes', []) if entry.get('name')
+    }
+    return [
+        copy.deepcopy(note_map.get(phase_spec['name'], {'name': phase_spec['name']}))
+        for phase_spec in recipe_spec.get('phases', [])
+    ]
 
 
 def _normalize_phase_specs(phase_specs: Iterable[dict]) -> list[dict]:
@@ -369,9 +376,7 @@ def build_dual_franka_assembly_episode(
         )
         owner_name = normalized_camera_spec['owner']
         if owner_name not in robot_cfg_map:
-            raise KeyError(
-                f"Camera {normalized_camera_spec['name']!r} references unknown robot owner {owner_name!r}."
-            )
+            raise KeyError(f"Camera {normalized_camera_spec['name']!r} references unknown robot owner {owner_name!r}.")
         if normalized_camera_spec.get('attach_runtime_sensor', False):
             robot_cfg_map[owner_name].sensors.append(_build_camera_cfg(normalized_camera_spec))
         camera_metadata.append(normalized_camera_spec)
@@ -443,7 +448,9 @@ def build_dual_franka_assembly_episode(
         scene_profile_metadata=copy.deepcopy(recipe_spec.get('scene_profile_metadata', {})),
         scene_lights=copy.deepcopy(recipe_spec.get('scene_lights', [])),
         asset_references=copy.deepcopy(recipe_spec.get('asset_references', [])),
-        source_benchmark=str(recipe_spec.get('source_benchmark', recipe_spec.get('benchmark_family', 'factory_dual_franka_assembly'))),
+        source_benchmark=str(
+            recipe_spec.get('source_benchmark', recipe_spec.get('benchmark_family', 'factory_dual_franka_assembly'))
+        ),
         source_config_path=recipe_spec.get('source_config_path'),
         camera_metadata=copy.deepcopy(camera_metadata),
         robot_metadata=copy.deepcopy(recipe_spec.get('robots', [])),

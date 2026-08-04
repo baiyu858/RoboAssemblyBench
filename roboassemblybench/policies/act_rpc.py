@@ -5,7 +5,6 @@ import socket
 import struct
 from typing import Any
 
-
 _HEADER = struct.Struct('!Q')
 _MAX_MESSAGE_BYTES = 128 * 1024 * 1024
 

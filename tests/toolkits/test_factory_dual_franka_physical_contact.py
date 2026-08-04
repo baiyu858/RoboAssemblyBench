@@ -6,15 +6,15 @@ import numpy as np
 from internutopia_extension.tasks.factory_dual_franka_assembly_task import (
     FactoryDualFrankaAssemblyTask,
 )
-from toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills import (
-    UR5eAssemblyAtomicSkillAdapter,
-)
 from toolkits.factory_dual_franka_assembly.planner_primitives import (
     compose_pose,
     normalize_quat,
     quat_conjugate,
     quat_multiply,
     quat_rotate,
+)
+from toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills import (
+    UR5eAssemblyAtomicSkillAdapter,
 )
 
 
@@ -38,7 +38,7 @@ def _finger(
                     'surface_gap': 0.001,
                     'signed_coordinate': signed_x,
                 }
-            }
+            },
         },
     }
 
@@ -238,10 +238,13 @@ def test_fixed_attachment_relaxes_to_contact_preserving_compliant_hold(monkeypat
         lambda *args, **kwargs: filters.append((args, kwargs)),
     )
 
-    assert task.relax_fixed_attachment_to_physical_hold(
-        'part',
-        locked_linear_world_direction=[0.0, 0.0, -2.0],
-    ) is True
+    assert (
+        task.relax_fixed_attachment_to_physical_hold(
+            'part',
+            locked_linear_world_direction=[0.0, 0.0, -2.0],
+        )
+        is True
+    )
     state = task._attachments['part']
     assert removed == ['part']
     assert state['mode'] == 'compliant_joint'
@@ -371,9 +374,7 @@ def test_insertion_compliance_waits_for_stable_object_motion(monkeypatch):
     }
     motion = {'valid': True, 'linear_speed': 0.2, 'angular_speed': 0.5}
     relaxed = []
-    task.relax_fixed_attachment_to_physical_hold = (
-        lambda name, **_kwargs: relaxed.append(name) or True
-    )
+    task.relax_fixed_attachment_to_physical_hold = lambda name, **_kwargs: relaxed.append(name) or True
     monkeypatch.setattr(adapter, '_object_pose', lambda **_: object_pose)
     monkeypatch.setattr(adapter, '_object_motion_detail', lambda **_: dict(motion))
     spec = {
@@ -386,11 +387,14 @@ def test_insertion_compliance_waits_for_stable_object_motion(monkeypatch):
         'target_object_max_angular_speed': 2.0,
     }
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is True
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is True
+    )
     assert relaxed == []
 
     motion.update(
@@ -401,23 +405,32 @@ def test_insertion_compliance_waits_for_stable_object_motion(monkeypatch):
         }
     )
     for _ in range(2):
-        assert adapter._maybe_relax_insertion_attachment(
+        assert (
+            adapter._maybe_relax_insertion_attachment(
+                task=task,
+                spec=spec,
+                tracked_objects={},
+            )
+            is True
+        )
+        assert relaxed == []
+    assert (
+        adapter._maybe_relax_insertion_attachment(
             task=task,
             spec=spec,
             tracked_objects={},
-        ) is True
-        assert relaxed == []
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is True
+        )
+        is True
+    )
     assert relaxed == ['part']
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is False
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is False
+    )
 
 
 def test_insertion_compliance_waits_for_current_waypoint_proximity(monkeypatch):
@@ -443,9 +456,7 @@ def test_insertion_compliance_waits_for_current_waypoint_proximity(monkeypatch):
         'orientation': identity.copy(),
     }
     relaxed = []
-    task.relax_fixed_attachment_to_physical_hold = (
-        lambda name, **_kwargs: relaxed.append(name) or True
-    )
+    task.relax_fixed_attachment_to_physical_hold = lambda name, **_kwargs: relaxed.append(name) or True
     monkeypatch.setattr(adapter, '_object_pose', lambda **_: object_pose)
     monkeypatch.setattr(
         adapter,
@@ -467,19 +478,25 @@ def test_insertion_compliance_waits_for_current_waypoint_proximity(monkeypatch):
         'relax_fixed_attachment_stable_steps': 1,
     }
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is False
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is False
+    )
     assert relaxed == []
 
     object_pose['position'] = np.asarray([0.004, 0.0, 0.0])
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is True
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is True
+    )
     assert relaxed == ['part']
 
 
@@ -506,9 +523,7 @@ def test_insertion_compliance_uses_split_axial_and_lateral_capture(monkeypatch):
         'orientation': identity.copy(),
     }
     relaxed = []
-    task.relax_fixed_attachment_to_physical_hold = (
-        lambda name, **_kwargs: relaxed.append(name) or True
-    )
+    task.relax_fixed_attachment_to_physical_hold = lambda name, **_kwargs: relaxed.append(name) or True
     monkeypatch.setattr(adapter, '_object_pose', lambda **_: object_pose)
     monkeypatch.setattr(
         adapter,
@@ -534,11 +549,14 @@ def test_insertion_compliance_uses_split_axial_and_lateral_capture(monkeypatch):
         'relax_fixed_attachment_stable_steps': 1,
     }
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is True
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is True
+    )
     assert relaxed == ['part']
 
     adapter = UR5eAssemblyAtomicSkillAdapter({})
@@ -555,11 +573,14 @@ def test_insertion_compliance_uses_split_axial_and_lateral_capture(monkeypatch):
         },
     )
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is False
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is False
+    )
     assert relaxed == []
 
     adapter = UR5eAssemblyAtomicSkillAdapter({})
@@ -577,21 +598,27 @@ def test_insertion_compliance_uses_split_axial_and_lateral_capture(monkeypatch):
         },
     )
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is False
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is False
+    )
     assert relaxed == []
 
     spec['relax_fixed_attachment_waypoint_lateral_position_tolerance'] = 0.030
     object_pose['position'] = np.asarray([0.024, 0.0, 0.006])
     task.phase_step_counter = 7
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec=spec,
-        tracked_objects={},
-    ) is False
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is False
+    )
     assert relaxed == []
 
 
@@ -609,9 +636,7 @@ def test_insertion_compliance_locks_gravity_for_horizontal_insertion(monkeypatch
         },
     )
     relaxed = []
-    task.relax_fixed_attachment_to_physical_hold = (
-        lambda name, **kwargs: relaxed.append((name, kwargs)) or True
-    )
+    task.relax_fixed_attachment_to_physical_hold = lambda name, **kwargs: relaxed.append((name, kwargs)) or True
     monkeypatch.setattr(
         adapter,
         '_object_pose',
@@ -630,18 +655,21 @@ def test_insertion_compliance_locks_gravity_for_horizontal_insertion(monkeypatch
         },
     )
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec={
-            'object': 'part',
-            'target_object_final_target': 'part_assembled',
-            'target_object_convergence_axis': [0.0, 1.0, 0.0],
-            'relax_fixed_attachment_minimum_gravity_alignment': 0.70,
-            'relax_fixed_attachment_within_final_position_tolerance': 0.015,
-            'relax_fixed_attachment_stable_steps': 1,
-        },
-        tracked_objects={},
-    ) is True
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec={
+                'object': 'part',
+                'target_object_final_target': 'part_assembled',
+                'target_object_convergence_axis': [0.0, 1.0, 0.0],
+                'relax_fixed_attachment_minimum_gravity_alignment': 0.70,
+                'relax_fixed_attachment_within_final_position_tolerance': 0.015,
+                'relax_fixed_attachment_stable_steps': 1,
+            },
+            tracked_objects={},
+        )
+        is True
+    )
     assert relaxed == [
         (
             'part',
@@ -664,9 +692,7 @@ def test_insertion_compliance_accepts_vertical_gravity_alignment(monkeypatch):
         },
     )
     relaxed = []
-    task.relax_fixed_attachment_to_physical_hold = (
-        lambda name, **kwargs: relaxed.append((name, kwargs)) or True
-    )
+    task.relax_fixed_attachment_to_physical_hold = lambda name, **kwargs: relaxed.append((name, kwargs)) or True
     monkeypatch.setattr(
         adapter,
         '_object_pose',
@@ -685,30 +711,29 @@ def test_insertion_compliance_accepts_vertical_gravity_alignment(monkeypatch):
         },
     )
 
-    assert adapter._maybe_relax_insertion_attachment(
-        task=task,
-        spec={
-            'object': 'part',
-            'target_object_final_target': 'part_assembled',
-            'target_object_convergence_axis': [0.0, 0.0, -1.0],
-            'relax_fixed_attachment_minimum_gravity_alignment': 0.70,
-            'relax_fixed_attachment_within_final_position_tolerance': 0.015,
-            'relax_fixed_attachment_final_orientation_tolerance': 0.15,
-            'relax_fixed_attachment_stable_steps': 1,
-        },
-        tracked_objects={},
-    ) is True
-    assert relaxed == [
-        ('part', {'locked_linear_world_direction': None})
-    ]
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec={
+                'object': 'part',
+                'target_object_final_target': 'part_assembled',
+                'target_object_convergence_axis': [0.0, 0.0, -1.0],
+                'relax_fixed_attachment_minimum_gravity_alignment': 0.70,
+                'relax_fixed_attachment_within_final_position_tolerance': 0.015,
+                'relax_fixed_attachment_final_orientation_tolerance': 0.15,
+                'relax_fixed_attachment_stable_steps': 1,
+            },
+            tracked_objects={},
+        )
+        is True
+    )
+    assert relaxed == [('part', {'locked_linear_world_direction': None})]
 
 
 def test_compliant_joint_frame_aligns_local_z_with_world_gravity():
     object_orientation = normalize_quat([0.5, 0.5, 0.5, 0.5])
     hand_orientation = normalize_quat([0.8, -0.2, 0.4, 0.4])
-    joint_world_orientation = FactoryDualFrankaAssemblyTask._quat_align_local_z(
-        [0.0, 0.0, -1.0]
-    )
+    joint_world_orientation = FactoryDualFrankaAssemblyTask._quat_align_local_z([0.0, 0.0, -1.0])
     parent_frame_orientation = normalize_quat(
         quat_multiply(
             quat_conjugate(object_orientation),
@@ -755,13 +780,9 @@ def test_compliant_joint_drive_scales_with_mass_and_grasp_lever_arm():
 
     assert parameters['linear_max_force'] >= 6.0 * 9.81
     assert parameters['locked_linear_limit'] == 0.00025
-    assert parameters['linear_stiffness'] * 2.0 * 0.006 >= parameters[
-        'linear_max_force'
-    ]
+    assert parameters['linear_stiffness'] * 2.0 * 0.006 >= parameters['linear_max_force']
     assert parameters['linear_damping'] > 10.0
-    assert parameters['angular_max_force'] >= (
-        parameters['linear_max_force'] * 0.24 * 0.5
-    )
+    assert parameters['angular_max_force'] >= (parameters['linear_max_force'] * 0.24 * 0.5)
     assert parameters['angular_stiffness'] > 5.0
     assert parameters['angular_damping'] > 0.2
 
@@ -797,16 +818,17 @@ def test_compliant_servo_pauses_on_dynamic_spike_then_resumes(monkeypatch):
     }
     phase_key = ('insert',)
     adapter._cartesian_command_positions[phase_key] = np.ones(3)
-    adapter._cartesian_command_orientations[phase_key] = np.asarray(
-        [1.0, 0.0, 0.0, 0.0]
-    )
+    adapter._cartesian_command_orientations[phase_key] = np.asarray([1.0, 0.0, 0.0, 0.0])
 
-    assert adapter._compliant_motion_requires_hold(
-        phase_key=phase_key,
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
+    assert (
+        adapter._compliant_motion_requires_hold(
+            phase_key=phase_key,
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
     assert phase_key not in adapter._cartesian_command_positions
     assert phase_key not in adapter._cartesian_command_orientations
     motion.update(
@@ -818,28 +840,40 @@ def test_compliant_servo_pauses_on_dynamic_spike_then_resumes(monkeypatch):
         }
     )
     for _ in range(2):
-        assert adapter._compliant_motion_requires_hold(
+        assert (
+            adapter._compliant_motion_requires_hold(
+                task=task,
+                spec=spec,
+                tracked_objects=tracked_objects,
+            )
+            is True
+        )
+    assert (
+        adapter._compliant_motion_requires_hold(
             task=task,
             spec=spec,
             tracked_objects=tracked_objects,
-        ) is True
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
+        )
+        is True
+    )
     motion.update({'linear_speed': 0.02, 'angular_speed': 1.0})
     for _ in range(2):
-        assert adapter._compliant_motion_requires_hold(
+        assert (
+            adapter._compliant_motion_requires_hold(
+                task=task,
+                spec=spec,
+                tracked_objects=tracked_objects,
+            )
+            is True
+        )
+    assert (
+        adapter._compliant_motion_requires_hold(
             task=task,
             spec=spec,
             tracked_objects=tracked_objects,
-        ) is True
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
+        )
+        is False
+    )
 
 
 def test_compliant_servo_rejects_stale_velocity_when_pose_history_is_static(
@@ -874,18 +908,24 @@ def test_compliant_servo_rejects_stale_velocity_when_pose_history_is_static(
         'pose_history_velocity_override_orientation_tolerance': 0.01,
     }
 
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
+    assert (
+        adapter._compliant_motion_requires_hold(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is False
+    )
 
     motion['pose_stability_position_drift'] = 0.003
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
+    assert (
+        adapter._compliant_motion_requires_hold(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
 
 
 def test_compliant_recovery_allows_bounded_target_settle_without_servo_resume(monkeypatch):
@@ -918,16 +958,22 @@ def test_compliant_recovery_allows_bounded_target_settle_without_servo_resume(mo
         'compliant_servo_settle_stable_steps': 2,
     }
 
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
+    assert (
+        adapter._compliant_motion_requires_hold(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is False
+    )
 
     motion.update(
         {
@@ -936,28 +982,40 @@ def test_compliant_recovery_allows_bounded_target_settle_without_servo_resume(mo
             'pose_stable_override': True,
         }
     )
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is False
+    )
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
+    assert (
+        adapter._compliant_motion_requires_hold(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
 
     motion.update({'angular_speed': 3.0})
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is False
+    )
 
 
 def test_compliant_recovery_retries_servo_after_bounded_target_settle(monkeypatch):
@@ -990,11 +1048,14 @@ def test_compliant_recovery_retries_servo_after_bounded_target_settle(monkeypatc
         'compliant_recovery_target_settle_max_steps': 2,
     }
 
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
+    assert (
+        adapter._compliant_motion_requires_hold(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
     motion.update(
         {
             'linear_speed': 0.07,
@@ -1002,27 +1063,39 @@ def test_compliant_recovery_retries_servo_after_bounded_target_settle(monkeypatc
             'pose_stable_override': True,
         }
     )
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is True
-    assert adapter._compliant_recovery_allows_target_settle(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is True
+    )
+    assert (
+        adapter._compliant_recovery_allows_target_settle(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is False
+    )
     assert (id(task), 'part') not in adapter._compliant_motion_recovery_state
-    assert adapter._compliant_motion_requires_hold(
-        task=task,
-        spec=spec,
-        tracked_objects=tracked_objects,
-    ) is False
+    assert (
+        adapter._compliant_motion_requires_hold(
+            task=task,
+            spec=spec,
+            tracked_objects=tracked_objects,
+        )
+        is False
+    )
 
 
 def test_compliant_servo_rate_limit_scales_with_object_speed():
@@ -1315,9 +1388,7 @@ def test_target_object_completion_uses_declared_lateral_tolerance(monkeypatch):
         'position': np.asarray([0.0004, 0.0, 0.0]),
         'orientation': target_pose['orientation'].copy(),
     }
-    tracked_objects = {
-        'part': {'attachment': {'mode': 'compliant_joint'}}
-    }
+    tracked_objects = {'part': {'attachment': {'mode': 'compliant_joint'}}}
     monkeypatch.setattr(adapter, '_object_pose', lambda **_: object_pose)
     monkeypatch.setattr(adapter, '_target_object_pose', lambda **_: target_pose)
     monkeypatch.setattr(
@@ -1351,9 +1422,7 @@ def test_target_object_completion_uses_declared_lateral_tolerance(monkeypatch):
         target_q=None,
     )
     assert len(completed) == 1
-    assert completed[0]['detail'][
-        'target_object_lateral_alignment_complete'
-    ] is False
+    assert completed[0]['detail']['target_object_lateral_alignment_complete'] is False
 
 
 def test_transport_servo_aligns_laterally_before_advancing_insertion_depth(monkeypatch):
@@ -1395,7 +1464,6 @@ def test_transport_servo_aligns_laterally_before_advancing_insertion_depth(monke
 
     np.testing.assert_allclose(command_pose['position'], [-0.002, 0.0, 0.0])
     assert not np.allclose(command_pose['orientation'], current_pose['orientation'])
-
 
     object_pose['position'] = np.asarray([0.0, 0.0, -0.010])
     current_pose['position'] = object_pose['position'].copy()
@@ -1514,9 +1582,7 @@ def test_compliant_hold_lateral_servo_moves_past_nominal_tcp(monkeypatch):
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose=target_pose,
     )
@@ -1527,9 +1593,7 @@ def test_compliant_hold_lateral_servo_moves_past_nominal_tcp(monkeypatch):
 def test_compliant_hold_servo_corrects_object_orientation_past_nominal_tcp(monkeypatch):
     adapter = UR5eAssemblyAtomicSkillAdapter({})
     identity = np.asarray([1.0, 0.0, 0.0, 0.0])
-    object_orientation = np.asarray(
-        [np.cos(0.05), 0.0, 0.0, np.sin(0.05)]
-    )
+    object_orientation = np.asarray([np.cos(0.05), 0.0, 0.0, np.sin(0.05)])
     current_pose = {
         'position': np.zeros(3),
         'orientation': identity.copy(),
@@ -1567,9 +1631,7 @@ def test_compliant_hold_servo_corrects_object_orientation_past_nominal_tcp(monke
             'target_object_orientation_tolerance': 0.05,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose=target_pose,
     )
@@ -1583,12 +1645,8 @@ def test_compliant_hold_servo_leaves_orientation_within_target_tolerance(
 ):
     adapter = UR5eAssemblyAtomicSkillAdapter({})
     identity = np.asarray([1.0, 0.0, 0.0, 0.0])
-    object_orientation = np.asarray(
-        [np.cos(0.02), 0.0, 0.0, np.sin(0.02)]
-    )
-    tcp_orientation = np.asarray(
-        [np.cos(0.015), 0.0, 0.0, np.sin(0.015)]
-    )
+    object_orientation = np.asarray([np.cos(0.02), 0.0, 0.0, np.sin(0.02)])
+    tcp_orientation = np.asarray([np.cos(0.015), 0.0, 0.0, np.sin(0.015)])
     current_pose = {
         'position': np.zeros(3),
         'orientation': tcp_orientation,
@@ -1625,9 +1683,7 @@ def test_compliant_hold_servo_leaves_orientation_within_target_tolerance(
             'target_object_orientation_tolerance': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -1643,9 +1699,7 @@ def test_compliant_hold_servo_leaves_orientation_within_target_tolerance(
 def test_compliant_hold_servo_keeps_nominal_tcp_orientation_by_default(monkeypatch):
     adapter = UR5eAssemblyAtomicSkillAdapter({})
     identity = np.asarray([1.0, 0.0, 0.0, 0.0])
-    object_orientation = np.asarray(
-        [np.cos(0.05), 0.0, 0.0, np.sin(0.05)]
-    )
+    object_orientation = np.asarray([np.cos(0.05), 0.0, 0.0, np.sin(0.05)])
     current_pose = {
         'position': np.zeros(3),
         'orientation': identity.copy(),
@@ -1676,9 +1730,7 @@ def test_compliant_hold_servo_keeps_nominal_tcp_orientation_by_default(monkeypat
             'cartesian_orientation_step': 0.2,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -1726,9 +1778,7 @@ def test_compliant_lateral_servo_compensates_long_grasp_lever(monkeypatch):
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -1782,9 +1832,7 @@ def test_compliant_lateral_servo_defers_long_lever_orientation_change(monkeypatc
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -1828,9 +1876,7 @@ def test_compliant_lateral_servo_holds_entry_orientation_anchor(monkeypatch):
         'cartesian_position_step': 0.00025,
         'cartesian_orientation_step': 0.1,
     }
-    tracked_objects = {
-        'part': {'attachment': {'mode': 'compliant_joint'}}
-    }
+    tracked_objects = {'part': {'attachment': {'mode': 'compliant_joint'}}}
 
     adapter._target_object_servo_pose(
         phase_key=phase_key,
@@ -1842,9 +1888,7 @@ def test_compliant_lateral_servo_holds_entry_orientation_anchor(monkeypatch):
         current_pose=current_pose,
         target_pose=current_pose,
     )
-    drifted_orientation = np.asarray(
-        [np.cos(0.01), 0.0, np.sin(0.01), 0.0]
-    )
+    drifted_orientation = np.asarray([np.cos(0.01), 0.0, np.sin(0.01), 0.0])
     current_pose['orientation'] = drifted_orientation
     command_pose = adapter._target_object_servo_pose(
         phase_key=phase_key,
@@ -1857,9 +1901,7 @@ def test_compliant_lateral_servo_holds_entry_orientation_anchor(monkeypatch):
         target_pose=current_pose,
     )
 
-    assert abs(float(np.dot(command_pose['orientation'], identity))) > abs(
-        float(np.dot(drifted_orientation, identity))
-    )
+    assert abs(float(np.dot(command_pose['orientation'], identity))) > abs(float(np.dot(drifted_orientation, identity)))
     np.testing.assert_allclose(
         adapter._insertion_lateral_orientation_anchors[phase_key],
         identity,
@@ -1875,9 +1917,7 @@ def test_compliant_lateral_servo_ignores_sub_deadband_orientation_noise(monkeypa
     }
     object_pose = {
         'position': np.asarray([0.0, 0.0, -0.24]),
-        'orientation': np.asarray(
-            [np.cos(0.0005), 0.0, 0.0, np.sin(0.0005)]
-        ),
+        'orientation': np.asarray([np.cos(0.0005), 0.0, 0.0, np.sin(0.0005)]),
     }
     target_object_pose = {
         'position': np.asarray([0.006, 0.0, -0.24]),
@@ -1906,9 +1946,7 @@ def test_compliant_lateral_servo_ignores_sub_deadband_orientation_noise(monkeypa
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -1959,9 +1997,7 @@ def test_compliant_lateral_gate_allows_only_outward_axial_recovery(monkeypatch):
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -2012,9 +2048,7 @@ def test_compliant_lateral_gate_retracts_to_alignment_clearance(monkeypatch):
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -2042,9 +2076,7 @@ def test_compliant_lateral_gate_retracts_to_alignment_clearance(monkeypatch):
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -2053,13 +2085,14 @@ def test_compliant_lateral_gate_retracts_to_alignment_clearance(monkeypatch):
     )
 
     np.testing.assert_allclose(command_pose['position'], [0.0005, 0.0, 0.001])
-    assert adapter._insertion_lateral_clearance_required[
-        ('compliant-alignment-clearance',)
-    ] is True
-    assert adapter._insertion_lateral_alignment_stable_steps.get(
-        ('compliant-alignment-clearance',),
-        0,
-    ) == 0
+    assert adapter._insertion_lateral_clearance_required[('compliant-alignment-clearance',)] is True
+    assert (
+        adapter._insertion_lateral_alignment_stable_steps.get(
+            ('compliant-alignment-clearance',),
+            0,
+        )
+        == 0
+    )
 
 
 def test_compliant_lateral_hysteresis_band_does_not_latch_clearance(monkeypatch):
@@ -2105,9 +2138,7 @@ def test_compliant_lateral_hysteresis_band_does_not_latch_clearance(monkeypatch)
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -2167,9 +2198,7 @@ def test_compliant_lateral_gate_caps_full_clearance_retraction(monkeypatch):
             robot_name='franka_left',
             spec=spec,
             tracked_robots={},
-            tracked_objects={
-                'part': {'attachment': {'mode': 'compliant_joint'}}
-            },
+            tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
             current_pose=current_pose,
             target_pose={
                 'position': np.zeros(3),
@@ -2256,9 +2285,7 @@ def test_compliant_lateral_gate_anchors_retraction_at_current_depth(monkeypatch)
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -2439,9 +2466,7 @@ def test_target_object_translation_uses_measured_orientation_during_rotation(
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
-            'orientation': np.asarray(
-                [0.70710678, 0.0, 0.0, 0.70710678]
-            ),
+            'orientation': np.asarray([0.70710678, 0.0, 0.0, 0.70710678]),
         },
     )
 
@@ -2687,13 +2712,9 @@ def test_compliant_servo_resets_position_integrator_between_lateral_and_axial(
         'target_object_servo_position_command_gate_overdrive': True,
         'target_object_servo_position_command_lookahead': 0.004,
     }
-    tracked_objects = {
-        'part': {'attachment': {'mode': 'compliant_joint'}}
-    }
+    tracked_objects = {'part': {'attachment': {'mode': 'compliant_joint'}}}
 
-    adapter._cartesian_command_positions[phase_key] = np.asarray(
-        [0.004, 0.0, 0.0]
-    )
+    adapter._cartesian_command_positions[phase_key] = np.asarray([0.004, 0.0, 0.0])
     command_pose = adapter._target_object_servo_pose(
         phase_key=phase_key,
         task=SimpleNamespace(),
@@ -2711,9 +2732,7 @@ def test_compliant_servo_resets_position_integrator_between_lateral_and_axial(
     assert phase_key not in adapter._cartesian_command_positions
     assert adapter._insertion_lateral_alignment_active[phase_key] is False
 
-    adapter._cartesian_command_positions[phase_key] = np.asarray(
-        [0.0, 0.0, -0.004]
-    )
+    adapter._cartesian_command_positions[phase_key] = np.asarray([0.0, 0.0, -0.004])
     target_object_pose['position'] = np.asarray([0.003, 0.0, -0.010])
     command_pose = adapter._target_object_servo_pose(
         phase_key=phase_key,
@@ -2777,9 +2796,7 @@ def test_compliant_axial_servo_keeps_independent_lateral_correction(monkeypatch)
             'cartesian_orientation_step': 0.1,
         },
         tracked_robots={},
-        tracked_objects={
-            'part': {'attachment': {'mode': 'compliant_joint'}}
-        },
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
         current_pose=current_pose,
         target_pose={
             'position': np.zeros(3),
@@ -3315,12 +3332,11 @@ def test_physical_joint_gates_accept_opposing_contact_from_finger_samples(monkey
         'top_clearance': None,
     }
 
-    assert task._strict_dual_finger_contact(
-        'part', left, right, attach_spec=attach_spec
-    ) is False
-    assert task._strict_physical_grasp_contact(
-        'part', contact_metrics, attach_spec=attach_spec
-    )['physical_contact_ready'] is True
+    assert task._strict_dual_finger_contact('part', left, right, attach_spec=attach_spec) is False
+    assert (
+        task._strict_physical_grasp_contact('part', contact_metrics, attach_spec=attach_spec)['physical_contact_ready']
+        is True
+    )
 
     task._attachments = {}
     task.step_counter = 1
@@ -3430,9 +3446,9 @@ def test_attach_accepts_bounded_contact_refined_target_after_strict_close(monkey
     assert task._attach_ready(phase_spec, attach_spec) is False
 
     target_info['position_error'] = 0.00805
-    task._local_skill_completions[
-        (4, 80, 'franka_left', 'ur5e_close_gripper')
-    ]['contact_detail']['strict_contact_ready'] = False
+    task._local_skill_completions[(4, 80, 'franka_left', 'ur5e_close_gripper')]['contact_detail'][
+        'strict_contact_ready'
+    ] = False
     assert task._attach_ready(phase_spec, attach_spec) is False
 
 
@@ -3484,9 +3500,9 @@ def test_force_probe_is_only_enabled_when_required_or_explicitly_requested():
     assert task._force_contact_measurement_enabled({'require_force_contact': True}) is True
     assert task._force_contact_measurement_enabled({'require_contact_report': True}) is True
     assert task._force_contact_measurement_enabled({'measure_force_contact': True}) is True
-    assert task._force_contact_measurement_enabled(
-        {'require_force_contact': True, 'measure_force_contact': False}
-    ) is True
+    assert (
+        task._force_contact_measurement_enabled({'require_force_contact': True, 'measure_force_contact': False}) is True
+    )
 
 
 def test_grasp_check_forwards_configured_interior_margin():
@@ -3499,9 +3515,7 @@ def test_grasp_check_forwards_configured_interior_margin():
 
     task = SimpleNamespace(
         _gripper_contact_metrics=contact_metrics,
-        _strict_physical_grasp_contact=lambda *_args, **_kwargs: {
-            'physical_contact_ready': True
-        },
+        _strict_physical_grasp_contact=lambda *_args, **_kwargs: {'physical_contact_ready': True},
     )
     ready, _ = adapter._grasp_contact_ready(
         task=task,
@@ -3527,9 +3541,7 @@ def test_grasp_check_forwards_force_measurement_without_requiring_it():
 
     task = SimpleNamespace(
         _gripper_contact_metrics=contact_metrics,
-        _strict_physical_grasp_contact=lambda *_args, **_kwargs: {
-            'physical_contact_ready': True
-        },
+        _strict_physical_grasp_contact=lambda *_args, **_kwargs: {'physical_contact_ready': True},
     )
     ready, _ = adapter._grasp_contact_ready(
         task=task,

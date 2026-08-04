@@ -29,8 +29,7 @@ def _axis_range(value: Any, *, group_name: str, axis_name: str) -> tuple[float, 
     upper = float(upper)
     if not math.isfinite(lower) or not math.isfinite(upper) or lower > upper:
         raise ValueError(
-            f'Invalid domain-randomization range for group {group_name!r} axis {axis_name!r}: '
-            f'[{lower}, {upper}].'
+            f'Invalid domain-randomization range for group {group_name!r} axis {axis_name!r}: ' f'[{lower}, {upper}].'
         )
     return lower, upper
 
@@ -67,16 +66,13 @@ def _sample_translation(group_name: str, group_spec: dict[str, Any], rng: random
 
     constraints = group_spec.get('translation_constraints') or []
     if not isinstance(constraints, list):
-        raise ValueError(
-            f'Domain-randomization group {group_name!r} translation_constraints must be a list.'
-        )
+        raise ValueError(f'Domain-randomization group {group_name!r} translation_constraints must be a list.')
 
     def satisfies_constraints(translation: list[float]) -> bool:
         for constraint in constraints:
             if not isinstance(constraint, dict):
                 raise ValueError(
-                    f'Domain-randomization group {group_name!r} translation constraints '
-                    'must be mappings.'
+                    f'Domain-randomization group {group_name!r} translation constraints ' 'must be mappings.'
                 )
             constraint_type = str(constraint.get('type', '')).strip().lower()
             points = constraint.get('points') or []
@@ -93,9 +89,7 @@ def _sample_translation(group_name: str, group_spec: dict[str, Any], rng: random
                         f'Domain-randomization group {group_name!r} constraint points '
                         'must contain three finite values.'
                     )
-                translated_points.append(
-                    [values[index] + translation[index] for index in range(3)]
-                )
+                translated_points.append([values[index] + translation[index] for index in range(3)])
 
             if constraint_type == 'points_inside_bounds':
                 lower = [float(value) for value in constraint.get('lower', [])]
@@ -109,8 +103,7 @@ def _sample_translation(group_name: str, group_spec: dict[str, Any], rng: random
                     or any(lower[axis] > upper[axis] for axis in axes)
                 ):
                     raise ValueError(
-                        f'Domain-randomization group {group_name!r} has invalid '
-                        'points_inside_bounds limits.'
+                        f'Domain-randomization group {group_name!r} has invalid ' 'points_inside_bounds limits.'
                     )
                 if any(
                     point[axis] < lower[axis] or point[axis] > upper[axis]
@@ -132,10 +125,7 @@ def _sample_translation(group_name: str, group_spec: dict[str, Any], rng: random
                         'points_within_distance constraint.'
                     )
                 if any(
-                    math.sqrt(
-                        sum((point[index] - origin[index]) ** 2 for index in range(3))
-                    )
-                    > maximum_distance
+                    math.sqrt(sum((point[index] - origin[index]) ** 2 for index in range(3))) > maximum_distance
                     for point in translated_points
                 ):
                     return False
@@ -147,15 +137,9 @@ def _sample_translation(group_name: str, group_spec: dict[str, Any], rng: random
         return True
 
     for _ in range(1024):
-        sampled = [
-            rng.uniform(lower, upper) if lower != upper else lower
-            for lower, upper in axis_ranges.values()
-        ]
+        sampled = [rng.uniform(lower, upper) if lower != upper else lower for lower, upper in axis_ranges.values()]
         planar_distance = math.hypot(sampled[0], sampled[1])
-        if (
-            minimum_planar_distance <= planar_distance <= maximum_planar_distance
-            and satisfies_constraints(sampled)
-        ):
+        if minimum_planar_distance <= planar_distance <= maximum_planar_distance and satisfies_constraints(sampled):
             return sampled
     raise ValueError(
         f'Domain-randomization group {group_name!r} cannot satisfy planar-distance bounds '
@@ -166,9 +150,7 @@ def _sample_translation(group_name: str, group_spec: dict[str, Any], rng: random
 
 def _color_triplet(value: Any, *, group_name: str) -> list[float]:
     if not isinstance(value, (list, tuple)) or len(value) != 3:
-        raise ValueError(
-            f'Domain-randomization appearance group {group_name!r} colors must contain three channels.'
-        )
+        raise ValueError(f'Domain-randomization appearance group {group_name!r} colors must contain three channels.')
     color = [float(channel) for channel in value]
     if any(not math.isfinite(channel) or channel < 0.0 or channel > 1.0 for channel in color):
         raise ValueError(
@@ -181,9 +163,7 @@ def _sample_color(group_name: str, group_spec: dict[str, Any], rng: random.Rando
     palette = group_spec.get('palette')
     if palette is not None:
         if not isinstance(palette, (list, tuple)) or not palette:
-            raise ValueError(
-                f'Domain-randomization appearance group {group_name!r} palette must be non-empty.'
-            )
+            raise ValueError(f'Domain-randomization appearance group {group_name!r} palette must be non-empty.')
         colors = [_color_triplet(value, group_name=group_name) for value in palette]
         return list(colors[rng.randrange(len(colors))])
 
@@ -191,9 +171,7 @@ def _sample_color(group_name: str, group_spec: dict[str, Any], rng: random.Rando
     if isinstance(color_spec, (list, tuple)):
         return _color_triplet(color_spec, group_name=group_name)
     if not isinstance(color_spec, dict):
-        raise ValueError(
-            f'Domain-randomization appearance group {group_name!r} requires palette or color.'
-        )
+        raise ValueError(f'Domain-randomization appearance group {group_name!r} requires palette or color.')
     sampled = []
     for channel_name in ('r', 'g', 'b'):
         lower, upper = _axis_range(
@@ -204,8 +182,7 @@ def _sample_color(group_name: str, group_spec: dict[str, Any], rng: random.Rando
         channel = rng.uniform(lower, upper) if lower != upper else lower
         if channel < 0.0 or channel > 1.0:
             raise ValueError(
-                f'Domain-randomization appearance group {group_name!r} channel {channel_name!r} '
-                'must stay in [0, 1].'
+                f'Domain-randomization appearance group {group_name!r} channel {channel_name!r} ' 'must stay in [0, 1].'
             )
         sampled.append(channel)
     return sampled
@@ -220,9 +197,7 @@ def _apply_group_translation(
     entry_kind: str,
 ) -> list[str]:
     by_name = {
-        str(entry.get('name')): entry
-        for entry in entries
-        if isinstance(entry, dict) and entry.get('name') is not None
+        str(entry.get('name')): entry for entry in entries if isinstance(entry, dict) and entry.get('name') is not None
     }
     applied = []
     for member_name in member_names:
@@ -256,9 +231,7 @@ def _apply_group_color(
     entry_kind: str,
 ) -> list[str]:
     by_name = {
-        str(entry.get('name')): entry
-        for entry in entries
-        if isinstance(entry, dict) and entry.get('name') is not None
+        str(entry.get('name')): entry for entry in entries if isinstance(entry, dict) and entry.get('name') is not None
     }
     applied = []
     for member_name in member_names:

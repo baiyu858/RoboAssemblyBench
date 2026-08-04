@@ -5,16 +5,20 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 
+from internutopia_extension.tasks.factory_dual_franka_assembly_task import (
+    FactoryDualFrankaAssemblyTask,
+)
 from roboassemblybench.core.domain_randomization import apply_domain_randomization
 from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
 from toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills import (
     UR5eAssemblyAtomicSkillAdapter,
     UR5ePlumbersBlockAtomicSkillAdapter,
 )
-from toolkits.factory_dual_franka_assembly.scene_builder import build_dual_franka_assembly_episode
+from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_episode,
+)
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
 from toolkits.factory_dual_franka_assembly.ur5e_skill_api import UR5eAssemblySkillAPI
-from internutopia_extension.tasks.factory_dual_franka_assembly_task import FactoryDualFrankaAssemblyTask
 
 
 def test_position_randomization_is_deterministic_and_group_correlated():
@@ -97,9 +101,9 @@ def test_wide_showcase_layouts_move_assembly_on_fixed_board_over_fifteen_centime
     layout_seeds = recipe['collection']['layout_seeds']
     translations = np.asarray(
         [
-            apply_domain_randomization(recipe, seed=seed, enabled_override=True)[1]['groups'][
-                'assembly_base'
-            ]['translation']
+            apply_domain_randomization(recipe, seed=seed, enabled_override=True)[1]['groups']['assembly_base'][
+                'translation'
+            ]
             for seed in layout_seeds
         ],
         dtype=float,
@@ -153,18 +157,18 @@ def test_wide_30cm_showcase_moves_pickup_and_assembly_while_optical_board_stays_
     layout_seeds = recipe['collection']['layout_seeds']
     pickup_translations = np.asarray(
         [
-            apply_domain_randomization(recipe, seed=seed, enabled_override=True)[1]['groups'][
-                'start_parts'
-            ]['translation']
+            apply_domain_randomization(recipe, seed=seed, enabled_override=True)[1]['groups']['start_parts'][
+                'translation'
+            ]
             for seed in layout_seeds
         ],
         dtype=float,
     )
     assembly_translations = np.asarray(
         [
-            apply_domain_randomization(recipe, seed=seed, enabled_override=True)[1]['groups'][
-                'assembly_base'
-            ]['translation']
+            apply_domain_randomization(recipe, seed=seed, enabled_override=True)[1]['groups']['assembly_base'][
+                'translation'
+            ]
             for seed in layout_seeds
         ],
         dtype=float,
@@ -175,12 +179,16 @@ def test_wide_30cm_showcase_moves_pickup_and_assembly_while_optical_board_stays_
             (-7.0 / 60.0, 0.07),
             (-1.0 / 12.0, 0.05),
             (-0.05, 0.05),
-            *((x, y) for y in (1.0 / 12.0, 7.0 / 60.0, 0.15) for x in (
-                -0.15,
-                -7.0 / 60.0,
-                -1.0 / 12.0,
-                -0.05,
-            )),
+            *(
+                (x, y)
+                for y in (1.0 / 12.0, 7.0 / 60.0, 0.15)
+                for x in (
+                    -0.15,
+                    -7.0 / 60.0,
+                    -1.0 / 12.0,
+                    -0.05,
+                )
+            ),
         ],
         dtype=float,
     )
@@ -258,10 +266,7 @@ def test_scene_builder_preserves_nominal_recipe_and_records_randomization():
     assert randomized_objects['fabrica_plumbers_block_0']['domain_randomization_group'] == 'start_parts'
     assert randomized_objects['fabrica_plumbers_block_3']['angular_damping'] == 2.0
     assert randomized_objects['fabrica_plumbers_block_3']['solver_position_iteration_count'] == 16
-    assert (
-        randomized.target_annotations['part_1_right_hole']['domain_randomization_group']
-        == 'assembly_base'
-    )
+    assert randomized.target_annotations['part_1_right_hole']['domain_randomization_group'] == 'assembly_base'
 
     evaluation = build_dual_franka_assembly_episode(
         recipe='fabrica_plumbers_block_ur5e_right_base_prepare',
@@ -726,14 +731,12 @@ def test_cartesian_skill_retries_ik_from_measured_joints(monkeypatch):
 
 
 def test_cartesian_ik_tolerances_are_smaller_than_servo_steps():
-    position_tolerance, orientation_tolerance = (
-        UR5eAssemblyAtomicSkillAdapter._ik_solver_tolerances(
-            {
-                'cartesian_servo': True,
-                'cartesian_position_step': 0.0025,
-                'cartesian_orientation_step': 0.012,
-            }
-        )
+    position_tolerance, orientation_tolerance = UR5eAssemblyAtomicSkillAdapter._ik_solver_tolerances(
+        {
+            'cartesian_servo': True,
+            'cartesian_position_step': 0.0025,
+            'cartesian_orientation_step': 0.012,
+        }
     )
 
     assert 0.0 < position_tolerance < 0.0025
@@ -989,9 +992,10 @@ def test_move_above_recovers_branch_jump_with_translation_only_step(monkeypatch)
     assert np.allclose(solved_orientations[-1], current_pose['orientation'])
     np.testing.assert_allclose(action['arm_joint_controller'][0], 0.025)
     assert np.all(np.asarray(action['arm_joint_controller'][0]) > 0.0)
-    assert adapter._last_targets[next(iter(adapter._last_targets))][
-        'ik_branch_recovery_mode'
-    ] == 'translation_only_command_warm_start'
+    assert (
+        adapter._last_targets[next(iter(adapter._last_targets))]['ik_branch_recovery_mode']
+        == 'translation_only_command_warm_start'
+    )
 
 
 def test_persistent_branch_jump_fails_after_tolerance(monkeypatch):
@@ -1100,10 +1104,7 @@ def test_light_insert_parts_allow_pose_stability_to_filter_noisy_physx_velocity(
     assert part_3_close['grasp_relative_position'] == part_3_descend['grasp_relative_position']
     assert part_3_close['grasp_relative_orientation'] == part_3_descend['grasp_relative_orientation']
     assert part_3_approach_phase['local_skill']['approach_clearance'] == 0.10
-    assert (
-        part_3_approach_phase['local_skill']['approach_clearance']
-        > part_3_descend['approach_clearance']
-    )
+    assert part_3_approach_phase['local_skill']['approach_clearance'] > part_3_descend['approach_clearance']
     assert part_3_descend['approach_clearance'] == 0.027
     assert part_3_close['approach_clearance'] == part_3_descend['approach_clearance']
 
@@ -1537,9 +1538,7 @@ def test_target_object_servo_pivots_tcp_around_held_object():
         target_pose=target_pose,
     )
 
-    reconstructed_object_position = np.asarray(command_pose['position']) + np.asarray(
-        [1.0, 0.0, 0.0]
-    )
+    reconstructed_object_position = np.asarray(command_pose['position']) + np.asarray([1.0, 0.0, 0.0])
     np.testing.assert_allclose(command_pose['orientation'], target_orientation)
     np.testing.assert_allclose(reconstructed_object_position, object_pose['position'], atol=1e-7)
 

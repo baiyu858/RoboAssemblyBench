@@ -16,20 +16,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from planning.robot.geometry import get_gripper_open_ratio
+from planning.robot.util_grasp import (
+    get_grasp_info_from_gripper_state,
+    get_gripper_pos_quat,
+)
+from planning.robot.workcell import get_assembly_center
 from scipy.spatial.transform import Rotation
 
-from planning.robot.geometry import get_gripper_open_ratio
-from planning.robot.util_grasp import get_grasp_info_from_gripper_state, get_gripper_pos_quat
-from planning.robot.workcell import get_assembly_center
-
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_BUNDLES_ROOT = (
-    REPO_ROOT / 'roboassemblybench/assets/Fabrica/canonical_7_bundles/task_bundles'
-)
-DEFAULT_OUTPUT = (
-    REPO_ROOT / 'roboassemblybench/assets/Fabrica/canonical_7_bundles/canonical_tasks.json'
-)
+DEFAULT_BUNDLES_ROOT = REPO_ROOT / 'roboassemblybench/assets/Fabrica/canonical_7_bundles/task_bundles'
+DEFAULT_OUTPUT = REPO_ROOT / 'roboassemblybench/assets/Fabrica/canonical_7_bundles/canonical_tasks.json'
 FABRICA_TO_ISAAC_ROBOTIQ_ROTATION = Rotation.from_euler('z', np.pi / 2.0)
 MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE = 0.20
 
@@ -91,9 +88,7 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
     )
     robotiq_open_ratio = get_gripper_open_ratio('robotiq-85', antipodal_points)
     if robotiq_open_ratio is None:
-        raise ValueError(
-            f'Panda grasp {grasp.grasp_id} is wider than the Robotiq 2F-85 workspace.'
-        )
+        raise ValueError(f'Panda grasp {grasp.grasp_id} is wider than the Robotiq 2F-85 workspace.')
 
     gripper_position_cm, gripper_orientation_wxyz = get_gripper_pos_quat(
         'robotiq-85',
@@ -104,9 +99,7 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
     )
     gripper_position_m = (np.asarray(gripper_position_cm) - assembly_center_cm) * 0.01
     fabrica_gripper_orientation_wxyz = np.asarray(gripper_orientation_wxyz, dtype=float)
-    fabrica_gripper_rotation = Rotation.from_quat(
-        fabrica_gripper_orientation_wxyz[[1, 2, 3, 0]]
-    )
+    fabrica_gripper_rotation = Rotation.from_quat(fabrica_gripper_orientation_wxyz[[1, 2, 3, 0]])
     gripper_rotation = fabrica_gripper_rotation * FABRICA_TO_ISAAC_ROBOTIQ_ROTATION
     gripper_orientation_wxyz = _wxyz_from_xyzw(gripper_rotation.as_quat())
     object_in_tcp_position = gripper_rotation.inv().apply(-gripper_position_m)
@@ -117,9 +110,7 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
         'target_gripper': 'robotiq-85',
         'target_gripper_asset': 'isaac_official_robotiq_2f85',
         'gripper_frame_conversion': 'fabrica_minus_x_to_isaac_plus_y',
-        'gripper_frame_rotation_wxyz': _wxyz_from_xyzw(
-            FABRICA_TO_ISAAC_ROBOTIQ_ROTATION.as_quat()
-        ),
+        'gripper_frame_rotation_wxyz': _wxyz_from_xyzw(FABRICA_TO_ISAAC_ROBOTIQ_ROTATION.as_quat()),
         'grasp_id': int(grasp.grasp_id),
         'panda_open_ratio': panda_open_ratio,
         'robotiq_open_ratio': float(robotiq_open_ratio),
@@ -158,9 +149,7 @@ def _grasp_geometry(
         np.asarray(grasp.quat, dtype=float),
         float(grasp.open_ratio),
     )
-    grasp_center_m = (
-        np.asarray(grasp_info['grasp_center'], dtype=float) - assembly_center_cm
-    ) * 0.01
+    grasp_center_m = (np.asarray(grasp_info['grasp_center'], dtype=float) - assembly_center_cm) * 0.01
     bbox_min_m = np.asarray(bbox_min_m, dtype=float)
     bbox_max_m = np.asarray(bbox_max_m, dtype=float)
     bbox_half_size_m = np.maximum((bbox_max_m - bbox_min_m) * 0.5, 1e-9)
@@ -170,9 +159,7 @@ def _grasp_geometry(
     )
     return {
         'grasp_center_m': _as_floats(grasp_center_m),
-        'interior_clearance_score': float(
-            np.min(center_margins_m / bbox_half_size_m)
-        ),
+        'interior_clearance_score': float(np.min(center_margins_m / bbox_half_size_m)),
         'source_collision_count': _source_collision_count(grasp),
     }
 
@@ -205,9 +192,7 @@ def _build_base_grasp_candidates(
             {
                 'selection_method': 'compiler_joint_pickup_yaw_base_grasp_selection',
                 'planner_grasp_id': int(planner_grasp.grasp_id),
-                'assembly_approach_cosine': float(
-                    converted['assembly_approach_direction'][2]
-                ),
+                'assembly_approach_cosine': float(converted['assembly_approach_direction'][2]),
                 **geometry,
             }
         )
@@ -216,9 +201,7 @@ def _build_base_grasp_candidates(
     if not candidates:
         raise ValueError(f'No Robotiq-compatible hold grasp found for base part {part_id}.')
     valid_candidates = [
-        item
-        for item in candidates
-        if item['interior_clearance_score'] >= MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE
+        item for item in candidates if item['interior_clearance_score'] >= MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE
     ]
     if not valid_candidates:
         best_interior_score = max(item['interior_clearance_score'] for item in candidates)
@@ -276,22 +259,17 @@ def _build_move_grasp_candidates(
                 'selection_method': 'compiler_move_grasp_candidate_conversion',
                 'planner_grasp_id': int(planner_grasp.grasp_id),
                 'is_planner_grasp': grasp_id == int(planner_grasp.grasp_id),
-                'grasp_lever_arm_m': float(
-                    np.linalg.norm(tcp_position - grasp_center)
-                ),
+                'grasp_lever_arm_m': float(np.linalg.norm(tcp_position - grasp_center)),
                 **geometry,
             }
         )
         candidates.append(converted)
 
     if not candidates:
-        raise ValueError(
-            f'No Robotiq-compatible move grasp found for moving part {part_id}.'
-        )
+        raise ValueError(f'No Robotiq-compatible move grasp found for moving part {part_id}.')
     if not any(candidate['is_planner_grasp'] for candidate in candidates):
         raise ValueError(
-            f'Planner move grasp {planner_grasp.grasp_id} for part {part_id} is not '
-            'Robotiq-compatible.'
+            f'Planner move grasp {planner_grasp.grasp_id} for part {part_id} is not ' 'Robotiq-compatible.'
         )
     for candidate in candidates:
         candidate['valid_candidate_count'] = len(candidates)
@@ -364,9 +342,7 @@ def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
 
     final_edge = disassembly_edges[-1]
     if str(final_edge['hold_part']) != base_part:
-        raise ValueError(
-            f'{assembly}: final optimized hold part {final_edge["hold_part"]} is not base {base_part}.'
-        )
+        raise ValueError(f'{assembly}: final optimized hold part {final_edge["hold_part"]} is not base {base_part}.')
     planner_base_grasp = _lookup_hold_grasp(
         grasps,
         base_part,
@@ -408,11 +384,7 @@ def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
             bbox_min_m=np.asarray(scene_part['bbox_min_m'], dtype=float),
             bbox_max_m=np.asarray(scene_part['bbox_max_m'], dtype=float),
         )
-        planner_move_grasp = next(
-            candidate
-            for candidate in move_grasp_candidates
-            if candidate['is_planner_grasp']
-        )
+        planner_move_grasp = next(candidate for candidate in move_grasp_candidates if candidate['is_planner_grasp'])
         disassembly_steps.append(
             {
                 'move_part': move_part,
@@ -430,8 +402,7 @@ def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
 
     if set(plan_by_move) != set(moved_parts):
         raise ValueError(
-            f'{assembly}: plan/tree moved-part mismatch: '
-            f'{sorted(plan_by_move)} != {sorted(moved_parts)}.'
+            f'{assembly}: plan/tree moved-part mismatch: ' f'{sorted(plan_by_move)} != {sorted(moved_parts)}.'
         )
 
     parts = []
@@ -442,9 +413,7 @@ def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
                 'part_id': str(part_id),
                 'name': f'fabrica_{assembly}_{part_id}',
                 'usd_path': _relative_to_repo(relative_usd_path),
-                'pickup_position': _as_floats(
-                    scene_part['scene_pickup_translation_m_local_to_board']
-                ),
+                'pickup_position': _as_floats(scene_part['scene_pickup_translation_m_local_to_board']),
                 'pickup_orientation': _pickup_orientation(scene_part),
                 'bbox_min': _as_floats(scene_part['bbox_min_m']),
                 'bbox_max': _as_floats(scene_part['bbox_max_m']),

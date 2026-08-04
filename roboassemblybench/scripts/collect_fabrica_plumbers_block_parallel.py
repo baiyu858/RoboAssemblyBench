@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import json
 import os
-from pathlib import Path
 import signal
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 from roboassemblybench.core.process_lock import exclusive_process_lock
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COLLECTOR = REPO_ROOT / 'roboassemblybench' / 'scripts' / 'collect_fabrica_plumbers_block_2k.py'
@@ -226,9 +225,7 @@ def _merge_manifests(args, shards: list[dict[str, Any]], recipe_fingerprint: str
             raise ValueError(f'{shard["name"]} does not contain its requested episode count.')
         if str(manifest.get('recipe_fingerprint') or '') != recipe_fingerprint:
             raise ValueError(f'{shard["name"]} recipe fingerprint mismatch.')
-        if [int(seed) for seed in manifest.get('collection_layout_seeds') or []] != list(
-            shard['layout_seeds']
-        ):
+        if [int(seed) for seed in manifest.get('collection_layout_seeds') or []] != list(shard['layout_seeds']):
             raise ValueError(f'{shard["name"]} layout seed contract mismatch.')
         if timing_contract is None:
             timing_contract = manifest.get('timing_contract') or {}
@@ -248,9 +245,7 @@ def _merge_manifests(args, shards: list[dict[str, Any]], recipe_fingerprint: str
             }
         )
     if len(successful) != int(args.num_episodes):
-        raise ValueError(
-            f'Merged shards contain {len(successful)} episodes, expected {args.num_episodes}.'
-        )
+        raise ValueError(f'Merged shards contain {len(successful)} episodes, expected {args.num_episodes}.')
     manifest = {
         'schema_version': 'roboassemblybench_position_2k_collection_v2',
         'recipe': args.recipe,
@@ -271,9 +266,7 @@ def _merge_manifests(args, shards: list[dict[str, Any]], recipe_fingerprint: str
         'single_worker': False,
         'parallel_workers': int(args.num_workers),
         'parallel_shards': shard_summaries,
-        'successful_episodes': {
-            seed: successful[seed] for seed in sorted(successful, key=lambda value: int(value))
-        },
+        'successful_episodes': {seed: successful[seed] for seed in sorted(successful, key=lambda value: int(value))},
         'failed_attempts': failed_attempts,
         'num_successful': len(successful),
         'num_failed_attempts': len(failed_attempts),
@@ -349,8 +342,7 @@ def run(args) -> dict[str, Any]:
                     status = _shard_status(shard)
                     if status['complete']:
                         print(
-                            f'{shard["name"]} completed {status["num_successful"]}/'
-                            f'{shard["target_episodes"]}.',
+                            f'{shard["name"]} completed {status["num_successful"]}/' f'{shard["target_episodes"]}.',
                             flush=True,
                         )
                     else:
@@ -368,12 +360,7 @@ def run(args) -> dict[str, Any]:
                         )
 
                 status = _shard_status(shard)
-                if (
-                    status['complete']
-                    or index in running
-                    or now < restart_after[index]
-                    or len(running) >= worker_limit
-                ):
+                if status['complete'] or index in running or now < restart_after[index] or len(running) >= worker_limit:
                     continue
                 running[index] = _start_shard(args, shard, restart_counts[index])
                 print(
@@ -449,19 +436,14 @@ def main() -> None:
         os.environ[FINGERPRINT_ROOT_ENV] = str(Path(args.fingerprint_repo_root).expanduser())
     recipe = load_task_recipe(args.recipe, scene_profile=args.scene_profile)
     if args.layout_seeds is None:
-        args.layout_seeds = [
-            int(seed) for seed in (recipe.get('collection') or {}).get('layout_seeds', [])
-        ]
+        args.layout_seeds = [int(seed) for seed in (recipe.get('collection') or {}).get('layout_seeds', [])]
     if (
         args.num_episodes <= 0
         or args.num_workers <= 0
         or args.num_workers > args.num_episodes
         or (
             args.max_concurrent_workers is not None
-            and (
-                args.max_concurrent_workers <= 0
-                or args.max_concurrent_workers > args.num_workers
-            )
+            and (args.max_concurrent_workers <= 0 or args.max_concurrent_workers > args.num_workers)
         )
         or not args.gpu_ids
         or not args.layout_seeds

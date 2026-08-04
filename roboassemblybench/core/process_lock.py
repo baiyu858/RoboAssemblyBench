@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 import json
 import os
-from pathlib import Path
 import socket
 import time
-from typing import Any
 import uuid
-
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any
 
 OWNER_FILE = 'owner.json'
 
@@ -56,9 +55,7 @@ def _remove_owned_lock(lock_dir: Path, token: str) -> None:
 
 
 def _discard_stale_lock(lock_dir: Path) -> None:
-    stale_path = lock_dir.with_name(
-        f'{lock_dir.name}.stale.{int(time.time())}.{os.getpid()}.{uuid.uuid4().hex[:8]}'
-    )
+    stale_path = lock_dir.with_name(f'{lock_dir.name}.stale.{int(time.time())}.{os.getpid()}.{uuid.uuid4().hex[:8]}')
     try:
         lock_dir.rename(stale_path)
     except FileNotFoundError:
@@ -82,9 +79,7 @@ def exclusive_process_lock(lock_dir: Path, *, description: str):
         except FileExistsError as exc:
             if process_lock_is_held(lock_dir):
                 owner = _load_owner(lock_dir)
-                raise RuntimeError(
-                    f'Another {description} holds {lock_dir}; owner={owner or "unknown"}.'
-                ) from exc
+                raise RuntimeError(f'Another {description} holds {lock_dir}; owner={owner or "unknown"}.') from exc
             _discard_stale_lock(lock_dir)
             continue
         owner = {

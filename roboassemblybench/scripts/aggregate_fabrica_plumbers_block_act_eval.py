@@ -60,9 +60,7 @@ def aggregate_evaluation(
             }
         )
         if unexpected_layout_seeds:
-            raise ValueError(
-                f'Online evaluation layout seed mismatch: unexpected={unexpected_layout_seeds}.'
-            )
+            raise ValueError(f'Online evaluation layout seed mismatch: unexpected={unexpected_layout_seeds}.')
 
     results = [results_by_seed[seed] for seed in sorted(results_by_seed)]
     successes = sum(int(bool(item.get('success'))) for item in results)

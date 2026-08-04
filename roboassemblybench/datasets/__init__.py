@@ -1,6 +1,6 @@
 from roboassemblybench.datasets.cartesian_episode import (
-    ACTION_SEMANTICS,
     ACTION_NAMES,
+    ACTION_SEMANTICS,
     CAMERA_KEYS,
     STATE_NAMES,
     CartesianObservationEncoder,

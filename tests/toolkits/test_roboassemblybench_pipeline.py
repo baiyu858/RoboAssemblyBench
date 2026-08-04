@@ -5,15 +5,17 @@ from types import SimpleNamespace
 import pytest
 
 from roboassemblybench.core.process_lock import exclusive_process_lock
-from roboassemblybench.scripts import run_fabrica_plumbers_block_act_pipeline as pipeline_module
+from roboassemblybench.scripts import (
+    run_fabrica_plumbers_block_act_pipeline as pipeline_module,
+)
+from roboassemblybench.scripts.export_fabrica_plumbers_block_lerobot_v3 import (
+    _reconcile_conversion_manifest,
+)
 from roboassemblybench.scripts.run_fabrica_plumbers_block_act_pipeline import (
     Pipeline,
     _lock_is_held,
     _resolve_checkpoint,
     _validate_collection_manifest,
-)
-from roboassemblybench.scripts.export_fabrica_plumbers_block_lerobot_v3 import (
-    _reconcile_conversion_manifest,
 )
 
 

@@ -157,12 +157,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._policy_success_stable_steps = max(int(getattr(config, 'policy_success_stable_steps', 24)), 1)
         self._policy_success_stable_count = 0
         self._policy_auto_grasp = bool(getattr(config, 'policy_auto_grasp', True))
-        self._policy_grasp_closed_threshold = float(
-            getattr(config, 'policy_auto_grasp_closed_joint_threshold', 0.35)
-        )
-        self._policy_release_open_threshold = float(
-            getattr(config, 'policy_auto_release_open_joint_threshold', 0.12)
-        )
+        self._policy_grasp_closed_threshold = float(getattr(config, 'policy_auto_grasp_closed_joint_threshold', 0.35))
+        self._policy_release_open_threshold = float(getattr(config, 'policy_auto_release_open_joint_threshold', 0.12))
         self._policy_release_cooldown_until = {name: 0 for name in config.robot_names}
         self._policy_interaction_history = []
         self._policy_attach_specs = self._collect_policy_attach_specs(config.phase_specs)
@@ -536,7 +532,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if target_spec is None:
             return float(default_position_tolerance), default_orientation_tolerance
 
-        position_tolerance = target_spec.get('position_tolerance', target_spec.get('tolerance', default_position_tolerance))
+        position_tolerance = target_spec.get(
+            'position_tolerance', target_spec.get('tolerance', default_position_tolerance)
+        )
         orientation_tolerance = target_spec.get('orientation_tolerance', default_orientation_tolerance)
         if target_spec.get('position_only') or target_spec.get('ignore_orientation'):
             orientation_tolerance = None
@@ -546,7 +544,18 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _effective_robot_target_tolerance(cls, tolerance: float) -> float:
         return max(float(tolerance), cls._ROBOT_TARGET_TOLERANCE_FLOOR)
 
-    def _transition_details(self, *, reason: str, transition_type: str, from_phase: str, to_phase: str, from_phase_index: int, to_phase_index: int, status: str, detail: dict | None = None):
+    def _transition_details(
+        self,
+        *,
+        reason: str,
+        transition_type: str,
+        from_phase: str,
+        to_phase: str,
+        from_phase_index: int,
+        to_phase_index: int,
+        status: str,
+        detail: dict | None = None,
+    ):
         payload = {
             'from_phase': from_phase,
             'from_phase_index': from_phase_index,
@@ -562,7 +571,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             payload.update(copy.deepcopy(detail))
         return payload
 
-    def _set_phase(self, new_phase_index: int, *, reason: str = 'advance', transition_type: str = 'advance', status: str = 'running', detail: dict | None = None):
+    def _set_phase(
+        self,
+        new_phase_index: int,
+        *,
+        reason: str = 'advance',
+        transition_type: str = 'advance',
+        status: str = 'running',
+        detail: dict | None = None,
+    ):
         previous_phase = self.phase
         previous_index = self.phase_index
         self.phase_index = new_phase_index
@@ -752,7 +769,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         return joint_prim
 
     def _create_configured_joint(self, joint_spec: dict):
-        joint_name = str(joint_spec.get('name') or f"{joint_spec.get('parent', 'world')}_{joint_spec.get('child')}_joint")
+        joint_name = str(
+            joint_spec.get('name') or f"{joint_spec.get('parent', 'world')}_{joint_spec.get('child')}_joint"
+        )
         if joint_name in self._configured_joint_paths:
             return
 
@@ -769,7 +788,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         parent_pos, parent_quat = self._joint_local_pose(joint_spec, 'parent_frame')
         child_pos, child_quat = self._joint_local_pose(joint_spec, 'child_frame')
         joint_type = str(joint_spec.get('type', 'RevoluteJoint'))
-        joint_path = str(joint_spec.get('prim_path') or f"{child_body_path}/{joint_name}")
+        joint_path = str(joint_spec.get('prim_path') or f'{child_body_path}/{joint_name}')
         anchor_to_world = bool(joint_spec.get('anchor_to_world', False))
         if anchor_to_world and parent_name is not None:
             parent_body = self._resolve_object(str(parent_name))
@@ -954,12 +973,22 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return
 
         object_name = handoff_spec.get('object')
-        target_robot = handoff_spec.get('to_robot') or handoff_spec.get('target_robot') or handoff_spec.get('destination_robot') or handoff_spec.get('to')
+        target_robot = (
+            handoff_spec.get('to_robot')
+            or handoff_spec.get('target_robot')
+            or handoff_spec.get('destination_robot')
+            or handoff_spec.get('to')
+        )
         source_robot = handoff_spec.get('from_robot') or handoff_spec.get('source_robot') or handoff_spec.get('from')
         if object_name is None or target_robot is None:
             return
 
-        align_target = handoff_spec.get('target') or handoff_spec.get('handoff_target') or handoff_spec.get('align_to') or handoff_spec.get('pose_target')
+        align_target = (
+            handoff_spec.get('target')
+            or handoff_spec.get('handoff_target')
+            or handoff_spec.get('align_to')
+            or handoff_spec.get('pose_target')
+        )
         if align_target is not None:
             _, target_position, target_orientation, _ = self._resolve_target_pose_spec(align_target)
             if target_position is not None:
@@ -969,7 +998,11 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 self._set_object_pose(object_name, target_position, target_orientation)
 
         current_attachment = self._clear_attachment_state(object_name, enable_collision=False)
-        if current_attachment is not None and source_robot is not None and current_attachment.get('robot_name') != source_robot:
+        if (
+            current_attachment is not None
+            and source_robot is not None
+            and current_attachment.get('robot_name') != source_robot
+        ):
             source_robot = current_attachment.get('robot_name')
 
         attach_phase_spec = None
@@ -1059,7 +1092,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         target_index = self._resolve_transition_target(timeout_spec)
         if action in {'retry', 'reset'}:
             self.phase_recovery_count += 1
-            self._set_phase(self.phase_index, reason='timeout-retry', transition_type='retry', status='running', detail=timeout_record)
+            self._set_phase(
+                self.phase_index,
+                reason='timeout-retry',
+                transition_type='retry',
+                status='running',
+                detail=timeout_record,
+            )
             return True
 
         if action in {'recover', 'recovery'}:
@@ -1067,14 +1106,26 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 target_index = self._phase_index_for_name(self.cfg.phase_timeout_recovery_phase)
             if target_index is not None:
                 self.phase_recovery_count += 1
-                self._set_phase(target_index, reason='timeout-recovery', transition_type='recovery', status='running', detail=timeout_record)
+                self._set_phase(
+                    target_index,
+                    reason='timeout-recovery',
+                    transition_type='recovery',
+                    status='running',
+                    detail=timeout_record,
+                )
                 return True
 
         if action in {'advance', 'next'}:
             next_index = self.phase_index + 1 if self.phase_index + 1 < len(self.phase_specs) else None
             if next_index is not None:
                 self.phase_recovery_count += 1
-                self._set_phase(next_index, reason='timeout-advance', transition_type='timeout', status='running', detail=timeout_record)
+                self._set_phase(
+                    next_index,
+                    reason='timeout-advance',
+                    transition_type='timeout',
+                    status='running',
+                    detail=timeout_record,
+                )
                 return True
 
         # Some assembly phases, especially the final retreat, are bookkeeping after all objects are
@@ -1089,7 +1140,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._set_terminal_state('failed', reason='timeout-failure', status='failed', detail=timeout_record)
         return True
 
-    def _resolve_phase_target_pose(self, robot_name: str, robot_target_spec, default_position_tolerance: float, default_orientation_tolerance):
+    def _resolve_phase_target_pose(
+        self, robot_name: str, robot_target_spec, default_position_tolerance: float, default_orientation_tolerance
+    ):
         target_name, target_position, target_orientation, target_spec = self.resolve_robot_target_pose(
             robot_name,
             robot_target_spec,
@@ -1125,7 +1178,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'target_reached': target_reached,
         }
 
-    def _set_terminal_state(self, terminal_phase: str, *, reason: str, status: str, transition_type: str = 'terminal', detail: dict | None = None):
+    def _set_terminal_state(
+        self,
+        terminal_phase: str,
+        *,
+        reason: str,
+        status: str,
+        transition_type: str = 'terminal',
+        detail: dict | None = None,
+    ):
         previous_phase = self.phase
         previous_index = self.phase_index
         self.phase_index = len(self.phase_specs)
@@ -1307,9 +1368,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if prim_path.endswith(suffix):
                 return rigid_body
         try:
-            from internutopia.core.robot.rigid_body import IRigidBody
             from isaacsim.core.utils.prims import get_prim_at_path
             from pxr import Usd
+
+            from internutopia.core.robot.rigid_body import IRigidBody
         except Exception:
             return None
         try:
@@ -1409,8 +1471,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return probe
 
         probe_name = (
-            f"{self.name or 'dual_franka'}_"
-            f"{prim_path.split('/')[-1]}_to_{filter_prim_path.split('/')[-1]}_contact"
+            f"{self.name or 'dual_franka'}_" f"{prim_path.split('/')[-1]}_to_{filter_prim_path.split('/')[-1]}_contact"
         )
         try:
             probe = RigidPrim(
@@ -1509,9 +1570,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     }
 
         probe = self._get_contact_probe(prim_path, filter_prim_path)
-        probe_valid = bool(
-            probe is not None and getattr(probe, 'is_physics_handle_valid', lambda: False)()
-        )
+        probe_valid = bool(probe is not None and getattr(probe, 'is_physics_handle_valid', lambda: False)())
         if not probe_valid:
             return {
                 'force': 0.0,
@@ -1603,11 +1662,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if robotiq_side is None:
             return self._FINGER_CONTACT_SAMPLE_POINTS
         face_y = self._ROBOTIQ_INNER_FINGER_FACE_Y[robotiq_side]
-        return tuple(
-            (x, face_y, z)
-            for z in self._ROBOTIQ_INNER_FINGER_FACE_Z
-            for x in (0.0, -0.006, 0.006)
-        )
+        return tuple((x, face_y, z) for z in self._ROBOTIQ_INNER_FINGER_FACE_Z for x in (0.0, -0.006, 0.006))
 
     def _finger_contact_point(self, rigid_body, finger_name: str | None = None) -> np.ndarray | None:
         if rigid_body is None:
@@ -1850,8 +1905,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     if right_axis is None:
                         continue
                     if (
-                        float(left_axis.get('signed_coordinate', 0.0))
-                        * float(right_axis.get('signed_coordinate', 0.0))
+                        float(left_axis.get('signed_coordinate', 0.0)) * float(right_axis.get('signed_coordinate', 0.0))
                         >= 0.0
                     ):
                         continue
@@ -1868,8 +1922,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     if (
                         bool(left_axis.get('within_patch'))
                         and bool(right_axis.get('within_patch'))
-                        and float(max(left_axis['surface_gap'], right_axis['surface_gap']))
-                        <= caging_contact_distance
+                        and float(max(left_axis['surface_gap'], right_axis['surface_gap'])) <= caging_contact_distance
                     ):
                         caging_candidates.append(
                             {
@@ -1930,7 +1983,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'contact_box_scale': (half_extents * 2.0).tolist(),
         }
 
-    def _strict_physical_grasp_contact(self, object_name: str, contact_metrics: dict, attach_spec: dict | None = None) -> dict:
+    def _strict_physical_grasp_contact(  # noqa: C901
+        self, object_name: str, contact_metrics: dict, attach_spec: dict | None = None
+    ) -> dict:
         attach_spec = attach_spec or {}
         left_finger_metrics = contact_metrics.get('left_finger') or {}
         right_finger_metrics = contact_metrics.get('right_finger') or {}
@@ -1969,11 +2024,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         configured_axes = attach_spec.get('physical_contact_axes')
         if configured_axes is None:
             attach_mode = self._attachment_mode(attach_spec)
-            allowed_axes = (
-                ('x', 'y')
-                if attach_mode in self._PHYSICAL_GRASP_ATTACHMENT_MODES
-                else ('x', 'y', 'z')
-            )
+            allowed_axes = ('x', 'y') if attach_mode in self._PHYSICAL_GRASP_ATTACHMENT_MODES else ('x', 'y', 'z')
         elif isinstance(configured_axes, str):
             allowed_axes = tuple(axis.strip().lower() for axis in configured_axes.split(',') if axis.strip())
         else:
@@ -2068,9 +2119,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                         }
                     )
         strict_sample_pair = (
-            min(strict_sample_pairs, key=lambda item: item['combined_surface_gap'])
-            if strict_sample_pairs
-            else None
+            min(strict_sample_pairs, key=lambda item: item['combined_surface_gap']) if strict_sample_pairs else None
         )
         if strict_sample_pair is not None:
             pinch_axis = strict_sample_pair['axis']
@@ -2084,8 +2133,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         )
         interior_contact_ready = True
         if interior_scale is not None:
+
             def _finger_inside_contact_patch(metric: dict) -> bool:
-                local_point = ((metric.get('local_contact') or {}).get('local_point'))
+                local_point = (metric.get('local_contact') or {}).get('local_point')
                 if local_point is None or contact_box_scale.size != 3 or pinch_axis not in axis_indices:
                     return False
                 local_point = np.asarray(local_point, dtype=float).reshape(-1)
@@ -2114,18 +2164,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         )
         require_dual_force_contact = bool(attach_spec.get('require_dual_force_contact', False))
         force_supported_geometric_contact = bool(
-            any_force_contact
-            and interior_contact_ready
-            and (strict_pinch_contact or strict_dual_finger_contact)
+            any_force_contact and interior_contact_ready and (strict_pinch_contact or strict_dual_finger_contact)
         )
         physical_contact_ready = bool(
-            interior_contact_ready
-            and (dual_force_contact or strict_pinch_contact or strict_dual_finger_contact)
+            interior_contact_ready and (dual_force_contact or strict_pinch_contact or strict_dual_finger_contact)
         )
         if require_force_contact:
             physical_contact_ready = bool(
-                dual_force_contact
-                or (not require_dual_force_contact and force_supported_geometric_contact)
+                dual_force_contact or (not require_dual_force_contact and force_supported_geometric_contact)
             )
 
         return {
@@ -2178,10 +2224,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             surface_gap = axis_contact.get('surface_gap')
             if surface_gap is None:
                 return False
-            return bool(
-                bool(axis_contact.get('contact'))
-                and float(surface_gap) <= strict_surface_gap
-            )
+            return bool(bool(axis_contact.get('contact')) and float(surface_gap) <= strict_surface_gap)
 
         def _opposite_sides(axis: str) -> bool:
             left_axis = (((left_finger_metrics or {}).get('local_contact') or {}).get('axes') or {}).get(axis)
@@ -2216,7 +2259,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def _attachment_joint_path(self, object_name: str) -> str:
         object_rigid_body = self._resolve_object(object_name)
-        return f"{object_rigid_body.unwrap().prim_path}/assembly_attachment_joint"
+        return f'{object_rigid_body.unwrap().prim_path}/assembly_attachment_joint'
 
     def _remove_attachment_joint(self, object_name: str):
         from omni.isaac.core.utils.prims import delete_prim
@@ -2256,9 +2299,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 or not np.isfinite(locked_direction_norm)
                 or locked_direction_norm <= 1e-9
             ):
-                raise ValueError(
-                    'locked_linear_world_direction must be a finite non-zero 3-vector.'
-                )
+                raise ValueError('locked_linear_world_direction must be a finite non-zero 3-vector.')
             attach_spec['compliant_hold_locked_linear_world_direction'] = (
                 locked_direction / locked_direction_norm
             ).tolist()
@@ -2290,9 +2331,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             replacement_path = self._create_attachment_joint(str(object_name), str(robot_name))
             attachment_state['joint_path'] = replacement_path
             return False
-        filter_gripper_collisions = bool(
-            attach_spec.get('compliant_hold_filter_gripper_collisions', True)
-        )
+        filter_gripper_collisions = bool(attach_spec.get('compliant_hold_filter_gripper_collisions', True))
         if filter_gripper_collisions and not filtered_paths:
             filtered_paths = self._set_attachment_gripper_collision_filter(
                 str(object_name),
@@ -2361,9 +2400,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         try:
             from pxr import UsdPhysics
 
-            locked_linear_world_direction = attach_spec.get(
-                'compliant_hold_locked_linear_world_direction'
-            )
+            locked_linear_world_direction = attach_spec.get('compliant_hold_locked_linear_world_direction')
             if locked_linear_world_direction is None:
                 parent_frame_orientation = np.array(
                     [1.0, 0.0, 0.0, 0.0],
@@ -2374,9 +2411,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     dtype=float,
                 )
             else:
-                joint_world_orientation = self._quat_align_local_z(
-                    locked_linear_world_direction
-                )
+                joint_world_orientation = self._quat_align_local_z(locked_linear_world_direction)
                 parent_frame_orientation = normalize_quat(
                     quat_multiply(
                         quat_conjugate(object_orientation),
@@ -2423,8 +2458,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             for drive_name in ('transX', 'transY', 'transZ'):
                 axis_limit = (
                     locked_linear_limit
-                    if locked_linear_world_direction is not None
-                    and drive_name == 'transZ'
+                    if locked_linear_world_direction is not None and drive_name == 'transZ'
                     else linear_limit
                 )
                 limit_api = UsdPhysics.LimitAPI.Apply(joint_prim, drive_name)
@@ -2444,8 +2478,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 )
         except Exception as exc:
             print(
-                '[ur5e-insertion-compliance-error] '
-                f'object={object_name} robot={robot_name} error={exc!r}',
+                '[ur5e-insertion-compliance-error] ' f'object={object_name} robot={robot_name} error={exc!r}',
                 flush=True,
             )
             return None
@@ -2470,12 +2503,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _quat_align_local_z(world_direction) -> np.ndarray:
         direction = np.asarray(world_direction, dtype=float)
         norm = float(np.linalg.norm(direction))
-        if (
-            direction.shape != (3,)
-            or not np.all(np.isfinite(direction))
-            or not np.isfinite(norm)
-            or norm <= 1e-9
-        ):
+        if direction.shape != (3,) or not np.all(np.isfinite(direction)) or not np.isfinite(norm) or norm <= 1e-9:
             raise ValueError('Joint alignment direction must be a finite non-zero 3-vector.')
         direction = direction / norm
         local_z = np.asarray([0.0, 0.0, 1.0], dtype=float)
@@ -2520,9 +2548,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             0.0,
         )
 
-        minimum_linear_force = float(
-            attach_spec.get('compliant_hold_linear_max_force', 20.0)
-        )
+        minimum_linear_force = float(attach_spec.get('compliant_hold_linear_max_force', 20.0))
         linear_force_cap = max(
             float(attach_spec.get('compliant_hold_linear_force_cap', 120.0)),
             minimum_linear_force,
@@ -2540,9 +2566,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             2.0 * damping_ratio * float(np.sqrt(linear_stiffness * mass)),
         )
 
-        minimum_angular_force = float(
-            attach_spec.get('compliant_hold_angular_max_force', 2.0)
-        )
+        minimum_angular_force = float(attach_spec.get('compliant_hold_angular_max_force', 2.0))
         angular_force_cap = max(
             float(attach_spec.get('compliant_hold_angular_force_cap', 12.0)),
             minimum_angular_force,
@@ -2561,9 +2585,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         rotational_inertia = max(mass * lever_arm * lever_arm, 1e-4)
         angular_damping = max(
             float(attach_spec.get('compliant_hold_angular_damping', 0.2)),
-            2.0
-            * damping_ratio
-            * float(np.sqrt(angular_stiffness * rotational_inertia)),
+            2.0 * damping_ratio * float(np.sqrt(angular_stiffness * rotational_inertia)),
         )
         return {
             'linear_limit': linear_limit,
@@ -2703,9 +2725,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         hold_phase: bool = False,
         within_grace: bool = False,
     ) -> float:
-        base_threshold = float(
-            attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD)
-        )
+        base_threshold = float(attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD))
         default_margin = 0.004 if hold_phase else 0.002
         base_margin = float(attach_spec.get('gripper_closed_margin', default_margin))
         opening_limit = base_threshold + base_margin
@@ -2806,10 +2826,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if bool(attach_spec.get('allow_caging_contact_for_physical_grasp', False)):
             release_contact_ready = bool(
                 release_contact_ready
-                or (
-                    contact_metrics.get('contact_ready')
-                    and contact_metrics.get('caging_axis') in {'x', 'y'}
-                )
+                or (contact_metrics.get('contact_ready') and contact_metrics.get('caging_axis') in {'x', 'y'})
             )
         if bool(attach_spec.get('release_require_contact_clear', False)) and release_contact_ready:
             return False
@@ -3036,9 +3053,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 max_position_norm=float(max_position_norm),
             )
 
-        max_reference_distance = self._object_state_sanity_config_float(
-            'object_state_sanity_max_reference_distance'
-        )
+        max_reference_distance = self._object_state_sanity_config_float('object_state_sanity_max_reference_distance')
         if include_reference_bounds and max_reference_distance is not None:
             reference_positions = self._object_state_reference_positions(object_name)
             if reference_positions:
@@ -3286,7 +3301,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return None
         return str(gripper_command).lower()
 
-    def _default_robot_orientation_tolerance(self, phase_spec: dict, robot_name: str, robot_target_spec) -> float | None:
+    def _default_robot_orientation_tolerance(
+        self, phase_spec: dict, robot_name: str, robot_target_spec
+    ) -> float | None:
         try:
             target_name, _, target_orientation, _ = self._resolve_target_pose_spec(robot_target_spec)
         except Exception:
@@ -3328,7 +3345,6 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         )
 
     def _resolve_attach_target_info(self, phase_spec: dict, attach_spec: dict):
-        object_name = attach_spec['object']
         robot_name = attach_spec['robot']
         target_like = attach_spec.get('target') or phase_spec.get('robot_targets', {}).get(robot_name)
         if target_like is not None:
@@ -3378,7 +3394,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             return self._current_relative_pose(object_name, robot_name)
         return None
 
-    def _attach_object(self, object_name: str, robot_name: str, *, phase_spec: dict | None = None, attach_spec: dict | None = None):
+    def _attach_object(
+        self, object_name: str, robot_name: str, *, phase_spec: dict | None = None, attach_spec: dict | None = None
+    ):
         rigid_body = self._resolve_object(object_name)
         object_pose = rigid_body.get_pose()
         robot_pose = self._get_robot_task_pose(robot_name)
@@ -3462,8 +3480,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             )
         )
         if uses_joint_attachment and (
-            force_symbolic_attachment
-            or (not joint_contact_ready and not allow_noncontact_joint_attachment)
+            force_symbolic_attachment or (not joint_contact_ready and not allow_noncontact_joint_attachment)
         ):
             # A fixed joint created from an off-gripper pose behaves like a hard
             # constraint pulling the object through space.  Use the existing
@@ -3502,9 +3519,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             self._locked_targets.pop(object_name, None)
             self._frozen_lock_poses.pop(object_name, None)
             return
-        collision_disabled = bool(
-            attach_spec.get('disable_collision_on_attach', requested_joint_attachment)
-        )
+        collision_disabled = bool(attach_spec.get('disable_collision_on_attach', requested_joint_attachment))
         if collision_disabled:
             self._set_object_collision(object_name, False)
         filtered_gripper_collision_paths = []
@@ -3633,9 +3648,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             target_position=np.zeros(3, dtype=float),
             target_orientation=anchor_orientation,
         )
-        max_position_slip = float(
-            attach_spec.get('hold_position_slip_tolerance', self._PHYSICAL_HOLD_POSITION_SLIP)
-        )
+        max_position_slip = float(attach_spec.get('hold_position_slip_tolerance', self._PHYSICAL_HOLD_POSITION_SLIP))
         max_orientation_slip = float(
             attach_spec.get('hold_orientation_slip_tolerance', self._PHYSICAL_HOLD_ORIENTATION_SLIP)
         )
@@ -3660,8 +3673,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             # Broad parts can remain physically carried by the gripper jaws even
             # when the tighter surface-gap probe flickers during the initial lift.
             contact_ready = bool(
-                contact_metrics.get('contact_ready')
-                and contact_metrics.get('caging_axis') in {'x', 'y'}
+                contact_metrics.get('contact_ready') and contact_metrics.get('caging_axis') in {'x', 'y'}
             )
         return bool(
             position_slip <= max_position_slip
@@ -3757,11 +3769,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
         robot_name = str(attach_spec['robot'])
         local_skill_spec = phase_spec.get('local_skill') or {}
-        local_skill_name = (
-            local_skill_spec.get('name')
-            if isinstance(local_skill_spec, dict)
-            else None
-        )
+        local_skill_name = local_skill_spec.get('name') if isinstance(local_skill_spec, dict) else None
         if local_skill_name is None:
             detail['reason'] = 'missing_local_skill'
             return detail
@@ -3817,11 +3825,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             0.0,
         )
         try:
-            allowed_position_error = (
-                float(position_tolerance)
-                + refinement_distance
-                + tracking_tolerance
-            )
+            allowed_position_error = float(position_tolerance) + refinement_distance + tracking_tolerance
             position_ready = bool(
                 position_error is not None
                 and np.isfinite(float(position_error))
@@ -3839,10 +3843,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         orientation_ready = bool(
             orientation_tolerance is None
             or orientation_error is None
-            or (
-                np.isfinite(float(orientation_error))
-                and float(orientation_error) <= float(orientation_tolerance)
-            )
+            or (np.isfinite(float(orientation_error)) and float(orientation_error) <= float(orientation_tolerance))
         )
         detail.update(
             {
@@ -3860,7 +3861,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         )
         return detail
 
-    def _attach_ready(self, phase_spec: dict, attach_spec: dict) -> bool:
+    def _attach_ready(self, phase_spec: dict, attach_spec: dict) -> bool:  # noqa: C901
         object_name = attach_spec['object']
         robot_name = attach_spec['robot']
         attachment_state = self._attachments.get(object_name)
@@ -3961,9 +3962,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     self._maybe_write_attach_debug(debug_payload)
                     return False
         slender_attach = self._is_slender_attach_object(object_name, attach_spec=attach_spec)
-        allow_top_contact_fallback = bool(
-            attach_spec.get('allow_top_contact_fallback', not slender_attach)
-        )
+        allow_top_contact_fallback = bool(attach_spec.get('allow_top_contact_fallback', not slender_attach))
         attach_mode = str(attach_spec.get('attachment_mode', 'fixed_joint')).lower()
         uses_physical_grasp = attach_mode in self._PHYSICAL_GRASP_ATTACHMENT_MODES
         default_require_target_reached = slender_attach or attach_mode in {
@@ -3974,9 +3973,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'contact_physical_grasp',
         }
         if uses_physical_grasp:
-            default_require_target_reached = bool(
-                attach_spec.get('require_target_reached_for_attach', False)
-            )
+            default_require_target_reached = bool(attach_spec.get('require_target_reached_for_attach', False))
         require_target_reached = bool(
             attach_spec.get('require_target_reached_for_attach', default_require_target_reached)
         )
@@ -4010,9 +4007,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         )
         debug_payload['contact_metrics'] = copy.deepcopy(contact_metrics)
         debug_payload['strict_contact'] = copy.deepcopy(strict_contact)
-        debug_payload['strict_contact_target_refinement'] = copy.deepcopy(
-            target_refinement
-        )
+        debug_payload['strict_contact_target_refinement'] = copy.deepcopy(target_refinement)
         gripper_opening_limit = self._gripper_opening_limit(
             object_name,
             attach_spec,
@@ -4020,9 +4015,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             hold_phase=False,
             within_grace=False,
         )
-        gripper_closed_threshold = float(
-            attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD)
-        )
+        gripper_closed_threshold = float(attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD))
         debug_payload['gripper_opening_limit'] = gripper_opening_limit
         if gripper_opening is not None and gripper_opening > gripper_opening_limit:
             debug_payload['blocked_by'] = 'gripper_open'
@@ -4137,18 +4130,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             debug_payload['blocked_by'] = 'contact'
             self._maybe_write_attach_debug(debug_payload)
             return False
-        effective_target_reached = bool(
-            target_info['target_reached'] or target_refinement.get('ready')
-        )
+        effective_target_reached = bool(target_info['target_reached'] or target_refinement.get('ready'))
         debug_payload['effective_target_reached'] = effective_target_reached
         if require_target_reached and not effective_target_reached:
             debug_payload['blocked_by'] = 'target'
             self._maybe_write_attach_debug(debug_payload)
             return False
-        attach_ready = bool(
-            proximity_metrics['within_proximity']
-            and (effective_target_reached or contact_ready)
-        )
+        attach_ready = bool(proximity_metrics['within_proximity'] and (effective_target_reached or contact_ready))
         debug_payload['attach_ready'] = attach_ready
         if not attach_ready:
             debug_payload['blocked_by'] = 'proximity_or_target'
@@ -4241,7 +4229,12 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if not handoff_spec:
             return True
         object_name = handoff_spec.get('object')
-        target_robot = handoff_spec.get('to_robot') or handoff_spec.get('target_robot') or handoff_spec.get('destination_robot') or handoff_spec.get('to')
+        target_robot = (
+            handoff_spec.get('to_robot')
+            or handoff_spec.get('target_robot')
+            or handoff_spec.get('destination_robot')
+            or handoff_spec.get('to')
+        )
         source_robot = handoff_spec.get('from_robot') or handoff_spec.get('source_robot') or handoff_spec.get('from')
         if object_name is None or target_robot is None:
             return True
@@ -4354,7 +4347,12 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if not handoff_spec:
                 continue
             object_name = handoff_spec.get('object')
-            target_robot = handoff_spec.get('to_robot') or handoff_spec.get('target_robot') or handoff_spec.get('destination_robot') or handoff_spec.get('to')
+            target_robot = (
+                handoff_spec.get('to_robot')
+                or handoff_spec.get('target_robot')
+                or handoff_spec.get('destination_robot')
+                or handoff_spec.get('to')
+            )
             if object_name is None or target_robot is None:
                 continue
             attachment_state = self._attachments.get(object_name)
@@ -4521,7 +4519,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 return False
             position_tolerance, orientation_tolerance = self._target_tolerances(
                 target_spec=target_spec,
-                default_position_tolerance=float(object_target.get('tolerance', object_target.get('position_tolerance', tolerance))),
+                default_position_tolerance=float(
+                    object_target.get('tolerance', object_target.get('position_tolerance', tolerance))
+                ),
                 default_orientation_tolerance=object_target.get('orientation_tolerance', orientation_tolerance),
             )
             if not pose_within_tolerance(
@@ -4551,7 +4551,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 robot_name = lift_spec.get('robot')
                 if robot_name is not None and attachment_state.get('robot_name') != robot_name:
                     return False
-                if attachment_state.get('mode') in {'physical_hold', 'pure_physical_grasp'} and not self._physical_hold_valid(
+                if attachment_state.get('mode') in {
+                    'physical_hold',
+                    'pure_physical_grasp',
+                } and not self._physical_hold_valid(
                     object_name,
                     attachment_state,
                 ):
@@ -4664,8 +4667,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     position_drifts.append(
                         float(
                             np.linalg.norm(
-                                np.asarray(sample_position, dtype=float)
-                                - np.asarray(end_position, dtype=float)
+                                np.asarray(sample_position, dtype=float) - np.asarray(end_position, dtype=float)
                             )
                         )
                     )
@@ -4679,10 +4681,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 pose_stability_position_drift = max(position_drifts)
                 pose_stability_orientation_drift = max(orientation_drifts)
                 pose_stable_override = bool(
-                    pose_stability_position_drift
-                    <= float(pose_stability_position_tolerance)
-                    and pose_stability_orientation_drift
-                    <= float(pose_stability_orientation_tolerance)
+                    pose_stability_position_drift <= float(pose_stability_position_tolerance)
+                    and pose_stability_orientation_drift <= float(pose_stability_orientation_tolerance)
                 )
         is_static = bool(
             (linear_speed <= float(linear_threshold) and angular_speed <= float(angular_threshold))
@@ -4753,8 +4753,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if not conditions:
                 return False
             return any(
-                self._evaluate_advance_condition(phase_spec=phase_spec, advance=condition)
-                for condition in conditions
+                self._evaluate_advance_condition(phase_spec=phase_spec, advance=condition) for condition in conditions
             )
         if advance_type == 'timer':
             return True
@@ -4904,7 +4903,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             object_name = success_criterion['object']
             target_name = success_criterion.get('target') or success_criterion.get('target_name')
             target_like = success_criterion.get('target_pose', target_name)
-            position_tolerance = float(success_criterion.get('position_tolerance', success_criterion.get('tolerance', 0.03)))
+            position_tolerance = float(
+                success_criterion.get('position_tolerance', success_criterion.get('tolerance', 0.03))
+            )
             orientation_tolerance = success_criterion.get('orientation_tolerance')
             object_position, object_orientation = self._resolve_object(object_name).get_pose()
             _, target_position, target_orientation, target_spec = self._resolve_target_pose_spec(target_like)
@@ -4956,7 +4957,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             object_name = success_criterion['object']
             target_name = success_criterion.get('target') or success_criterion.get('target_name')
             target_like = success_criterion.get('target_pose', target_name)
-            position_tolerance = float(success_criterion.get('position_tolerance', success_criterion.get('tolerance', 0.03)))
+            position_tolerance = float(
+                success_criterion.get('position_tolerance', success_criterion.get('tolerance', 0.03))
+            )
             orientation_tolerance = success_criterion.get('orientation_tolerance')
             object_position, object_orientation = self._resolve_object(object_name).get_pose()
             _, target_position, target_orientation, target_spec = self._resolve_target_pose_spec(target_like)
@@ -5016,15 +5019,17 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     'position_error': position_error,
                     'position_tolerance': position_tolerance,
                     'orientation_error': orientation_error,
-                'orientation_tolerance': orientation_tolerance,
-                'pose_passed': pose_passed,
-                'released_passed': released_passed,
-                'attached_passed': attached_passed,
-                'static_metrics': static_metrics,
-                'static_passed': static_passed,
-                'contact_passed': contact_passed,
-                'passed': bool(pose_passed and released_passed and attached_passed and static_passed and contact_passed),
-            }
+                    'orientation_tolerance': orientation_tolerance,
+                    'pose_passed': pose_passed,
+                    'released_passed': released_passed,
+                    'attached_passed': attached_passed,
+                    'static_metrics': static_metrics,
+                    'static_passed': static_passed,
+                    'contact_passed': contact_passed,
+                    'passed': bool(
+                        pose_passed and released_passed and attached_passed and static_passed and contact_passed
+                    ),
+                }
             )
         return diagnostics
 
@@ -5068,8 +5073,12 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'orientation': np.asarray(current_orientation).tolist(),
                 'gripper_opening': self._get_robot_gripper_opening(robot_name),
                 'target_name': target_info['target_name'],
-                'task_target': None if target_info['target_position'] is None else np.asarray(target_info['target_position']).tolist(),
-                'task_target_orientation': None if target_info['target_orientation'] is None else np.asarray(target_info['target_orientation']).tolist(),
+                'task_target': None
+                if target_info['target_position'] is None
+                else np.asarray(target_info['target_position']).tolist(),
+                'task_target_orientation': None
+                if target_info['target_orientation'] is None
+                else np.asarray(target_info['target_orientation']).tolist(),
                 'position_error': target_info['position_error'],
                 'orientation_error': target_info['orientation_error'],
                 'position_tolerance': target_info['position_tolerance'],
@@ -5300,11 +5309,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def calculate_metrics(self) -> dict:
         criteria_passed = bool(self._check_success())
-        reported_success = bool(
-            self.success
-            if self.policy_evaluation_mode
-            else self.success or criteria_passed
-        )
+        reported_success = bool(self.success if self.policy_evaluation_mode else self.success or criteria_passed)
         return {
             'recipe': self.cfg.recipe,
             'seed': self.cfg.seed,

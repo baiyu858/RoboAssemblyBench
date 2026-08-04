@@ -1,18 +1,22 @@
-import socket
 import json
+import socket
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from roboassemblybench.policies.act_rpc import receive_message, send_message
-from roboassemblybench.scripts.aggregate_fabrica_plumbers_block_act_eval import aggregate_evaluation
+from roboassemblybench.scripts.aggregate_fabrica_plumbers_block_act_eval import (
+    aggregate_evaluation,
+)
 from roboassemblybench.scripts.evaluate_fabrica_plumbers_block_act import (
     _env_action,
     apply_max_steps_override,
     sanitize_absolute_cartesian_action,
 )
-from roboassemblybench.scripts.serve_fabrica_plumbers_block_act import _portable_action_payload
+from roboassemblybench.scripts.serve_fabrica_plumbers_block_act import (
+    _portable_action_payload,
+)
 
 
 def _state() -> np.ndarray:

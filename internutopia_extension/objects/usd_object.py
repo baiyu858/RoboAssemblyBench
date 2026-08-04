@@ -36,7 +36,7 @@ class UsdObject(BaseObject):
             raise FileNotFoundError('Cannot resolve Isaac Sim assets root for object USD path: ' + path)
         return os.path.abspath(path)
 
-    def set_up_to_scene(self, scene: IScene):
+    def set_up_to_scene(self, scene: IScene):  # noqa: C901
         from omni.isaac.core.prims import RigidPrim
         from omni.isaac.core.prims.xform_prim import XFormPrim
         from omni.isaac.core.utils.prims import is_prim_path_valid
@@ -248,9 +248,7 @@ class UsdObject(BaseObject):
                     visible=visible,
                 )
                 if collider and (
-                    static_friction is not None
-                    or dynamic_friction is not None
-                    or restitution is not None
+                    static_friction is not None or dynamic_friction is not None or restitution is not None
                 ):
                     try:
                         from isaacsim.core.api.materials import PhysicsMaterial

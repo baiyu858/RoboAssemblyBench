@@ -3,15 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any
 
-
-DEFAULT_DATASET_DIR = Path(
-    'outputs/fabrica_plumbers_block_ur5e_right_base_prepare_2k_lerobot_v3'
-)
+DEFAULT_DATASET_DIR = Path('outputs/fabrica_plumbers_block_ur5e_right_base_prepare_2k_lerobot_v3')
 DEFAULT_LAYOUT_SEEDS = [12, 94419, 44288, 25621]
 DEFAULT_CAMERA_KEY = 'observation.images.front'
 
@@ -57,12 +54,9 @@ def select_diverse_episodes(
         )
         if len(candidates) < episodes_per_layout:
             raise ValueError(
-                f'Layout seed {layout_seed} has {len(candidates)} episodes; '
-                f'{episodes_per_layout} are required.'
+                f'Layout seed {layout_seed} has {len(candidates)} episodes; ' f'{episodes_per_layout} are required.'
             )
-        for quantile_rank, candidate_index in enumerate(
-            _quantile_indices(len(candidates), episodes_per_layout)
-        ):
+        for quantile_rank, candidate_index in enumerate(_quantile_indices(len(candidates), episodes_per_layout)):
             candidate = dict(candidates[candidate_index])
             candidate['selection'] = {
                 'layout_seed': int(layout_seed),
@@ -109,13 +103,9 @@ def _tile_filter(
     parts_x, parts_y = _translation_mm(episode, 'start_parts')
     base_x, base_y = _translation_mm(episode, 'assembly_base')
     line_one = (
-        f"ep {int(episode['episode_index']):04d}  seed {int(episode['seed'])}  "
-        f"layout {int(episode['layout_seed'])}"
+        f"ep {int(episode['episode_index']):04d}  seed {int(episode['seed'])}  " f"layout {int(episode['layout_seed'])}"
     )
-    line_two = (
-        f'parts {parts_x:+.1f} {parts_y:+.1f} mm  '
-        f'base {base_x:+.1f} {base_y:+.1f} mm'
-    )
+    line_two = f'parts {parts_x:+.1f} {parts_y:+.1f} mm  ' f'base {base_x:+.1f} {base_y:+.1f} mm'
     return (
         f'[{input_index}:v]'
         f'setpts={timestamp_scale:.12f}*(PTS-STARTPTS),'
@@ -180,13 +170,10 @@ def build_ffmpeg_command(
         )
 
     layout = '|'.join(
-        f'{(index % columns) * tile_width}_{(index // columns) * tile_height}'
-        for index in range(len(selected))
+        f'{(index % columns) * tile_width}_{(index // columns) * tile_height}' for index in range(len(selected))
     )
     inputs = ''.join(f'[tile{index}]' for index in range(len(selected)))
-    filters.append(
-        f'{inputs}xstack=inputs={len(selected)}:layout={layout}:fill=black,format=yuv420p[outv]'
-    )
+    filters.append(f'{inputs}xstack=inputs={len(selected)}:layout={layout}:fill=black,format=yuv420p[outv]')
     command.extend(
         [
             '-filter_complex_threads',
@@ -213,9 +200,7 @@ def build_ffmpeg_command(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description='Create a stratified MP4 mosaic from the Fabrica LeRobot v3 dataset.'
-    )
+    parser = argparse.ArgumentParser(description='Create a stratified MP4 mosaic from the Fabrica LeRobot v3 dataset.')
     parser.add_argument('--dataset-dir', type=Path, default=DEFAULT_DATASET_DIR)
     parser.add_argument('--output', type=Path, default=None)
     parser.add_argument('--layout-seeds', type=int, nargs='+', default=DEFAULT_LAYOUT_SEEDS)

@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import json
 import os
-import signal
 import shutil
+import signal
 import subprocess
-import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from roboassemblybench.core.domain_randomization import apply_domain_randomization
+from roboassemblybench.core.process_lock import exclusive_process_lock
 from roboassemblybench.datasets.cartesian_episode import (
     ACTION_NAMES,
     ACTION_SEMANTICS,
@@ -21,10 +22,7 @@ from roboassemblybench.datasets.cartesian_episode import (
     STATE_NAMES,
     cartesian_trajectory_errors,
 )
-from roboassemblybench.core.domain_randomization import apply_domain_randomization
-from roboassemblybench.core.process_lock import exclusive_process_lock
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e_right_base_prepare_2k_raw_v3'
@@ -336,10 +334,7 @@ def _select_qualification_seeds(
     matrix = np.stack([feature_by_seed[seed] for seed in candidates])
     span = np.ptp(matrix, axis=0)
     span[span < 1e-12] = 1.0
-    normalized = {
-        seed: (feature_by_seed[seed] - np.min(matrix, axis=0)) / span
-        for seed in candidates
-    }
+    normalized = {seed: (feature_by_seed[seed] - np.min(matrix, axis=0)) / span for seed in candidates}
 
     selected = []
     for seed in required_seeds:
@@ -468,9 +463,7 @@ def _ensure_recipe_qualified(args, output_dir: Path) -> dict[str, Any]:
         if bool(manifest.get('passed', False)):
             _write_qualification_status(output_dir, manifest)
             return manifest
-        failed_results = [
-            item for item in manifest.get('results', []) if not bool(item.get('passed', False))
-        ]
+        failed_results = [item for item in manifest.get('results', []) if not bool(item.get('passed', False))]
         resource_failures = [item for item in failed_results if item.get('resource_abort') is not None]
         if resource_failures:
             manifest.setdefault('resource_aborts', []).extend(resource_failures)
@@ -702,10 +695,7 @@ def collect(args) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     qualification = _ensure_recipe_qualified(args, output_dir)
     args.qualification_manifest = str(
-        output_dir
-        / 'qualification'
-        / str(args.recipe_fingerprint)
-        / QUALIFICATION_MANIFEST_NAME
+        output_dir / 'qualification' / str(args.recipe_fingerprint) / QUALIFICATION_MANIFEST_NAME
     )
     if bool(qualification.get('skipped', False)):
         args.qualification_manifest = ''
@@ -721,9 +711,7 @@ def collect(args) -> dict[str, Any]:
         manifest = _load_json(manifest_path)
         recorded_fingerprint = str(manifest.get('recipe_fingerprint') or '')
         if recorded_fingerprint and recorded_fingerprint != expected_recipe_fingerprint:
-            raise RuntimeError(
-                'Collection manifest recipe fingerprint does not match the current resolved recipe.'
-            )
+            raise RuntimeError('Collection manifest recipe fingerprint does not match the current resolved recipe.')
         recorded_layout_seeds = [int(seed) for seed in manifest.get('collection_layout_seeds') or []]
         if recorded_layout_seeds != list(args.layout_seeds):
             raise RuntimeError(
@@ -796,9 +784,7 @@ def collect(args) -> dict[str, Any]:
         batch_record['returncode'] = returncode
         batch_record['finished_at_unix'] = time.time()
         batch_record['status'] = (
-            'resource_aborted'
-            if resource_abort is not None
-            else ('completed' if returncode == 0 else 'worker_failed')
+            'resource_aborted' if resource_abort is not None else ('completed' if returncode == 0 else 'worker_failed')
         )
         if resource_abort is not None:
             batch_record['resource_abort'] = resource_abort
@@ -838,7 +824,7 @@ def collect(args) -> dict[str, Any]:
         manifest['num_failed_attempts'] = len(manifest['failed_attempts'])
         _write_json_atomic(manifest_path, manifest)
         print(
-            f"Finished {batch_name}: valid={len(valid_seeds)}/{len(seeds)}, total="
+            f'Finished {batch_name}: valid={len(valid_seeds)}/{len(seeds)}, total='
             f"{len(manifest['successful_episodes'])}/{args.num_episodes}",
             flush=True,
         )
@@ -915,9 +901,7 @@ def main() -> None:
     if args.qualification_seed_count is None:
         args.qualification_seed_count = int(qualification_spec.get('seed_count', 4))
     if args.qualification_required_seeds is None:
-        args.qualification_required_seeds = [
-            int(seed) for seed in qualification_spec.get('required_seeds', [17])
-        ]
+        args.qualification_required_seeds = [int(seed) for seed in qualification_spec.get('required_seeds', [17])]
     if args.layout_seeds is None:
         args.layout_seeds = [int(seed) for seed in collection_spec.get('layout_seeds', [])]
     if not args.layout_seeds:

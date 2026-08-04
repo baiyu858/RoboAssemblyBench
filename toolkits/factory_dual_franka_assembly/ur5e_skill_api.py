@@ -4,10 +4,8 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-
 UR5E_ASSEMBLY_ADAPTER = (
-    'toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:'
-    'UR5eAssemblyAtomicSkillAdapter'
+    'toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:' 'UR5eAssemblyAtomicSkillAdapter'
 )
 
 
@@ -107,11 +105,7 @@ class UR5eAssemblySkillAPI:
             ('object', 'target_object_target'),
         ),
     )
-    _by_name = {
-        alias: definition
-        for definition in definitions
-        for alias in (definition.name, definition.runtime_name)
-    }
+    _by_name = {alias: definition for definition in definitions for alias in (definition.name, definition.runtime_name)}
     _motion_defaults = {
         'cartesian_servo': True,
         'cartesian_position_step': 0.015,
