@@ -9,8 +9,10 @@ from toolkits.factory_dual_franka_assembly.convert_dataset import (
     load_episode_payloads,
     split_entries,
 )
+from toolkits.factory_dual_franka_assembly.demo_policy import (
+    DualFrankaAssemblyDemoPolicy,
+)
 from toolkits.factory_dual_franka_assembly.export_lerobot import export_lerobot_dataset
-from toolkits.factory_dual_franka_assembly.demo_policy import DualFrankaAssemblyDemoPolicy
 from toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills import (
     UR5ePlumbersBlockAtomicSkillAdapter,
 )
@@ -28,7 +30,7 @@ def test_idle_arm_clearance_accounts_for_raised_robot_base_and_gripper_envelope(
             robot_metadata=[
                 {'name': 'franka_left', 'position': [0.50, 0.30, 0.998]},
                 {'name': 'franka_right', 'position': [0.58, -0.80, 0.998]},
-            ]
+            ],
         ),
         robots={},
         is_local_skill_complete=lambda robot_name, skill_name: False,
@@ -61,9 +63,10 @@ def test_idle_arm_clearance_accounts_for_raised_robot_base_and_gripper_envelope(
 
     assert clearance_pose is not None
     assert clearance_pose['position'][2] > tracked_robots['franka_right']['position'][2]
-    assert np.linalg.norm(
-        clearance_pose['position'] - np.asarray(tracked_robots['franka_right']['position'], dtype=float)
-    ) <= policy._MAX_POSITION_STEP['retreat'] + 1e-9
+    assert (
+        np.linalg.norm(clearance_pose['position'] - np.asarray(tracked_robots['franka_right']['position'], dtype=float))
+        <= policy._MAX_POSITION_STEP['retreat'] + 1e-9
+    )
 
 
 def test_transport_completion_requires_carried_object_pose_when_enabled():
@@ -128,6 +131,66 @@ def test_transport_completion_requires_carried_object_pose_when_enabled():
     )
     assert len(completions) == 1
     assert completions[0]['detail']['target_object_pose_complete'] is True
+
+
+def test_close_until_contact_releases_transient_hold_before_latching(monkeypatch):
+    adapter = UR5ePlumbersBlockAtomicSkillAdapter({})
+    contact_sequence = iter([True, False, True, True])
+    remembered_openness = []
+
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **kwargs: 0.45)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **kwargs: (0.0, 0.8))
+    monkeypatch.setattr(
+        adapter,
+        '_grasp_contact_ready',
+        lambda **kwargs: (next(contact_sequence), {'contact_checked': True}),
+    )
+    monkeypatch.setattr(
+        adapter,
+        '_remember_gripper_hold_openness',
+        lambda **kwargs: remembered_openness.append(kwargs['openness']),
+    )
+
+    state = {}
+    spec = {
+        'close_until_contact_min_steps': 0,
+        'close_contact_stable_steps': 2,
+        'use_joint_stall_for_close_until_contact': False,
+        'close_contact_hold_squeeze_margin': 0.04,
+        'closed_openness': 0.0,
+    }
+
+    def close_step(step):
+        return adapter._close_until_contact_ready(
+            state=state,
+            task=SimpleNamespace(),
+            robot_name='franka_left',
+            spec=spec,
+            tracked_objects={},
+            close_elapsed_steps=step,
+            gripper_openness=0.0,
+        )
+
+    ready, _ = close_step(1)
+    assert ready is False
+    assert 'hold_gripper_openness' in state
+    assert remembered_openness == []
+
+    ready, _ = close_step(2)
+    assert ready is False
+    assert state['close_contact_stable_steps'] == 0
+    assert 'hold_gripper_openness' not in state
+    assert remembered_openness == []
+
+    ready, _ = close_step(3)
+    assert ready is False
+    assert 'hold_gripper_openness' in state
+    assert remembered_openness == []
+
+    ready, _ = close_step(4)
+    assert ready is True
+    assert state['close_contact_stable_steps'] == 2
+    assert state['hold_gripper_openness'] == pytest.approx(remembered_openness[-1])
 
 
 def test_task_specs_are_discoverable():
@@ -290,7 +353,9 @@ def test_lerobot_export_supports_multi_view_video_keys(tmp_path, monkeypatch):
 
     rendered = []
 
-    def fake_render_episode_video(*, episode, output_path, fps, width, height, video_mode, keep_video_frames=False, camera_video_key=None):
+    def fake_render_episode_video(
+        *, episode, output_path, fps, width, height, video_mode, keep_video_frames=False, camera_video_key=None
+    ):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b'fake-mp4')
         rendered.append((output_path, camera_video_key))
@@ -303,7 +368,9 @@ def test_lerobot_export_supports_multi_view_video_keys(tmp_path, monkeypatch):
             'renderer': 'stub',
         }
 
-    monkeypatch.setattr('toolkits.factory_dual_franka_assembly.export_lerobot._render_episode_video', fake_render_episode_video)
+    monkeypatch.setattr(
+        'toolkits.factory_dual_franka_assembly.export_lerobot._render_episode_video', fake_render_episode_video
+    )
 
     summary = export_lerobot_dataset(
         input_dir=input_dir,
@@ -318,7 +385,9 @@ def test_lerobot_export_supports_multi_view_video_keys(tmp_path, monkeypatch):
     )
 
     info = json.loads((tmp_path / 'output' / 'meta' / 'info.json').read_text(encoding='utf-8'))
-    episode_row = json.loads((tmp_path / 'output' / 'meta' / 'episodes.jsonl').read_text(encoding='utf-8').splitlines()[0])
+    episode_row = json.loads(
+        (tmp_path / 'output' / 'meta' / 'episodes.jsonl').read_text(encoding='utf-8').splitlines()[0]
+    )
 
     assert summary['total_video_streams'] == 3
     assert summary['video_keys'] == [
@@ -380,7 +449,9 @@ def test_lerobot_export_defaults_to_front_and_dual_wrist_views_when_camera_metad
 
     rendered = []
 
-    def fake_render_episode_video(*, episode, output_path, fps, width, height, video_mode, keep_video_frames=False, camera_video_key=None):
+    def fake_render_episode_video(
+        *, episode, output_path, fps, width, height, video_mode, keep_video_frames=False, camera_video_key=None
+    ):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b'fake-mp4')
         rendered.append(camera_video_key)
@@ -393,7 +464,9 @@ def test_lerobot_export_defaults_to_front_and_dual_wrist_views_when_camera_metad
             'renderer': 'stub',
         }
 
-    monkeypatch.setattr('toolkits.factory_dual_franka_assembly.export_lerobot._render_episode_video', fake_render_episode_video)
+    monkeypatch.setattr(
+        'toolkits.factory_dual_franka_assembly.export_lerobot._render_episode_video', fake_render_episode_video
+    )
 
     summary = export_lerobot_dataset(
         input_dir=input_dir,

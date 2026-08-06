@@ -5090,10 +5090,32 @@ class UR5eAssemblyAtomicSkillAdapter:
         )
         detected_clamp = bool(contact_candidate or stall_contact)
 
+        configured_latch_after_stable = spec.get('close_contact_latch_after_stable')
+        use_transient_hold_candidate = bool(
+            configured_latch_after_stable is None and not spec.get('require_strict_physical_contact', False)
+        )
         if detected_clamp:
             state['close_contact_stable_steps'] = int(state.get('close_contact_stable_steps', 0)) + 1
+            if (
+                use_transient_hold_candidate
+                and close_elapsed_steps >= min_steps
+                and state.get('hold_gripper_openness') is None
+            ):
+                hold_openness = self._gripper_openness_from_q(
+                    gripper_q=gripper_q,
+                    open_q=open_q,
+                    closed_q=closed_q,
+                    squeeze_margin=hold_squeeze_margin,
+                )
+                if hold_openness is not None:
+                    max_hold_openness = spec.get('max_hold_gripper_openness', spec.get('closed_openness'))
+                    if max_hold_openness is not None:
+                        hold_openness = min(float(hold_openness), float(max_hold_openness))
+                    state['hold_gripper_openness'] = float(hold_openness)
         else:
             state['close_contact_stable_steps'] = 0
+            if use_transient_hold_candidate:
+                state.pop('hold_gripper_openness', None)
 
         motion_ready = True
         motion_detail: dict[str, Any] = {'checked': False}
@@ -5161,7 +5183,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             and motion_ready
             and motion_stable_ready
         )
-        latch_after_stable = spec.get('close_contact_latch_after_stable')
+        latch_after_stable = configured_latch_after_stable
         if latch_after_stable is None:
             max_deferred_latch_steps = max(
                 int(spec.get('close_contact_deferred_latch_max_steps', 8)),
@@ -5172,7 +5194,15 @@ class UR5eAssemblyAtomicSkillAdapter:
             )
         latch_after_stable = bool(latch_after_stable)
         latch_ready = bool(ready or not latch_after_stable)
-        if (
+        if use_transient_hold_candidate and ready:
+            hold_openness = state.get('hold_gripper_openness')
+            if hold_openness is not None:
+                self._remember_gripper_hold_openness(
+                    task=task,
+                    robot_name=robot_name,
+                    openness=float(hold_openness),
+                )
+        elif (
             latch_ready
             and detected_clamp
             and close_elapsed_steps >= min_steps

@@ -20,6 +20,12 @@ from internutopia.core.vec_env import Env
 from internutopia_extension import import_extensions
 from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
+from toolkits.constraint_checking.integration.pipeline import (
+    RuntimeConstraintEpisodeHook,
+)
+from toolkits.constraint_checking.integration.precheck_pipeline import (
+    PassivePrecheckEpisodeHook,
+)
 from toolkits.factory_dual_franka_assembly.demo_policy import (
     DualFrankaAssemblyDemoPolicy,
 )
@@ -395,6 +401,15 @@ def _run_task_sequence(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    runtime_constraint_monitor: bool = False,
+    constraint_check_stride: int = 8,
+    constraint_threshold: float | None = None,
+    constraint_include_ground: bool = False,
+    constraint_ignore_pairs: list[str] | None = None,
+    assembly_sequence_precheck: bool = False,
+    stage_trajectory_precheck: bool = False,
+    stage_precheck_stride: int = 64,
+    stage_precheck_waypoints: int = 8,
     record_episode_steps: bool = True,
     record_lerobot_raw: bool = False,
     dataset_fps: int = 30,
@@ -425,6 +440,22 @@ def _run_task_sequence(
     video_recorder = None
     runtime_checker = None
     dataset_recorder = None
+    constraint_hook = RuntimeConstraintEpisodeHook(
+        enabled=runtime_constraint_monitor,
+        check_stride=constraint_check_stride,
+        threshold=constraint_threshold,
+        include_ground=constraint_include_ground,
+        ignore_pairs=constraint_ignore_pairs,
+    )
+    precheck_hook = PassivePrecheckEpisodeHook(
+        sequence_enabled=assembly_sequence_precheck,
+        stage_enabled=stage_trajectory_precheck,
+        stage_check_stride=stage_precheck_stride,
+        stage_waypoints=stage_precheck_waypoints,
+        threshold=constraint_threshold,
+        include_ground=constraint_include_ground,
+        ignore_pairs=constraint_ignore_pairs,
+    )
     last_task = None
     rollout_started_at = time.monotonic()
     rollout_loop_entered = False
@@ -483,9 +514,11 @@ def _run_task_sequence(
 
             step_started_at = time.monotonic()
             env_actions = policy.act(task)
+            precheck_hook.observe_before_step(task, env_actions)
             if dataset_recorder is not None:
                 dataset_recorder.record(task=task, obs=obs_list[0], actions=env_actions)
             obs_list, _, terminated, _, _ = env.step([env_actions])
+            constraint_hook.observe(task)
             completed_step = int(task.step_counter)
             if completed_step <= 5 or completed_step % 60 == 0:
                 elapsed = max(time.monotonic() - rollout_started_at, 1e-9)
@@ -534,6 +567,8 @@ def _run_task_sequence(
                 metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
                 if runtime_checker is not None:
                     metrics['runtime_robochecker'] = runtime_checker.finalize()
+                constraint_hook.attach_metrics(metrics)
+                precheck_hook.attach_metrics(metrics)
                 results.append(metrics)
                 if results_output_path is not None:
                     _write_json(results_output_path, results)
@@ -571,6 +606,8 @@ def _run_task_sequence(
                 recorder = None
                 video_recorder = None
                 dataset_recorder = None
+                constraint_hook.reset_episode()
+                precheck_hook.reset_episode()
                 obs_list, task_cfgs = env.reset([0])
                 if not task_cfgs or task_cfgs[0] is None:
                     break
@@ -583,6 +620,8 @@ def _run_task_sequence(
                 task = next(iter(active_tasks.values())) if active_tasks else last_task
                 if not results and task is not None:
                     metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
+                    constraint_hook.attach_metrics(metrics)
+                    precheck_hook.attach_metrics(metrics)
                     metrics.setdefault('terminal_reason', 'rollout-ended-without-termination')
                     results.append(metrics)
             except Exception:
@@ -596,6 +635,7 @@ def _run_task_sequence(
                 runtime_checker.finalize()
             except Exception:
                 pass
+        constraint_monitor_metrics = constraint_hook.finalize() if recorder is not None else None
         live_video_output = None
         raw_dataset_output = None
         if video_recorder is not None:
@@ -616,6 +656,9 @@ def _run_task_sequence(
                 metrics = _attach_policy_diagnostics(last_task.calculate_metrics(), policy)
             except Exception:
                 metrics = {}
+            if constraint_monitor_metrics is not None:
+                metrics['runtime_constraint_monitor'] = constraint_monitor_metrics
+            precheck_hook.attach_metrics(metrics)
             metrics['success'] = False
             metrics.setdefault('status', 'failed')
             if not metrics.get('terminal_reason'):
@@ -725,6 +768,15 @@ def _worker_mode(args, *, headless: bool):
             runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
             runtime_capture_rgb=bool(args.runtime_capture_rgb),
             runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+            runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+            constraint_check_stride=max(int(args.constraint_check_stride), 1),
+            constraint_threshold=args.constraint_threshold,
+            constraint_include_ground=bool(args.constraint_include_ground),
+            constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+            assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+            stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+            stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+            stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
             record_episode_steps=not bool(args.skip_episode_steps or args.record_lerobot_raw),
             record_lerobot_raw=bool(args.record_lerobot_raw),
             dataset_fps=max(int(args.dataset_fps), 1),
@@ -775,6 +827,15 @@ def _worker_mode(args, *, headless: bool):
         runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
         runtime_capture_rgb=bool(args.runtime_capture_rgb),
         runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+        runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+        constraint_check_stride=max(int(args.constraint_check_stride), 1),
+        constraint_threshold=args.constraint_threshold,
+        constraint_include_ground=bool(args.constraint_include_ground),
+        constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+        assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+        stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+        stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+        stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
         record_episode_steps=not bool(args.skip_episode_steps or args.record_lerobot_raw),
         record_lerobot_raw=bool(args.record_lerobot_raw),
         dataset_fps=max(int(args.dataset_fps), 1),
@@ -809,6 +870,15 @@ def _invoke_worker(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    runtime_constraint_monitor: bool = False,
+    constraint_check_stride: int = 8,
+    constraint_threshold: float | None = None,
+    constraint_include_ground: bool = False,
+    constraint_ignore_pairs: list[str] | None = None,
+    assembly_sequence_precheck: bool = False,
+    stage_trajectory_precheck: bool = False,
+    stage_precheck_stride: int = 64,
+    stage_precheck_waypoints: int = 8,
     skip_episode_steps: bool = False,
     record_lerobot_raw: bool = False,
     dataset_fps: int = 30,
@@ -862,6 +932,21 @@ def _invoke_worker(
             command.append('--runtime-stop-on-violation')
         if runtime_capture_rgb:
             command.append('--runtime-capture-rgb')
+    if runtime_constraint_monitor:
+        command.append('--runtime-constraint-monitor')
+        command.extend(['--constraint-check-stride', str(int(constraint_check_stride))])
+        if constraint_threshold is not None:
+            command.extend(['--constraint-threshold', str(float(constraint_threshold))])
+        if constraint_include_ground:
+            command.append('--constraint-include-ground')
+        for pair in constraint_ignore_pairs or []:
+            command.extend(['--constraint-ignore-pair', str(pair)])
+    if assembly_sequence_precheck:
+        command.append('--assembly-sequence-precheck')
+    if stage_trajectory_precheck:
+        command.append('--stage-trajectory-precheck')
+        command.extend(['--stage-precheck-stride', str(int(stage_precheck_stride))])
+        command.extend(['--stage-precheck-waypoints', str(int(stage_precheck_waypoints))])
     if scene_profile is not None:
         command.extend(['--worker-scene-profile', scene_profile])
     if seeds:
@@ -891,6 +976,15 @@ def _results_from_worker(
     runtime_stop_on_violation: bool = True,
     runtime_capture_rgb: bool = True,
     runtime_rgb_frame_stride: int = 24,
+    runtime_constraint_monitor: bool = False,
+    constraint_check_stride: int = 8,
+    constraint_threshold: float | None = None,
+    constraint_include_ground: bool = False,
+    constraint_ignore_pairs: list[str] | None = None,
+    assembly_sequence_precheck: bool = False,
+    stage_trajectory_precheck: bool = False,
+    stage_precheck_stride: int = 64,
+    stage_precheck_waypoints: int = 8,
     skip_episode_steps: bool = False,
     record_lerobot_raw: bool = False,
     dataset_fps: int = 30,
@@ -926,6 +1020,15 @@ def _results_from_worker(
         runtime_stop_on_violation=runtime_stop_on_violation,
         runtime_capture_rgb=runtime_capture_rgb,
         runtime_rgb_frame_stride=runtime_rgb_frame_stride,
+        runtime_constraint_monitor=runtime_constraint_monitor,
+        constraint_check_stride=constraint_check_stride,
+        constraint_threshold=constraint_threshold,
+        constraint_include_ground=constraint_include_ground,
+        constraint_ignore_pairs=constraint_ignore_pairs,
+        assembly_sequence_precheck=assembly_sequence_precheck,
+        stage_trajectory_precheck=stage_trajectory_precheck,
+        stage_precheck_stride=stage_precheck_stride,
+        stage_precheck_waypoints=stage_precheck_waypoints,
         skip_episode_steps=skip_episode_steps,
         record_lerobot_raw=record_lerobot_raw,
         dataset_fps=dataset_fps,
@@ -1006,6 +1109,33 @@ def main():
     parser.add_argument('--runtime-capture-rgb', action='store_true')
     parser.add_argument('--runtime-rgb-frame-stride', type=int, default=24)
     parser.add_argument(
+        '--runtime-constraint-monitor',
+        action='store_true',
+        help='Record passive runtime collision metrics without changing rollout behavior.',
+    )
+    parser.add_argument('--constraint-check-stride', type=int, default=8)
+    parser.add_argument('--constraint-threshold', type=float, default=None)
+    parser.add_argument('--constraint-include-ground', action='store_true')
+    parser.add_argument(
+        '--constraint-ignore-pair',
+        action='append',
+        default=[],
+        metavar='A:B',
+        help='Ignore a symmetric entity substring pair; may be repeated.',
+    )
+    parser.add_argument(
+        '--assembly-sequence-precheck',
+        action='store_true',
+        help='Passively validate the complete phase sequence before rollout.',
+    )
+    parser.add_argument(
+        '--stage-trajectory-precheck',
+        action='store_true',
+        help='Passively precheck commanded joint segments before env.step().',
+    )
+    parser.add_argument('--stage-precheck-stride', type=int, default=64)
+    parser.add_argument('--stage-precheck-waypoints', type=int, default=8)
+    parser.add_argument(
         '--output-dir',
         type=str,
         default=str(Path(__file__).resolve().parent / 'outputs' / 'factory_dual_franka_assembly'),
@@ -1070,6 +1200,15 @@ def main():
                 runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+                runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+                constraint_check_stride=max(int(args.constraint_check_stride), 1),
+                constraint_threshold=args.constraint_threshold,
+                constraint_include_ground=bool(args.constraint_include_ground),
+                constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+                assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+                stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+                stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+                stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
                 skip_episode_steps=bool(args.skip_episode_steps),
                 domain_randomization=bool(args.domain_randomization),
             )
@@ -1106,6 +1245,15 @@ def main():
                 runtime_stop_on_violation=bool(args.runtime_stop_on_violation),
                 runtime_capture_rgb=bool(args.runtime_capture_rgb),
                 runtime_rgb_frame_stride=max(int(args.runtime_rgb_frame_stride), 1),
+                runtime_constraint_monitor=bool(args.runtime_constraint_monitor),
+                constraint_check_stride=max(int(args.constraint_check_stride), 1),
+                constraint_threshold=args.constraint_threshold,
+                constraint_include_ground=bool(args.constraint_include_ground),
+                constraint_ignore_pairs=list(args.constraint_ignore_pair or []),
+                assembly_sequence_precheck=bool(args.assembly_sequence_precheck),
+                stage_trajectory_precheck=bool(args.stage_trajectory_precheck),
+                stage_precheck_stride=max(int(args.stage_precheck_stride), 1),
+                stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
                 skip_episode_steps=bool(args.skip_episode_steps),
                 record_lerobot_raw=bool(args.record_lerobot_raw),
                 dataset_fps=max(int(args.dataset_fps), 1),

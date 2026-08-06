@@ -244,9 +244,9 @@ All of them route through:
 toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:UR5eAssemblyAtomicSkillAdapter
 ```
 
-Planner code can compile typed calls through
-`toolkits.factory_dual_franka_assembly.ur5e_skill_api:UR5eAssemblySkillAPI`
-instead of constructing recipe phases or adapter paths directly.
+Planner code can compile typed calls through the `UR5eAssemblySkillAPI` class in
+`toolkits.factory_dual_franka_assembly.ur5e_skill_api` instead of constructing
+recipe phases or adapter paths directly.
 
 Current generic safeguards include joint-space IK tracking, IK branch-jump and
 wrist-flip limiting, bounded per-step joint targets, shared-workspace arm
