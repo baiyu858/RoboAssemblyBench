@@ -437,20 +437,26 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
         assert resolved['stabilize_fixture_parts'] is True
         initial_locks = recipe['phases'][0]['lock']
         base_object = f'fabrica_{task_name}_{base_part_id}'
-        assert {lock_spec['object'] for lock_spec in initial_locks} == (actual_parts - {base_object})
+        assert {lock_spec['object'] for lock_spec in initial_locks} == actual_parts
         assert {lock_spec['target'] for lock_spec in initial_locks} == {
-            f'part_{object_name.rsplit("_", 1)[-1]}_fixture_pickup' for object_name in actual_parts - {base_object}
+            f'part_{object_name.rsplit("_", 1)[-1]}_fixture_pickup' for object_name in actual_parts
         }
         for lock_spec in initial_locks:
             assert lock_spec['snap_free_object'] is True
             assert lock_spec['free_snap_steps'] == 0
             assert lock_spec['position_tolerance'] == 0.03
             assert lock_spec['orientation_tolerance'] == 0.20
+            assert lock_spec['disable_collision_on_lock'] is True
             assert lock_spec['target'] in recipe['domain_randomization']['groups']['start_parts']['targets']
         for phase in close_phases:
             local_skill = phase['local_skill']
             attach = phase['attach'][0]
-            assert phase['unlock'] == [local_skill['object']]
+            assert 'unlock' not in phase
+            assert 'unlock_after_steps' not in phase
+            if local_skill['object'] == base_object:
+                assert phase['fixture_lock'][0]['target'] == f'part_{base_part_id}_fixture_pickup'
+            else:
+                assert 'fixture_lock' not in phase
             assert local_skill['close_until_contact'] is True
             assert local_skill['close_position_tolerance'] == 0.007
             assert local_skill['close_gate_hold_refined_command'] is True
@@ -473,6 +479,8 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             assert attach['strict_contact_target_refinement_tracking_tolerance'] == pytest.approx(0.00035)
             assert attach['measure_force_contact'] is True
             assert local_skill['measure_force_contact'] is True
+            assert attach['min_attach_steps'] == 24
+            assert phase['advance']['min_steps'] == 24
             assert attach['allow_noncontact_fixed_joint'] is False
             assert attach['position_tolerance'] == 0.007
             assert attach['orientation_tolerance'] == 0.10

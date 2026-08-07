@@ -29,6 +29,28 @@ def test_valid_pick_carry_place_sequence():
     assert report.final_holding['left'] is None
 
 
+def test_free_object_fixture_lock_is_not_reported_as_release_without_attach():
+    report = check(
+        [
+            {
+                'name': 'initialize_fixture',
+                'lock': [
+                    {
+                        'object': 'part_a',
+                        'target': 'part_a_fixture_pickup',
+                        'snap_free_object': True,
+                    }
+                ],
+            }
+        ]
+    )
+
+    assert report.feasible
+    assert report.errors == []
+    assert report.warnings == []
+    assert report.actions[-1]['kind'] == 'fixture_lock'
+
+
 def test_robot_cannot_attach_second_object_while_holding():
     report = check(
         [

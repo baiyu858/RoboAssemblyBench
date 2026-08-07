@@ -140,6 +140,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._configured_joints_created = False
         self._locked_targets = {}
         self._frozen_lock_poses = {}
+        self._locked_collision_states = {}
         self._object_pose_history = {}
         self._object_collision_enabled = {}
         self._contact_probes = {}
@@ -617,6 +618,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             object_name = self._extract_object_name(object_entry)
             if object_name is not None:
                 self._unlock_object(object_name)
+
+        for fixture_lock in self._as_list(phase_spec.get('fixture_lock')):
+            if not isinstance(fixture_lock, dict):
+                continue
+            object_name = self._extract_object_name(fixture_lock)
+            target_name = fixture_lock.get('target') or fixture_lock.get('target_name')
+            if object_name is not None and target_name is not None:
+                self._lock_object(object_name, target_name, lock_spec=fixture_lock)
 
         for joint_override in self._as_list(phase_spec.get('joint_overrides')):
             if isinstance(joint_override, dict):
@@ -3500,6 +3509,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'phase': None if phase_spec is None else phase_spec.get('name'),
                 'attach_step': int(self.step_counter),
             }
+            locked_collision_state = self._locked_collision_states.pop(object_name, None)
+            if locked_collision_state is not None:
+                self._set_object_collision(object_name, bool(locked_collision_state))
             self._locked_targets.pop(object_name, None)
             self._frozen_lock_poses.pop(object_name, None)
             return
@@ -3516,6 +3528,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'phase': None if phase_spec is None else phase_spec.get('name'),
                 'attach_step': int(self.step_counter),
             }
+            locked_collision_state = self._locked_collision_states.pop(object_name, None)
+            if locked_collision_state is not None:
+                self._set_object_collision(object_name, bool(locked_collision_state))
             self._locked_targets.pop(object_name, None)
             self._frozen_lock_poses.pop(object_name, None)
             return
@@ -3551,6 +3566,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             'phase': None if phase_spec is None else phase_spec.get('name'),
             'attach_step': int(self.step_counter),
         }
+        locked_collision_state = self._locked_collision_states.pop(object_name, None)
+        if locked_collision_state is not None:
+            self._set_object_collision(object_name, bool(locked_collision_state))
         self._locked_targets.pop(object_name, None)
         self._frozen_lock_poses.pop(object_name, None)
         if collision_disabled and joint_path is None:
@@ -3686,6 +3704,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def _lock_object(self, object_name: str, target_name: str, *, lock_spec: dict | None = None):
         lock_spec = lock_spec or {}
+        if not hasattr(self, '_locked_collision_states'):
+            self._locked_collision_states = {}
         current_position, current_orientation = self._resolve_object(object_name).get_pose()
         rebase_targets = self._as_list(lock_spec.get('rebase_targets'))
         if rebase_targets:
@@ -3735,11 +3755,16 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             self._frozen_lock_poses.pop(object_name, None)
             target_pose = self.target_poses[target_name]
             self._set_object_pose(object_name, target_pose['position'], target_pose['orientation'])
-        self._set_object_collision(object_name, True)
+        collision_enabled = not bool(lock_spec.get('disable_collision_on_lock', False))
+        self._locked_collision_states[object_name] = collision_enabled
+        self._set_object_collision(object_name, collision_enabled)
 
     def _unlock_object(self, object_name: str):
         self._locked_targets.pop(object_name, None)
         self._frozen_lock_poses.pop(object_name, None)
+        collision_enabled = self._locked_collision_states.pop(object_name, None)
+        if collision_enabled is not None:
+            self._set_object_collision(object_name, True)
 
     def _maybe_write_attach_debug(self, payload: dict):
         debug_path = os.environ.get('DUAL_FRANKA_ATTACH_DEBUG_PATH')
@@ -4264,6 +4289,19 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             for lock_spec in self._as_list(phase_spec.get('lock'))
             if isinstance(lock_spec, dict) and lock_spec.get('object') is not None
         }
+
+        for unlock_spec in self._as_list(phase_spec.get('unlock_after_steps')):
+            if not isinstance(unlock_spec, dict):
+                continue
+            object_name = self._extract_object_name(unlock_spec)
+            if object_name is None:
+                continue
+            unlock_after_steps = max(
+                int(unlock_spec.get('steps', unlock_spec.get('min_steps', 0))),
+                0,
+            )
+            if self.phase_step_counter >= unlock_after_steps:
+                self._unlock_object(object_name)
 
         for attach_spec in self._as_list(phase_spec.get('attach')):
             attach_spec = self._normalized_attach_spec(attach_spec)

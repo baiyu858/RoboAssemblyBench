@@ -35,6 +35,7 @@ fabrica_canonical:
   preshape_timeout_steps: 720
   preshape_open_margin: 0.20
   preshape_gripper_position_tolerance: 0.025
+  fixture_release_after_steps: 8
   descend_position_tolerance: 0.007
   descend_relaxed_position_tolerance: 0.018
   descend_relaxed_after_steps: 600

@@ -9,6 +9,9 @@ fabrica_canonical:
   board_origin: [0.47, -0.14, 0.0125]
   base_robot: franka_right
   assembly_robot: franka_left
+  base_grasp_id: 5
+  move_grasp_id_overrides:
+    '5': 797
 
 qualification:
   seed_count: 4

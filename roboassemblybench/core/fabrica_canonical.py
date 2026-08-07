@@ -808,6 +808,7 @@ def _select_move_grasps_for_layout(
     ik_orientation_tolerance: float,
     ik_minimum_manipulability: float,
     ik_max_iterations: int,
+    grasp_id_overrides: dict[str, int] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], bool]:
     parts_by_id = {str(part['part_id']): part for part in task['parts']}
     assembled_parts = [parts_by_id[str(task['base_part'])]]
@@ -820,6 +821,16 @@ def _select_move_grasps_for_layout(
         if not isinstance(candidates, list) or not candidates:
             legacy_grasp = step.get('move_grasp')
             candidates = [legacy_grasp] if isinstance(legacy_grasp, dict) else []
+        override_id = None if grasp_id_overrides is None else grasp_id_overrides.get(part_id)
+        if override_id is not None:
+            candidates = [
+                candidate for candidate in candidates if int(candidate.get('grasp_id', -1)) == int(override_id)
+            ]
+            if not candidates:
+                raise ValueError(
+                    f'{assembly}: configured move grasp id {override_id} for part {part_id} '
+                    'is not present in the canonical move grasp candidates.'
+                )
         evaluated = [
             {
                 'candidate': candidate,
@@ -1161,6 +1172,20 @@ def _resolve_pickup_layout_and_grasps(
         if not isinstance(legacy_base_grasp, dict):
             raise ValueError(f'{assembly}: metadata has no base grasp candidates.')
         base_candidates = [legacy_base_grasp]
+    configured_base_grasp_id = spec.get('base_grasp_id')
+    if configured_base_grasp_id is not None:
+        try:
+            configured_base_grasp_id = int(configured_base_grasp_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('base_grasp_id must be an integer grasp candidate id.') from exc
+        base_candidates = [
+            candidate for candidate in base_candidates if int(candidate.get('grasp_id', -1)) == configured_base_grasp_id
+        ]
+        if not base_candidates:
+            raise ValueError(
+                f'{assembly}: configured base_grasp_id={configured_base_grasp_id} is not present in the '
+                'canonical base grasp candidates.'
+            )
     base_bbox_min = _vector(
         parts_by_id[base_part]['bbox_min'],
         size=3,
@@ -1194,6 +1219,12 @@ def _resolve_pickup_layout_and_grasps(
         size=3,
         name='pickup_layout_offset',
     )
+    move_grasp_id_overrides = spec.get('move_grasp_id_overrides') or {}
+    if not isinstance(move_grasp_id_overrides, dict):
+        raise ValueError('move_grasp_id_overrides must be a mapping from part id to grasp id.')
+    move_grasp_id_overrides = {
+        str(part_id): int(grasp_id) for part_id, grasp_id in move_grasp_id_overrides.items()
+    }
     pivot_world = _add(
         configured_pickup_origin,
         _quat_rotate(configured_pickup_orientation, rotation_pivot),
@@ -1284,6 +1315,7 @@ def _resolve_pickup_layout_and_grasps(
             ik_orientation_tolerance=move_grasp_ik_orientation_tolerance,
             ik_minimum_manipulability=move_grasp_ik_minimum_manipulability,
             ik_max_iterations=move_grasp_ik_max_iterations,
+            grasp_id_overrides=move_grasp_id_overrides,
         )
         move_grasps = {
             str(step['move_part']): selected_move_grasps.get(
@@ -1734,6 +1766,8 @@ def _append_pick_and_attach_phases(
     prealign_steps: int,
     prealign_joint_positions: list[float] | None,
     prealign_shoulder_pan: float | None,
+    fixture_release_after_steps: int,
+    fixture_lock_target: str | None,
 ) -> None:
     grasp_parameters = _grasp_parameters(object_name, grasp)
     preclose_openness = min(
@@ -1876,12 +1910,29 @@ def _append_pick_and_attach_phases(
         'allow_noncontact_fixed_joint': False,
         'gripper_closed_threshold': min(0.8, closed_joint_position + 0.04),
         **contact_parameters,
-        'min_attach_steps': 36,
+        'min_attach_steps': 24,
         'position_tolerance': float(descend_position_tolerance),
         'orientation_tolerance': 0.10,
         'support_height_tolerance': None,
         'top_clearance': None,
     }
+    # Keep the pickup pose frozen until the geometric/physical grasp gate
+    # succeeds.  Releasing a dynamic mesh on a fixed step lets it fall away
+    # during the close phase before the fingers have formed a stable pinch.
+    close_phase_actions = {
+        'gripper_commands': {robot: 'close'},
+        'attach': [attach_spec],
+    }
+    if fixture_lock_target is not None:
+        close_phase_actions['fixture_lock'] = [
+            {
+                'object': object_name,
+                'target': fixture_lock_target,
+                'snap_free_object': True,
+                'free_snap_steps': 0,
+                'disable_collision_on_lock': True,
+            }
+        ]
     close_phase = _skill_phase(
         skill='close_gripper',
         robot=robot,
@@ -1913,21 +1964,17 @@ def _append_pick_and_attach_phases(
             'require_strict_physical_contact': True,
             **contact_parameters,
         },
-        phase_actions={
-            'unlock': [object_name],
-            'gripper_commands': {robot: 'close'},
-            'attach': [attach_spec],
-        },
+        phase_actions=close_phase_actions,
     )
     close_phase['advance'] = {
         'type': 'all_of',
-        'min_steps': 36,
+        'min_steps': 24,
         'conditions': [
             {
                 'type': 'local_skill_complete',
                 'robot': robot,
                 'skill': 'ur5e_close_gripper',
-                'min_steps': 36,
+                'min_steps': 24,
             },
             {'type': 'object_attached', 'object': object_name, 'robot': robot},
         ],
@@ -2189,6 +2236,10 @@ def _append_release_and_retreat(
                     'orientation_tolerance': 0.12,
                     'snap_on_open': False,
                     'freeze_current_pose': True,
+                    # Fabrica part meshes are dynamic triangle meshes. Keep
+                    # their collision disabled after release so PhysX does not
+                    # attempt to promote them to invalid simulation shapes.
+                    'disable_collision_on_lock': True,
                 }
             ],
             'advance': {
@@ -2327,6 +2378,7 @@ def _compile_targets_and_phases(
     descend_position_tolerance = float(spec.get('descend_position_tolerance', 0.007))
     descend_relaxed_position_tolerance = float(spec.get('descend_relaxed_position_tolerance', 0.012))
     descend_relaxed_after_steps = int(spec.get('descend_relaxed_after_steps', 600))
+    fixture_release_after_steps = int(spec.get('fixture_release_after_steps', 8))
     insertion_relaxed_position_tolerance = float(spec.get('insertion_relaxed_position_tolerance', 0.018))
     base_support_release_position_tolerance = float(spec.get('base_support_release_position_tolerance', 0.012))
     base_support_lateral_position_tolerance = float(spec.get('base_support_lateral_position_tolerance', 0.015))
@@ -2424,6 +2476,7 @@ def _compile_targets_and_phases(
         or not math.isfinite(descend_relaxed_position_tolerance)
         or descend_relaxed_position_tolerance < descend_position_tolerance
         or descend_relaxed_after_steps <= 0
+        or fixture_release_after_steps < 0
         or not math.isfinite(insertion_relaxed_position_tolerance)
         or insertion_relaxed_position_tolerance < 0.008
         or not math.isfinite(base_support_release_position_tolerance)
@@ -2494,6 +2547,7 @@ def _compile_targets_and_phases(
             'preshape gripper tolerance must be in (0, 0.1], transport/insertion/base-place '
             'timeouts must '
             'be positive, and delayed descend/insertion tolerances must be positive and ordered, '
+            'fixture release delay cannot be negative, '
             'with insertion lateral tolerance no larger than the relaxed position tolerance; '
             'the insertion lateral-tolerance object-extent scale must be in [0, 0.25]; '
             'intermediate insertion lateral tolerance must be between the final tolerance '
@@ -2634,6 +2688,8 @@ def _compile_targets_and_phases(
         prealign_steps=move_above_prealign_steps,
         prealign_joint_positions=prealign_joint_positions_by_robot.get(base_robot),
         prealign_shoulder_pan=prealign_shoulder_pan_by_robot.get(base_robot),
+        fixture_release_after_steps=fixture_release_after_steps,
+        fixture_lock_target=fixture_pickup_targets[base_part_id],
     )
     _append_transport_phase(
         phases,
@@ -2769,6 +2825,8 @@ def _compile_targets_and_phases(
             prealign_steps=move_above_prealign_steps,
             prealign_joint_positions=prealign_joint_positions_by_robot.get(assembly_robot),
             prealign_shoulder_pan=prealign_shoulder_pan_by_robot.get(assembly_robot),
+            fixture_release_after_steps=fixture_release_after_steps,
+            fixture_lock_target=None,
         )
         _append_transport_phase(
             phases,
@@ -2972,9 +3030,9 @@ def _compile_targets_and_phases(
                 'orientation_tolerance': 0.20,
                 'snap_free_object': True,
                 'free_snap_steps': 0,
+                'disable_collision_on_lock': True,
             }
             for part_id in parts_by_id
-            if part_id != base_part_id
         ]
 
     for part_id in parts_by_id:
@@ -3496,6 +3554,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             for step in task['assembly_steps']
         ],
         'stabilize_fixture_parts': bool(spec.get('stabilize_fixture_parts', True)),
+        'fixture_release_after_steps': int(spec.get('fixture_release_after_steps', 8)),
         'configured_pickup_origin': configured_pickup_origin,
         'selected_pickup_origin': pickup_origin,
         'configured_pickup_orientation': configured_pickup_orientation,

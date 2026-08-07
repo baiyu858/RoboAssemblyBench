@@ -30,6 +30,7 @@ from toolkits.factory_dual_franka_assembly.demo_policy import (
     DualFrankaAssemblyDemoPolicy,
 )
 from toolkits.factory_dual_franka_assembly.scene_builder import (
+    build_dual_franka_assembly_episode,
     build_dual_franka_assembly_batch,
 )
 from toolkits.factory_dual_franka_assembly.scene_profiles import (
@@ -415,6 +416,7 @@ def _run_task_sequence(
     dataset_fps: int = 30,
     dataset_frame_stride: int = 8,
     rendering_fps: int | None = None,
+    rendering_interval_override: int | None = None,
 ):
     simulation_fps = 240 if rendering_fps is None else max(int(rendering_fps), 1)
     dataset_rendering_interval = max(int(dataset_frame_stride), 1) - 1 if record_lerobot_raw else None
@@ -424,6 +426,10 @@ def _run_task_sequence(
     rollout_rendering_interval = (
         dataset_rendering_interval if record_lerobot_raw else (None if requires_runtime_rendering else 239)
     )
+    if rendering_interval_override is not None:
+        if requires_runtime_rendering:
+            raise ValueError('A rendering interval override cannot be used while runtime image capture is enabled.')
+        rollout_rendering_interval = max(int(rendering_interval_override), 0)
     env = _build_env(
         task_configs=task_configs,
         headless=headless,
@@ -737,12 +743,77 @@ def collect_demos(recipe: str, scene_profile: str | None, seeds, output_dir: Pat
     return _run_task_sequence(task_configs=task_configs, headless=headless, output_dir=output_dir)
 
 
+def _build_collect_worker_task_configs(
+    *,
+    recipes: list[str],
+    seeds: list[int],
+    layout_seeds: list[int] | None,
+    scene_profile: str | None,
+    attach_runtime_cameras: bool,
+    domain_randomization_enabled: bool | None,
+):
+    """Build a serial episode queue, including heterogeneous recipes."""
+    recipes = [str(recipe) for recipe in recipes]
+    seeds = [int(seed) for seed in seeds]
+    if not recipes:
+        raise ValueError('Collect worker requires at least one recipe.')
+    if not seeds:
+        raise ValueError('Collect worker requires at least one seed.')
+
+    if len(recipes) == 1:
+        episode_recipes = recipes * len(seeds)
+    elif len(seeds) == 1:
+        episode_recipes = recipes
+        seeds = seeds * len(recipes)
+    elif len(recipes) == len(seeds):
+        episode_recipes = recipes
+    else:
+        raise ValueError(
+            'A multi-recipe collect worker requires either one shared seed or one seed per recipe.'
+        )
+
+    if layout_seeds is None:
+        resolved_layout_seeds = list(seeds)
+    else:
+        resolved_layout_seeds = [int(seed) for seed in layout_seeds]
+        if len(resolved_layout_seeds) == 1 and len(episode_recipes) > 1:
+            resolved_layout_seeds *= len(episode_recipes)
+        if len(resolved_layout_seeds) != len(episode_recipes):
+            raise ValueError(
+                'Collect worker requires one shared layout seed or one --worker-layout-seeds value per episode.'
+            )
+
+    return [
+        build_dual_franka_assembly_episode(
+            recipe=recipe,
+            seed=seed,
+            layout_seed=layout_seed,
+            episode_idx=episode_idx,
+            scene_profile=scene_profile,
+            attach_runtime_cameras=attach_runtime_cameras,
+            domain_randomization_enabled=domain_randomization_enabled,
+        )
+        for episode_idx, (recipe, seed, layout_seed) in enumerate(
+            zip(episode_recipes, seeds, resolved_layout_seeds)
+        )
+    ]
+
+
 def _worker_mode(args, *, headless: bool):
     scene_profile = None if args.worker_scene_profile in {None, '', 'raw', 'none'} else args.worker_scene_profile
+    worker_recipes = list(args.worker_recipes or [])
+    if args.worker_recipe is not None:
+        if worker_recipes:
+            raise ValueError('Use either --worker-recipe or --worker-recipes, not both.')
+        worker_recipes = [args.worker_recipe]
+    if not worker_recipes:
+        raise ValueError('Worker mode requires --worker-recipe or --worker-recipes.')
     if args.worker_mode == 'search':
+        if len(worker_recipes) != 1:
+            raise ValueError('Search worker mode supports exactly one recipe.')
         _run_task_sequence(
             task_configs=build_dual_franka_assembly_batch(
-                recipe=args.worker_recipe,
+                recipe=worker_recipes[0],
                 seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
                 scene_profile=scene_profile,
                 attach_runtime_cameras=bool(
@@ -786,25 +857,20 @@ def _worker_mode(args, *, headless: bool):
                 if int(args.rendering_fps) > 0
                 else (240 if args.record_lerobot_raw else None)
             ),
+            rendering_interval_override=args.worker_rendering_interval,
         )
         return
 
     if args.worker_mode != 'collect':
         raise ValueError(f'Unsupported worker mode: {args.worker_mode!r}')
 
-    if not args.worker_seeds:
-        raise ValueError('Collect worker requires at least one seed.')
-    worker_layout_seeds = None
-    if args.worker_layout_seeds:
-        worker_layout_seeds = [int(seed) for seed in args.worker_layout_seeds]
-        if len(worker_layout_seeds) != len(args.worker_seeds):
-            raise ValueError('Collect worker requires one --worker-layout-seeds value per worker seed.')
-
     _run_task_sequence(
-        task_configs=build_dual_franka_assembly_batch(
-            recipe=args.worker_recipe,
-            seeds=[int(seed) for seed in args.worker_seeds],
-            layout_seeds=worker_layout_seeds,
+        task_configs=_build_collect_worker_task_configs(
+            recipes=worker_recipes,
+            seeds=[int(seed) for seed in (args.worker_seeds or [])],
+            layout_seeds=None
+            if not args.worker_layout_seeds
+            else [int(seed) for seed in args.worker_layout_seeds],
             scene_profile=scene_profile,
             attach_runtime_cameras=bool(args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb),
             domain_randomization_enabled=True if args.domain_randomization else None,
@@ -845,6 +911,7 @@ def _worker_mode(args, *, headless: bool):
             if int(args.rendering_fps) > 0
             else (240 if args.record_lerobot_raw else None)
         ),
+        rendering_interval_override=args.worker_rendering_interval,
     )
 
 
@@ -1083,10 +1150,17 @@ def main():
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--worker-mode', choices=['search', 'collect'], default=None)
     parser.add_argument('--worker-recipe', type=str, default=None)
+    parser.add_argument('--worker-recipes', nargs='+', default=None)
     parser.add_argument('--worker-scene-profile', type=str, default=None)
     parser.add_argument('--worker-results-path', type=str, default=None)
     parser.add_argument('--worker-seeds', nargs='*', default=None)
     parser.add_argument('--worker-layout-seeds', nargs='*', default=None)
+    parser.add_argument(
+        '--worker-rendering-interval',
+        type=int,
+        default=None,
+        help='Override sparse rendering for worker-only, non-image debug rollouts.',
+    )
     parser.add_argument('--record-live-video', action='store_true')
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)

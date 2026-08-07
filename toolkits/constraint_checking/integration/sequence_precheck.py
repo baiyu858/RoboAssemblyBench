@@ -60,6 +60,18 @@ class AssemblySequencePrechecker:
 
         for index, phase in enumerate(phases):
             phase_name = str(phase.get('name') or f'phase_{index}')
+            for fixture_lock in _as_list(phase.get('fixture_lock')):
+                if not isinstance(fixture_lock, dict):
+                    continue
+                action = {
+                    'phase_index': index,
+                    'phase': phase_name,
+                    'kind': 'fixture_lock',
+                    'robot': None,
+                    'object': self._text(fixture_lock.get('object') or fixture_lock.get('name')),
+                }
+                actions.append(action)
+                self._validate_reference(action, known_robots, known_objects, errors)
             local_skills = self._local_skills(phase)
             for skill in local_skills:
                 robot = self._text(skill.get('robot'))
@@ -145,6 +157,26 @@ class AssemblySequencePrechecker:
                 if not isinstance(lock, dict):
                     continue
                 object_name = self._text(lock.get('object'))
+                # A free-object snap is fixture initialization/stabilization,
+                # not a release. Keep it in the normalized trace without
+                # requiring a preceding attachment.
+                if lock.get('snap_free_object') and object_name not in held_by:
+                    actions.append(
+                        {
+                            'phase_index': index,
+                            'phase': phase_name,
+                            'kind': 'fixture_lock',
+                            'robot': None,
+                            'object': object_name,
+                        }
+                    )
+                    self._validate_reference(
+                        actions[-1],
+                        known_robots,
+                        known_objects,
+                        errors,
+                    )
+                    continue
                 released_objects.add(object_name)
                 self._release(
                     index,

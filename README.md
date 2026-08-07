@@ -131,11 +131,83 @@ The generator defaults to `SKIP_EPISODE_STEPS=1` to keep memory bounded while
 still executing the complete rollout and recording videos. Set it to `0` only
 when the large per-step JSON trace is required.
 
+## Six-Task Demo Data
+
+The current validated position-randomized checkpoint contains one successful
+demo for each of the six remaining Fabrica tasks. The optical board stays fixed;
+the start-parts and assembly-target groups are sampled independently in XY.
+The recorded layout seeds are pinned below so the same demos can be reproduced:
+
+| Task | `layout_seed` | Local output | Front-view preview |
+| --- | ---: | --- | --- |
+| `beam` | 505 | `outputs/fabrica_position_randomized_videos/beam/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/beam/episode_0000_live_videos/observation_images_front.mp4) |
+| `car` | 303 | `outputs/fabrica_position_randomized_videos/car/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/car/episode_0000_live_videos/observation_images_front.mp4) |
+| `cooling_manifold` | 101 | `outputs/fabrica_position_randomized_videos/cooling_manifold/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/cooling_manifold/episode_0000_live_videos/observation_images_front.mp4) |
+| `duct` | 202 | `outputs/fabrica_position_randomized_videos/duct/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/duct/episode_0000_live_videos/observation_images_front.mp4) |
+| `gamepad` | 606 | `outputs/fabrica_position_randomized_videos/gamepad/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/gamepad/episode_0000_live_videos/observation_images_front.mp4) |
+| `stool_circular` | 412 | `outputs/fabrica_position_randomized_videos/stool_circular/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/stool_circular/episode_0000_live_videos/observation_images_front.mp4) |
+
+### Download The Validated Bundles
+
+The demo bundles are public in the reproduction-assets dataset. From the
+repository root, run:
+
+```bash
+huggingface-cli download baiyu858/InternUtopia-repro-assets \
+  --repo-type dataset \
+  --include 'outputs/fabrica_position_randomized_videos/**' \
+  --local-dir .
+```
+
+Each task directory contains `episode_0000.json`, validation results and logs,
+and three videos under `episode_0000_live_videos/`:
+`observation_images_front.mp4`, `observation_images_left_wrist.mp4`, and
+`observation_images_right_wrist.mp4`.
+
+### Reproduce The Six Bundles
+
+Run each task in its own Isaac process. This keeps Isaac visual assets isolated
+between heterogeneous Fabrica scenes and avoids stale robot-visual hierarchies
+when switching tasks:
+
+```bash
+declare -A LAYOUT_SEEDS=(
+  [beam]=505 [car]=303 [cooling_manifold]=101
+  [duct]=202 [gamepad]=606 [stool_circular]=412
+)
+
+for task in beam car cooling_manifold duct gamepad stool_circular; do
+  python roboassemblybench/scripts/validate_fabrica_canonical_ur5e.py \
+    --tasks "$task" \
+    --conda-env internutopia311 \
+    --output-dir "outputs/fabrica_position_randomized_videos/$task" \
+    --seed 0 \
+    --layout-seed "${LAYOUT_SEEDS[$task]}" \
+    --domain-randomization \
+    --record-live-video \
+    --live-video-fps 30 \
+    --live-video-frame-stride 8
+done
+```
+
+The validated run uses `seed=0`, `domain_randomization=true`, and generates a
+complete rollout with `success-criteria-met`. The published bundles use
+`--skip-episode-steps` to keep the download small; `episode_0000.json` therefore
+contains episode metadata and metrics but not the large per-step trace. To
+collect full state/action steps for a task, use the generic generator with:
+
+```bash
+SKIP_EPISODE_STEPS=0 DOMAIN_RANDOMIZATION=1 NUM_DEMOS=1 \
+  bash roboassemblybench/scripts/generate_fabrica_canonical_ur5e_demo.sh beam
+```
+
 ## Dataset And ACT
 
-The position-randomized collector translates two groups independently in XY by
-up to 2 cm: the complete start-parts group and the assembly targets. The optical
-board remains fixed.
+The six-task position-randomized demos translate the complete start-parts group
+and the assembly targets independently in XY. The sampled offsets are constrained
+to 5-12 cm for pickup layouts and 5-15 cm for assembly layouts; the optical board
+remains fixed. The 2,000-episode collector below is a separate plumbers-block
+dataset workflow and uses its own four qualified layout seeds.
 Each accepted episode contains three `640x480` RGB streams, a 16D dual-arm
 Cartesian state, and a 16D next-sample absolute Cartesian action. Physics and
 control run at 240 Hz; cameras and dataset samples are synchronized at 30 Hz
