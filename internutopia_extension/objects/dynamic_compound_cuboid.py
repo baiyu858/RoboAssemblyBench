@@ -13,7 +13,10 @@ class DynamicCompoundCuboid(BaseObject):
 
     def set_up_to_scene(self, scene: IScene):
         import omni.usd
-        from omni.isaac.core.prims import GeometryPrim, RigidPrim
+        try:
+            from isaacsim.core.prims import GeometryPrim, SingleRigidPrim as RigidPrim
+        except ImportError:
+            from omni.isaac.core.prims import GeometryPrim, RigidPrim
         from pxr import Gf, UsdGeom, UsdPhysics
 
         stage = omni.usd.get_context().get_stage()

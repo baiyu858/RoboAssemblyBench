@@ -1,0 +1,11 @@
+extends: recipe_wide_15cm_showcase.yaml
+
+task_name: fabrica_plumbers_block_ur5e_right_base_prepare_wide_15cm_diag_closed_transit
+max_steps: 7900
+
+phases:
+  - name: left_move_above_block_3
+    gripper_commands:
+      franka_left: 0.0
+    local_skill:
+      gripper_command: 0.0

@@ -983,7 +983,11 @@ def test_staged_randomization_moves_layouts_but_never_the_optical_board():
             objects_a['factory_tabletop_visual']['color'],
             table_color,
         )
-        assert result_a['appearance_groups']['background']['objects'] == []
+        assert result_a['appearance_groups']['background']['objects'] == ['factory_background_visual']
+        np.testing.assert_allclose(
+            objects_a['factory_background_visual']['color'],
+            background_color,
+        )
         np.testing.assert_allclose(
             lights_a['warehouse_dome_fill']['color'],
             background_color,

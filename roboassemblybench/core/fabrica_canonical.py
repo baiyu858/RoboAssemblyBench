@@ -12,12 +12,105 @@ import numpy as np
 
 from roboassemblybench.core.paths import BENCHMARK_ROOT
 from roboassemblybench.core.scene_profiles import deep_merge
-from toolkits.factory_dual_franka_assembly.ur5e_skill_api import UR5eAssemblySkillAPI
+from toolkits.factory_dual_franka_assembly.ur5e_skill_api import AssemblySkillAPI
 
 CANONICAL_METADATA_PATH = BENCHMARK_ROOT / 'assets/Fabrica/canonical_7_bundles/canonical_tasks.json'
 CANONICAL_SCHEMA_VERSION = 'roboassemblybench.fabrica_canonical/v3'
 PICKUP_TCP_ORIENTATION_REFERENCE_WXYZ = [0.0, 1.0, 0.0, 0.0]
 DEFAULT_PICKUP_YAW_CANDIDATES_DEGREES = [0.0, 90.0, -90.0, 180.0]
+_FRANKA_IK_BASE_ELEMENTS = [
+    'base_link',
+    'base_link_robot',
+    'panda_link0',
+    'panda_joint1',
+    'panda_link1',
+    'panda_joint2',
+    'panda_link2',
+    'panda_joint3',
+    'panda_link3',
+    'panda_joint4',
+    'panda_link4',
+    'panda_joint5',
+    'panda_link5',
+    'panda_joint6',
+    'panda_link6',
+    'panda_joint7',
+    'panda_link7',
+    'panda_joint8',
+    'panda_link8',
+    'panda_hand_joint',
+    'panda_hand',
+]
+_ARM_JOINT_NAMES_BY_PLATFORM = {
+    'franka': tuple(f'panda_joint{index}' for index in range(1, 8)),
+    'ur5e': (
+        'shoulder_pan_joint',
+        'shoulder_lift_joint',
+        'elbow_joint',
+        'wrist_1_joint',
+        'wrist_2_joint',
+        'wrist_3_joint',
+    ),
+}
+
+
+def _robot_platform(robot: dict[str, Any]) -> str:
+    robot_type = str(robot.get('type', 'FrankaRobot')).strip().lower()
+    if 'franka' in robot_type or 'panda' in robot_type:
+        return 'franka'
+    if 'ur5' in robot_type:
+        return 'ur5e'
+    raise ValueError(f'Unsupported Fabrica canonical robot type {robot.get("type")!r}.')
+
+
+def _recipe_robot_platform(*, spec: dict[str, Any], robots: list[dict[str, Any]]) -> str:
+    configured = str(spec.get('robot_platform', '')).strip().lower()
+    platforms = {_robot_platform(robot) for robot in robots if isinstance(robot, dict)}
+    if len(platforms) != 1:
+        raise ValueError(f'Canonical Fabrica recipes require one robot platform, found {sorted(platforms)}.')
+    detected = next(iter(platforms))
+    if configured and configured != detected:
+        raise ValueError(
+            f'fabrica_canonical.robot_platform={configured!r} does not match configured robots ({detected!r}).'
+        )
+    return detected
+
+
+def _activate_gripper_profile(value: Any, *, robot_platform: str) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _activate_gripper_profile(item, robot_platform=robot_platform)
+        return
+    if not isinstance(value, dict):
+        return
+    if 'object_in_tcp_position' in value and 'object_in_tcp_orientation' in value:
+        if robot_platform == 'franka':
+            required = (
+                'panda_tcp_in_assembly_position',
+                'panda_tcp_in_assembly_orientation',
+                'panda_object_in_tcp_position',
+                'panda_object_in_tcp_orientation',
+                'panda_open_ratio',
+            )
+            missing = [name for name in required if name not in value]
+            if missing:
+                raise ValueError(f'Canonical Panda grasp profile is incomplete: missing {missing}.')
+            value.update(
+                {
+                    'target_gripper': 'panda',
+                    'target_gripper_asset': 'isaac_franka_panda',
+                    'gripper_frame_conversion': 'fabrica_panda_to_isaac_panda_hand',
+                    'tcp_in_assembly_position': copy.deepcopy(value['panda_tcp_in_assembly_position']),
+                    'tcp_in_assembly_orientation': copy.deepcopy(value['panda_tcp_in_assembly_orientation']),
+                    'object_in_tcp_position': copy.deepcopy(value['panda_object_in_tcp_position']),
+                    'object_in_tcp_orientation': copy.deepcopy(value['panda_object_in_tcp_orientation']),
+                    'gripper_open_ratio': float(value['panda_open_ratio']),
+                }
+            )
+        else:
+            value['gripper_open_ratio'] = float(value['robotiq_open_ratio'])
+    for item in value.values():
+        _activate_gripper_profile(item, robot_platform=robot_platform)
 
 
 def _vector(value: Any, *, size: int, name: str) -> list[float]:
@@ -268,13 +361,14 @@ def _pickup_fixture_body_clearance(
     return 1.0 if not math.isfinite(clearance) else clearance
 
 
-@lru_cache(maxsize=2)
-def _ur5e_ik_chain(urdf_path: str):
+@lru_cache(maxsize=4)
+def _ik_chain(urdf_path: str, robot_platform: str):
     from ikpy.chain import Chain
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
-        chain = Chain.from_urdf_file(urdf_path)
+        kwargs = {'base_elements': _FRANKA_IK_BASE_ELEMENTS} if robot_platform == 'franka' else {}
+        chain = Chain.from_urdf_file(urdf_path, **kwargs)
     chain.active_links_mask = np.asarray(
         [link.joint_type != 'fixed' for link in chain.links],
         dtype=bool,
@@ -298,15 +392,33 @@ def _rotation_matrix(quaternion: list[float]) -> np.ndarray:
     )
 
 
-def _ur5e_initial_ik_configuration(chain, robot: dict[str, Any]) -> np.ndarray:
+def _initial_ik_configuration(chain, robot: dict[str, Any]) -> np.ndarray:
     configured = robot.get('initial_joint_positions') or {}
     if not isinstance(configured, dict):
-        raise ValueError('UR5e initial_joint_positions must be a mapping.')
+        raise ValueError('Robot initial_joint_positions must be a mapping.')
     result = np.zeros(len(chain.links), dtype=float)
     for index, link in enumerate(chain.links):
         if link.name in configured:
             result[index] = float(configured[link.name])
     return result
+
+
+def _initial_arm_joint_positions(robot: dict[str, Any]) -> list[float]:
+    platform = _robot_platform(robot)
+    joint_names = _ARM_JOINT_NAMES_BY_PLATFORM[platform]
+    configured = robot.get('initial_joint_positions') or {}
+    if not isinstance(configured, dict):
+        raise ValueError('Robot initial_joint_positions must be a mapping.')
+    missing = [name for name in joint_names if name not in configured]
+    if missing:
+        raise ValueError(
+            f"Robot {robot.get('name')!r} cannot use joint-home parking; missing initial joints {missing}."
+        )
+    return _vector(
+        [configured[name] for name in joint_names],
+        size=len(joint_names),
+        name=f"{robot.get('name', platform)} initial arm joint positions",
+    )
 
 
 def _pose_in_robot_frame(
@@ -326,7 +438,7 @@ def _pose_in_robot_frame(
     )
 
 
-def _solve_ur5e_ik_pose(
+def _solve_ik_pose(
     *,
     chain,
     position: list[float],
@@ -373,7 +485,7 @@ def _solve_ur5e_ik_pose(
     return best
 
 
-def _ur5e_jacobian_metrics(
+def _jacobian_metrics(
     chain,
     configuration: np.ndarray,
     *,
@@ -422,21 +534,25 @@ def _move_grasp_ik_metrics(
     minimum_manipulability: float,
     max_iterations: int,
 ) -> dict[str, Any]:
-    from internutopia_extension.configs.robots.ur5e import arm_ik_cfg
+    robot_platform = _robot_platform(robot)
+    if robot_platform == 'franka':
+        from internutopia_extension.configs.robots.franka import arm_ik_cfg
+    else:
+        from internutopia_extension.configs.robots.ur5e import arm_ik_cfg
 
-    chain = _ur5e_ik_chain(str(arm_ik_cfg.robot_urdf_path))
-    initial_configuration = _ur5e_initial_ik_configuration(chain, robot)
+    chain = _ik_chain(str(arm_ik_cfg.robot_urdf_path), robot_platform)
+    initial_configuration = _initial_ik_configuration(chain, robot)
     robot_position = _vector(
         robot.get('position', [0.0, 0.0, 0.0]),
         size=3,
-        name='UR5e IK robot position',
+        name=f'{robot_platform} IK robot position',
     )
     if bool(robot.get('apply_workspace_offset', True)):
         robot_position = _add(robot_position, workspace_offset)
     robot_orientation = _vector(
         robot.get('orientation', [1.0, 0.0, 0.0, 0.0]),
         size=4,
-        name='UR5e IK robot orientation',
+        name=f'{robot_platform} IK robot orientation',
     )
 
     pickup_part_position, pickup_part_orientation = _part_pickup_pose(
@@ -522,7 +638,7 @@ def _move_grasp_ik_metrics(
     minimum_path_manipulability = math.inf
     maximum_path_condition_number = 0.0
     for name, position, orientation in targets:
-        configuration, position_error, orientation_error = _solve_ur5e_ik_pose(
+        configuration, position_error, orientation_error = _solve_ik_pose(
             chain=chain,
             position=position,
             orientation=orientation,
@@ -532,7 +648,7 @@ def _move_grasp_ik_metrics(
             fallback_start=configuration,
             max_iterations=max_iterations,
         )
-        manipulability, condition_number = _ur5e_jacobian_metrics(
+        manipulability, condition_number = _jacobian_metrics(
             chain,
             configuration,
         )
@@ -560,6 +676,7 @@ def _move_grasp_ik_metrics(
             feasible = False
             break
     return {
+        'robot_platform': robot_platform,
         'ik_feasible': feasible,
         'ik_position_tolerance': position_tolerance,
         'ik_orientation_tolerance': orientation_tolerance,
@@ -801,6 +918,7 @@ def _select_move_grasps_for_layout(
     preferred_interior_clearance: float,
     minimum_relative_interior_clearance: float,
     minimum_fixture_clearance: float,
+    enforce_fixture_clearance: bool,
     minimum_relative_orientation_continuity: float,
     transport_tcp_height: float,
     ik_lift_distance: float,
@@ -876,11 +994,14 @@ def _select_move_grasps_for_layout(
                 entry['metrics']['pickup_fixture_body_clearance'] for entry in source_collision_feasible
             )
             required_fixture_clearance = minimum_fixture_clearance
-            fixture_feasible = [
-                entry
-                for entry in source_collision_feasible
-                if entry['metrics']['pickup_fixture_body_clearance'] >= required_fixture_clearance
-            ]
+            if enforce_fixture_clearance:
+                fixture_feasible = [
+                    entry
+                    for entry in source_collision_feasible
+                    if entry['metrics']['pickup_fixture_body_clearance'] >= required_fixture_clearance
+                ]
+            else:
+                fixture_feasible = list(source_collision_feasible)
             if fixture_feasible:
                 maximum_orientation_continuity = max(
                     entry['metrics']['pickup_orientation_continuity'] for entry in fixture_feasible
@@ -1108,6 +1229,7 @@ def _resolve_pickup_layout_and_grasps(
     )
     move_grasp_fixture_footprint_margin = float(spec.get('move_grasp_fixture_footprint_margin', 0.035))
     move_grasp_minimum_fixture_clearance = float(spec.get('move_grasp_minimum_fixture_clearance', 0.001))
+    move_grasp_enforce_fixture_clearance = bool(spec.get('move_grasp_enforce_fixture_clearance', True))
     move_grasp_minimum_relative_orientation_continuity = float(
         spec.get('move_grasp_minimum_relative_orientation_continuity', 0.90)
     )
@@ -1304,6 +1426,7 @@ def _resolve_pickup_layout_and_grasps(
             preferred_interior_clearance=(move_grasp_preferred_interior_clearance),
             minimum_relative_interior_clearance=(move_grasp_minimum_relative_interior_clearance),
             minimum_fixture_clearance=move_grasp_minimum_fixture_clearance,
+            enforce_fixture_clearance=move_grasp_enforce_fixture_clearance,
             minimum_relative_orientation_continuity=(move_grasp_minimum_relative_orientation_continuity),
             transport_tcp_height=_transport_tcp_height(
                 spec,
@@ -1486,6 +1609,10 @@ def _resolve_pickup_layout_and_grasps(
             f'interior={best["interior_clearance_score"]:.3f}, '
             f'support_clearance_ratio={best["support_clearance_ratio"]:.3f}, '
             f'reach={best["maximum_pickup_tcp_reach"]:.3f}, '
+            f'move_grasps_feasible={best["move_grasps_feasible"]}, '
+            f'move_ik_counts={[(part_id, diagnostics.get("ik_feasible_candidate_count", 0)) for part_id, diagnostics in best["move_grasp_diagnostics"].items()]}, '
+            f'move_ik_rejections={[(part_id, [(metrics.get("grasp_id"), metrics.get("ik_maximum_position_error"), metrics.get("ik_maximum_orientation_error"), metrics.get("ik_minimum_path_manipulability")) for metrics in diagnostics.get("ik_rejections", [])[:3]]) for part_id, diagnostics in best["move_grasp_diagnostics"].items() if diagnostics.get("ik_feasible_candidate_count", 0) == 0]}, '
+            f'move_geometry_counts={[(part_id, diagnostics.get("candidate_count"), diagnostics.get("kinematically_feasible_candidate_count"), diagnostics.get("source_collision_feasible_candidate_count"), diagnostics.get("fixture_feasible_candidate_count"), diagnostics.get("geometry_feasible_candidate_count")) for part_id, diagnostics in best["move_grasp_diagnostics"].items() if diagnostics.get("ik_feasible_candidate_count", 0) == 0]}, '
             f'fixture_on_board={best["fixture_on_optical_board"]}.'
         )
     selected = max(
@@ -1548,6 +1675,7 @@ def _resolve_pickup_layout_and_grasps(
         'move_grasp_minimum_relative_interior_clearance': (move_grasp_minimum_relative_interior_clearance),
         'move_grasp_fixture_footprint_margin': (move_grasp_fixture_footprint_margin),
         'move_grasp_minimum_fixture_clearance': move_grasp_minimum_fixture_clearance,
+        'move_grasp_enforce_fixture_clearance': move_grasp_enforce_fixture_clearance,
         'move_grasp_minimum_relative_orientation_continuity': (move_grasp_minimum_relative_orientation_continuity),
         'move_grasp_ik_position_tolerance': move_grasp_ik_position_tolerance,
         'move_grasp_ik_orientation_tolerance': (move_grasp_ik_orientation_tolerance),
@@ -1718,7 +1846,7 @@ def _skill_phase(
     parameters: dict[str, Any],
     phase_actions: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return UR5eAssemblySkillAPI.compile_call(
+    return AssemblySkillAPI.compile_call(
         {
             'skill': skill,
             'robot': robot,
@@ -1770,12 +1898,17 @@ def _append_pick_and_attach_phases(
     fixture_lock_target: str | None,
 ) -> None:
     grasp_parameters = _grasp_parameters(object_name, grasp)
+    grasp_open_ratio = float(grasp['gripper_open_ratio'])
     preclose_openness = min(
         1.0,
-        float(grasp['robotiq_open_ratio']) + float(preshape_open_margin),
+        grasp_open_ratio + float(preshape_open_margin),
     )
-    closed_openness = max(0.0, float(grasp['robotiq_open_ratio']) - 0.035)
+    closed_openness = max(0.0, grasp_open_ratio - 0.035)
     closed_joint_position = 0.8 * (1.0 - closed_openness)
+    if grasp.get('target_gripper') == 'panda':
+        gripper_closed_threshold = min(0.04, 0.04 * closed_openness + 0.004)
+    else:
+        gripper_closed_threshold = min(0.8, closed_joint_position + 0.04)
     contact_box_offset, contact_box_scale = _contact_box(part)
     contact_parameters = {
         'require_dual_finger_contact': True,
@@ -1908,7 +2041,7 @@ def _append_pick_and_attach_phases(
         'strict_contact_target_refinement_max_distance': 0.025,
         'strict_contact_target_refinement_tracking_tolerance': 0.00035,
         'allow_noncontact_fixed_joint': False,
-        'gripper_closed_threshold': min(0.8, closed_joint_position + 0.04),
+        'gripper_closed_threshold': gripper_closed_threshold,
         **contact_parameters,
         'min_attach_steps': 24,
         'position_tolerance': float(descend_position_tolerance),
@@ -2221,6 +2354,7 @@ def _append_release_and_retreat(
     park_offset: list[float],
     park_workspace_center: list[float],
     park_minimum_planar_radius: float,
+    park_joint_positions: list[float] | None,
 ) -> None:
     phases.append(
         {
@@ -2228,6 +2362,15 @@ def _append_release_and_retreat(
             'timeout_steps': 720,
             'robot_targets': {},
             'gripper_commands': {robot: 'open'},
+            'detach': [
+                {
+                    'object': object_name,
+                    # Remove the transport joint before the fingers open. If
+                    # the pose already passes the lock gate, locking wins and
+                    # clears the attachment in the same interaction update.
+                    'release_min_steps': 0,
+                }
+            ],
             'lock': [
                 {
                     'object': object_name,
@@ -2266,26 +2409,43 @@ def _append_release_and_retreat(
             },
         )
     )
-    phases.append(
-        _skill_phase(
-            skill='retreat_vertical',
-            robot=robot,
-            phase_name=f'{prefix}_park',
-            timeout_steps=1800,
-            parameters={
-                'relative_to_current_tcp': True,
-                'offset': copy.deepcopy(park_offset),
-                'offset_frame': 'world',
-                'workspace_center': copy.deepcopy(park_workspace_center),
-                'workspace_minimum_planar_radius': float(park_minimum_planar_radius),
-                'lock_target_position': True,
-                'lock_target_orientation': False,
-                'gripper_command': 'open',
-                'position_tolerance': 0.018,
-                'cartesian_position_step': 0.010,
-            },
+    if park_joint_positions is not None:
+        phases.append(
+            _skill_phase(
+                skill='move_arm_to_joint_positions',
+                robot=robot,
+                phase_name=f'{prefix}_park',
+                timeout_steps=1800,
+                parameters={
+                    'joint_positions': copy.deepcopy(park_joint_positions),
+                    'gripper_command': 'open',
+                    'joint_position_tolerance': 0.025,
+                    'joint_target_stable_steps': 8,
+                    'max_joint_step': 0.020,
+                },
+            )
         )
-    )
+    else:
+        phases.append(
+            _skill_phase(
+                skill='retreat_vertical',
+                robot=robot,
+                phase_name=f'{prefix}_park',
+                timeout_steps=1800,
+                parameters={
+                    'relative_to_current_tcp': True,
+                    'offset': copy.deepcopy(park_offset),
+                    'offset_frame': 'world',
+                    'workspace_center': copy.deepcopy(park_workspace_center),
+                    'workspace_minimum_planar_radius': float(park_minimum_planar_radius),
+                    'lock_target_position': True,
+                    'lock_target_orientation': False,
+                    'gripper_command': 'open',
+                    'position_tolerance': 0.018,
+                    'cartesian_position_step': 0.010,
+                },
+            )
+        )
 
 
 def _compile_targets_and_phases(
@@ -2311,6 +2471,9 @@ def _compile_targets_and_phases(
     post_release_park_distance = float(spec.get('post_release_park_distance', 0.35))
     post_release_park_vertical_offset = float(spec.get('post_release_park_vertical_offset', 0.02))
     post_release_park_minimum_planar_radius = float(spec.get('post_release_park_minimum_planar_radius', 0.28))
+    post_release_park_mode = str(spec.get('post_release_park_mode', 'cartesian')).strip().lower()
+    if post_release_park_mode not in {'cartesian', 'joint_home'}:
+        raise ValueError("post_release_park_mode must be either 'cartesian' or 'joint_home'.")
     if (
         not math.isfinite(release_retreat_distance)
         or release_retreat_distance <= 0.0
@@ -2361,6 +2524,14 @@ def _compile_targets_and_phases(
             size=3,
             name=f'{robot_name} position',
         )
+
+    def post_release_park_joint_positions(robot_name: str) -> list[float] | None:
+        if post_release_park_mode != 'joint_home':
+            return None
+        robot = robots_by_name.get(robot_name)
+        if robot is None:
+            raise ValueError(f'Post-release parking references missing robot {robot_name!r}.')
+        return _initial_arm_joint_positions(robot)
 
     def release_retreat_offset(insertion_axis: list[float]) -> list[float]:
         direction = _normalized_direction(insertion_axis, name='release retreat axis')
@@ -2433,6 +2604,12 @@ def _compile_targets_and_phases(
     insertion_compliance_geometric_capture_after_steps = int(
         spec.get('insertion_compliance_geometric_capture_after_steps', 1200)
     )
+    insertion_compliance_waypoint_axial_tolerance_object_extent_scale = float(
+        spec.get(
+            'insertion_compliance_waypoint_axial_tolerance_object_extent_scale',
+            0.0,
+        )
+    )
     insertion_compliance_minimum_gravity_alignment = float(
         spec.get('insertion_compliance_minimum_gravity_alignment', 0.70)
     )
@@ -2447,10 +2624,11 @@ def _compile_targets_and_phases(
     prealign_joint_positions_by_robot = spec.get('prealign_joint_positions_by_robot') or {}
     if not isinstance(prealign_joint_positions_by_robot, dict):
         raise ValueError('prealign_joint_positions_by_robot must be a mapping.')
+    arm_joint_count = 7 if any(_robot_platform(robot) == 'franka' for robot in robots) else 6
     for robot_name, positions in prealign_joint_positions_by_robot.items():
         prealign_joint_positions_by_robot[robot_name] = _vector(
             positions,
-            size=6,
+            size=arm_joint_count,
             name=f'{robot_name} prealign_joint_positions',
         )
     prealign_shoulder_pan_by_robot = spec.get('prealign_shoulder_pan_by_robot') or {}
@@ -2532,6 +2710,9 @@ def _compile_targets_and_phases(
         or insertion_compliance_capture_stable_steps <= 0
         or insertion_compliance_geometric_capture_after_steps < 0
         or insertion_compliance_geometric_capture_after_steps >= insertion_timeout_steps
+        or not math.isfinite(insertion_compliance_waypoint_axial_tolerance_object_extent_scale)
+        or insertion_compliance_waypoint_axial_tolerance_object_extent_scale < 0.0
+        or insertion_compliance_waypoint_axial_tolerance_object_extent_scale > 1.0
         or not math.isfinite(insertion_compliance_minimum_gravity_alignment)
         or insertion_compliance_minimum_gravity_alignment < 0.0
         or insertion_compliance_minimum_gravity_alignment > 1.0
@@ -2571,6 +2752,8 @@ def _compile_targets_and_phases(
             'insertion-compliance capture speed limits and stable steps must be positive, '
             'and geometric capture delay must be non-negative and smaller than the '
             'insertion timeout; '
+            'the insertion-compliance waypoint axial-tolerance object-extent scale '
+            'must be in [0, 1]; '
             'the insertion-compliance minimum gravity alignment must be in [0, 1]; '
             'the compliant alignment-retraction limit must be in (0, 0.05] m; '
             'orientation-first steps and tolerance '
@@ -2756,6 +2939,7 @@ def _compile_targets_and_phases(
         park_offset=post_release_park_offset(base_robot),
         park_workspace_center=post_release_park_workspace_center(base_robot),
         park_minimum_planar_radius=post_release_park_minimum_planar_radius,
+        park_joint_positions=post_release_park_joint_positions(base_robot),
     )
 
     for step_index, step in enumerate(task['assembly_steps']):
@@ -2929,6 +3113,15 @@ def _compile_targets_and_phases(
                 insertion_relaxed_position_tolerance,
                 0.010,
             )
+            if insertion_compliance_waypoint_axial_tolerance_object_extent_scale > 0.0:
+                compliance_waypoint_axial_tolerance = max(
+                    compliance_waypoint_axial_tolerance,
+                    min(
+                        0.020,
+                        min(part_bbox_size)
+                        * insertion_compliance_waypoint_axial_tolerance_object_extent_scale,
+                    ),
+                )
             compliance_waypoint_lateral_tolerance = intermediate_insertion_lateral_position_tolerance
             insertion_path_depth = max(
                 sum(insertion_entry_delta[axis] * normalized_insertion_axis[axis] for axis in range(3)),
@@ -3015,6 +3208,7 @@ def _compile_targets_and_phases(
             park_offset=post_release_park_offset(assembly_robot),
             park_workspace_center=post_release_park_workspace_center(assembly_robot),
             park_minimum_planar_radius=post_release_park_minimum_planar_radius,
+            park_joint_positions=post_release_park_joint_positions(assembly_robot),
         )
 
     base_release_phase = next(phase for phase in phases if phase.get('name') == f'base_{base_part_id}_release_and_lock')
@@ -3059,6 +3253,7 @@ def _default_domain_randomization(
     pickup_target_names: list[str],
     assembly_target_names: list[str],
     translation_constraints: dict[str, list[dict[str, Any]]],
+    robot_platform: str,
 ) -> dict[str, Any]:
     pickup_range = spec.get(
         'pickup_translation_range',
@@ -3072,9 +3267,81 @@ def _default_domain_randomization(
     pickup_maximum_planar_distance = float(spec.get('pickup_translation_maximum_planar_distance', math.inf))
     assembly_minimum_planar_distance = float(spec.get('assembly_translation_minimum_planar_distance', 0.0))
     assembly_maximum_planar_distance = float(spec.get('assembly_translation_maximum_planar_distance', math.inf))
+    table_texture_paths = [
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/'
+            'SM_HeavyDutyPackingTable_C02_01/materials/textures/'
+            'Wood_Laminate_Gray_A/T_Wood_Laminate_Gray_A_Albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/'
+            'SM_HeavyDutyPackingTable_C02_01/materials/textures/'
+            'Wood_Pressed_A/T_Wood_Pressed_A1_Albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/'
+            'SM_HeavyDutyPackingTable_C02_01/materials/textures/'
+            'MetalPainted_White_Glossy_A/T_MetalPainted_White_Glossy_A_Albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/'
+            'T_Plastic_Gray_A_Albedo.png'
+        ),
+    ]
+    wall_texture_paths = [
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/materials/textures/'
+            't_corrugatedboxes_b01_tile01_albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/'
+            'SM_HeavyDutyPackingTable_C02_01/materials/textures/'
+            'Metal_Glossy_A/T_Metal_Glossy_A_Albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/'
+            'SM_HeavyDutyPackingTable_C02_01/materials/textures/'
+            'MetalPainted_White_Glossy_A/T_MetalPainted_White_Glossy_A_Albedo.png'
+        ),
+    ]
+    floor_texture_paths = [
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/'
+            'SM_HeavyDutyPackingTable_C02_01/materials/textures/'
+            'Metal_Glossy_A/T_Metal_Glossy_A_Albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/props/container_h20/textures/'
+            'T_Plastic_Gray_A_Albedo.png'
+        ),
+        _asset_path(
+            'roboassemblybench/assets/Fabrica/'
+            'fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/'
+            'isaac_official/Isaac/Props/PackingTable/materials/textures/'
+            't_corrugatedboxes_b01_tile02_albedo.png'
+        ),
+    ]
     return {
         'enabled': False,
-        'seed_namespace': f'fabrica_{assembly}_canonical_ur5e_domain_v1',
+        'seed_namespace': f'fabrica_{assembly}_canonical_{robot_platform}_domain_v1',
         'fixed_objects': ['optical_board'],
         'groups': {
             'start_parts': {
@@ -3111,6 +3378,12 @@ def _default_domain_randomization(
             },
         },
         'appearance': {
+            'allowed_objects': [
+                'factory_tabletop_visual',
+                'factory_background_visual',
+                'factory_floor_visual',
+            ],
+            'allowed_lights': ['warehouse_dome_fill'],
             'groups': {
                 'table_surface': {
                     'objects': ['factory_tabletop_visual'],
@@ -3124,18 +3397,121 @@ def _default_domain_randomization(
                     ],
                 },
                 'background': {
-                    'objects': [],
+                    'objects': ['factory_background_visual'],
                     'lights': ['warehouse_dome_fill'],
                     'palette': [
-                        [0.78, 0.84, 1.0],
-                        [0.92, 0.82, 0.72],
-                        [0.72, 0.88, 0.80],
-                        [0.86, 0.76, 0.82],
-                        [0.72, 0.82, 0.88],
-                        [0.88, 0.88, 0.76],
+                        [0.84, 0.88, 0.95],
+                        [0.95, 0.88, 0.82],
+                        [0.84, 0.94, 0.88],
+                        [0.93, 0.85, 0.90],
+                        [0.84, 0.90, 0.94],
+                        [0.94, 0.93, 0.84],
                     ],
+                    'intensity': [60.0, 160.0],
+                    'exposure': [-0.35, 0.0],
                 },
-            }
+            },
+        },
+        'visual_distractors': {
+            'enabled': True,
+            'count_range': [0, 8],
+            'safe_margin': 0.20,
+            'robot_keepout_radius': 0.24,
+            'minimum_spacing': 0.08,
+            'workspace_keepout': {
+                'x': [0.04, 0.96],
+                'y': [-0.60, 0.60],
+            },
+            'shapes': ['cube', 'flat', 'tall'],
+            'assets': [
+                {
+                    'name': 'warehouse_cardboard_box',
+                    'path': '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxA_02.usd',
+                    'scale_range': [0.08, 0.14],
+                    'z_offset': 0.0,
+                },
+                {
+                    'name': 'warehouse_bucket',
+                    'path': '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/Props/SM_BucketPlastic_B.usd',
+                    'scale_range': [0.08, 0.14],
+                    'z_offset': 0.0,
+                },
+                {
+                    'name': 'warehouse_barrel',
+                    'path': '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/Props/SM_BarelPlastic_A_01.usd',
+                    'scale_range': [0.04, 0.08],
+                    'z_offset': 0.0,
+                },
+                {
+                    'name': 'warehouse_traffic_cone',
+                    'path': '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/Props/S_TrafficCone.usd',
+                    'scale_range': [0.06, 0.12],
+                    'z_offset': 0.0,
+                },
+            ],
+            'size_range': [0.025, 0.045],
+            'height_range': [0.012, 0.025],
+        },
+        'textures': {
+            'enabled': True,
+            'table_object': 'factory_tabletop_visual',
+            'texture_scale': [2.0, 6.0],
+            'table_paths': table_texture_paths,
+            'wall_paths': wall_texture_paths,
+            'floor_paths': floor_texture_paths,
+            'targets': [
+                {
+                    'name': 'tabletop',
+                    'object': 'factory_tabletop_visual',
+                    'paths': table_texture_paths,
+                    'texture_scale': [2.0, 6.0],
+                },
+                {
+                    'name': 'back_wall',
+                    'object': 'factory_background_visual',
+                    'paths': wall_texture_paths,
+                    'texture_scale': [1.0, 3.0],
+                },
+                {
+                    'name': 'floor',
+                    'object': 'factory_floor_visual',
+                    'paths': floor_texture_paths,
+                    'texture_scale': [2.0, 5.0],
+                },
+            ],
+        },
+        'lighting': {
+            'count_range': [2, 4],
+            'position_offset': {
+                'x': [-1.0, 1.0],
+                'y': [-1.0, 1.0],
+                'z': [-0.3, 0.3],
+            },
+            'intensity_multiplier': [0.7, 1.3],
+            'base_intensity': 600.0,
+            'base_height': 3.5,
+            'exposure': [0.0, 0.35],
+            'radius': 0.45,
+            'palette': [
+                [1.00, 0.68, 0.42],
+                [0.45, 0.72, 1.00],
+                [0.55, 1.00, 0.72],
+                [1.00, 0.52, 0.76],
+            ],
+        },
+        'scene': {
+            'asset_paths': [
+                '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd',
+                '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse.usd',
+                '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_multiple_shelves.usd',
+                '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/full_warehouse.usd',
+            ],
+            'position_offset': {
+                'x': [-0.08, 0.08],
+                'y': [-0.08, 0.08],
+                'z': [0.0, 0.0],
+            },
+            'yaw_degrees': [-3.0, 3.0],
         },
     }
 
@@ -3362,7 +3738,9 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     robots = payload.get('robots', [])
     if not isinstance(robots, list):
         raise ValueError('robots must be a list.')
+    robot_platform = _recipe_robot_platform(spec=spec, robots=robots)
     task = copy.deepcopy(task)
+    _activate_gripper_profile(task, robot_platform=robot_platform)
     (
         pickup_origin,
         pickup_orientation,
@@ -3440,6 +3818,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         pickup_target_names=pickup_target_names,
         assembly_target_names=assembly_target_names,
         translation_constraints=translation_constraints,
+        robot_platform=robot_platform,
     )
 
     resolved = copy.deepcopy(payload)
@@ -3466,6 +3845,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     )
     resolved['fabrica_canonical_resolved'] = {
         'assembly': assembly,
+        'robot_platform': robot_platform,
         'metadata_schema_version': metadata['schema_version'],
         'metadata_path': str(Path(metadata_path or CANONICAL_METADATA_PATH).expanduser().resolve()),
         'bundle_path': _asset_path(task['bundle_path']),
@@ -3518,6 +3898,12 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         'insertion_compliance_geometric_capture_after_steps': int(
             spec.get('insertion_compliance_geometric_capture_after_steps', 1200)
         ),
+        'insertion_compliance_waypoint_axial_tolerance_object_extent_scale': float(
+            spec.get(
+                'insertion_compliance_waypoint_axial_tolerance_object_extent_scale',
+                0.0,
+            )
+        ),
         'insertion_compliance_minimum_gravity_alignment': float(
             spec.get('insertion_compliance_minimum_gravity_alignment', 0.70)
         ),
@@ -3545,6 +3931,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         'post_release_park_distance': float(spec.get('post_release_park_distance', 0.35)),
         'post_release_park_vertical_offset': float(spec.get('post_release_park_vertical_offset', 0.02)),
         'post_release_park_minimum_planar_radius': float(spec.get('post_release_park_minimum_planar_radius', 0.28)),
+        'post_release_park_mode': str(spec.get('post_release_park_mode', 'cartesian')).strip().lower(),
         'assembly_order': [
             {
                 'move_part': str(step['move_part']),

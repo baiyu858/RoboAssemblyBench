@@ -22,6 +22,12 @@ class UsdObject(BaseObject):
         if parsed.scheme in {'http', 'https', 'omniverse'}:
             return path
         if path.startswith('${ISAAC_ASSETS_ROOT}') or path.startswith('/Isaac/'):
+            assets_root_override = os.environ.get('ISAAC_ASSETS_ROOT', '').strip()
+            if assets_root_override:
+                suffix = path.removeprefix('${ISAAC_ASSETS_ROOT}')
+                if path.startswith('/Isaac/'):
+                    suffix = path
+                return os.path.abspath(os.path.expanduser(assets_root_override)).rstrip('/') + '/' + suffix.lstrip('/')
             try:
                 from isaacsim.storage.native import get_assets_root_path
 
@@ -37,10 +43,16 @@ class UsdObject(BaseObject):
         return os.path.abspath(path)
 
     def set_up_to_scene(self, scene: IScene):  # noqa: C901
-        from omni.isaac.core.prims import RigidPrim
-        from omni.isaac.core.prims.xform_prim import XFormPrim
-        from omni.isaac.core.utils.prims import is_prim_path_valid
-        from omni.isaac.core.utils.stage import add_reference_to_stage
+        try:
+            from isaacsim.core.prims import SingleRigidPrim as RigidPrim
+            from isaacsim.core.prims import SingleXFormPrim as XFormPrim
+            from isaacsim.core.utils.prims import is_prim_path_valid
+            from isaacsim.core.utils.stage import add_reference_to_stage
+        except ImportError:
+            from omni.isaac.core.prims import RigidPrim
+            from omni.isaac.core.prims.xform_prim import XFormPrim
+            from omni.isaac.core.utils.prims import is_prim_path_valid
+            from omni.isaac.core.utils.stage import add_reference_to_stage
         from omni.physx.scripts import utils
         from pxr import PhysxSchema, UsdGeom, UsdPhysics
 

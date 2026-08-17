@@ -26,6 +26,14 @@ class IScene(ABC):
         """Remove an object from the scene."""
         raise NotImplementedError()
 
+    def remove_prim_path(self, prim_path: str) -> None:
+        """Remove an exact backend scene subtree by prim path when supported."""
+        raise NotImplementedError()
+
+    def flush_updates(self) -> None:
+        """Flush pending backend scene edits before loading replacement assets."""
+        raise NotImplementedError()
+
     @abstractmethod
     def object_exists(self, target: any) -> bool:
         """Check if an object exists in the scene registry."""

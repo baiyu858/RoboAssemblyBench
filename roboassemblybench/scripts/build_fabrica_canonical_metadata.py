@@ -71,6 +71,10 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
     panda_position_cm = np.asarray(grasp.pos, dtype=float)
     panda_orientation_wxyz = np.asarray(grasp.quat, dtype=float)
     panda_open_ratio = float(grasp.open_ratio)
+    panda_position_m = (panda_position_cm - assembly_center_cm) * 0.01
+    panda_rotation = Rotation.from_quat(panda_orientation_wxyz[[1, 2, 3, 0]])
+    panda_object_in_tcp_position = panda_rotation.inv().apply(-panda_position_m)
+    panda_object_in_tcp_orientation = _wxyz_from_xyzw(panda_rotation.inv().as_quat())
     grasp_info = get_grasp_info_from_gripper_state(
         'panda',
         panda_position_cm,
@@ -113,6 +117,10 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
         'gripper_frame_rotation_wxyz': _wxyz_from_xyzw(FABRICA_TO_ISAAC_ROBOTIQ_ROTATION.as_quat()),
         'grasp_id': int(grasp.grasp_id),
         'panda_open_ratio': panda_open_ratio,
+        'panda_tcp_in_assembly_position': _as_floats(panda_position_m),
+        'panda_tcp_in_assembly_orientation': _as_floats(panda_orientation_wxyz),
+        'panda_object_in_tcp_position': _as_floats(panda_object_in_tcp_position),
+        'panda_object_in_tcp_orientation': panda_object_in_tcp_orientation,
         'robotiq_open_ratio': float(robotiq_open_ratio),
         'grasp_width_m': grasp_width_cm * 0.01,
         'tcp_in_assembly_position': _as_floats(gripper_position_m),

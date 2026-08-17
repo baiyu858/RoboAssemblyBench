@@ -39,11 +39,17 @@ class DynamicCompoundCuboidCfg(ObjectCfg):
 class VisualCubeCfg(ObjectCfg):
     type: Optional[str] = 'VisualCube'
     color: Optional[List[float]] = None
+    texture_path: Optional[str] = None
+    texture_scale: Optional[Tuple[float, float]] = None
+    texture_rotation_degrees: Optional[float] = None
 
 
 class StaticCubeCfg(ObjectCfg):
     type: Optional[str] = 'StaticCube'
     color: Optional[List[float]] = None
+    texture_path: Optional[str] = None
+    texture_scale: Optional[Tuple[float, float]] = None
+    texture_rotation_degrees: Optional[float] = None
     static_friction: Optional[float] = None
     dynamic_friction: Optional[float] = None
     restitution: Optional[float] = None

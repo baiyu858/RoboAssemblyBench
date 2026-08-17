@@ -21,12 +21,6 @@ from internutopia_extension.configs.robots.franka import (
 from internutopia_extension.configs.robots.franka import (
     gripper_cfg as franka_gripper_cfg,
 )
-from internutopia_extension.configs.robots.ur5e import UR5eRobotCfg
-from internutopia_extension.configs.robots.ur5e import arm_ik_cfg as ur5e_arm_ik_cfg
-from internutopia_extension.configs.robots.ur5e import (
-    arm_joint_cfg as ur5e_arm_joint_cfg,
-)
-from internutopia_extension.configs.robots.ur5e import gripper_cfg as ur5e_gripper_cfg
 from internutopia_extension.configs.sensors import RepCameraCfg
 from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task import (
     FactoryDualFrankaAssemblyTaskCfg,
@@ -73,6 +67,9 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
             common_kwargs['scale'] = tuple(float(value) for value in robot_spec['scale'])
 
         if robot_type in {'FrankaRobot', 'franka', 'Franka'}:
+            franka_kwargs = {}
+            if 'initial_joint_positions' in robot_spec:
+                franka_kwargs['initial_joint_positions'] = copy.deepcopy(robot_spec['initial_joint_positions'])
             robots.append(
                 FrankaRobotCfg(
                     controllers=[
@@ -81,9 +78,21 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
                         franka_gripper_cfg.update(),
                     ],
                     **common_kwargs,
+                    **franka_kwargs,
                 )
             )
         elif robot_type in {'UR5eRobot', 'ur5e', 'UR5e'}:
+            from internutopia_extension.configs.robots.ur5e import UR5eRobotCfg
+            from internutopia_extension.configs.robots.ur5e import (
+                arm_ik_cfg as ur5e_arm_ik_cfg,
+            )
+            from internutopia_extension.configs.robots.ur5e import (
+                arm_joint_cfg as ur5e_arm_joint_cfg,
+            )
+            from internutopia_extension.configs.robots.ur5e import (
+                gripper_cfg as ur5e_gripper_cfg,
+            )
+
             ur5e_kwargs = {}
             for field_name in (
                 'end_effector_prim_name',
@@ -215,10 +224,23 @@ def _build_object_cfg(object_spec: dict, position: np.ndarray, orientation: np.n
             **common_kwargs,
         )
     if kind == 'visual_cube':
-        return VisualCubeCfg(color=list(object_spec['color']), **common_kwargs)
+        return VisualCubeCfg(
+            color=list(object_spec['color']),
+            texture_path=object_spec.get('texture_path'),
+            texture_scale=None
+            if object_spec.get('texture_scale') is None
+            else tuple(float(value) for value in object_spec['texture_scale']),
+            texture_rotation_degrees=object_spec.get('texture_rotation_degrees'),
+            **common_kwargs,
+        )
     if kind == 'static_cube':
         return StaticCubeCfg(
             color=list(object_spec['color']),
+            texture_path=object_spec.get('texture_path'),
+            texture_scale=None
+            if object_spec.get('texture_scale') is None
+            else tuple(float(value) for value in object_spec['texture_scale']),
+            texture_rotation_degrees=object_spec.get('texture_rotation_degrees'),
             static_friction=object_spec.get('static_friction'),
             dynamic_friction=object_spec.get('dynamic_friction'),
             restitution=object_spec.get('restitution'),
@@ -354,6 +376,7 @@ def build_dual_franka_assembly_episode(
     scene_profile: str | None = None,
     attach_runtime_cameras: bool = False,
     domain_randomization_enabled: bool | None = None,
+    randomization_profile: str | None = None,
     policy_evaluation_mode: bool = False,
 ) -> FactoryDualFrankaAssemblyTaskCfg:
     recipe_spec = load_task_recipe(spec_path or recipe, scene_profile=scene_profile)
@@ -362,6 +385,7 @@ def build_dual_franka_assembly_episode(
         recipe_spec,
         seed=resolved_layout_seed,
         enabled_override=domain_randomization_enabled,
+        profile=randomization_profile,
     )
     rng = random.Random(seed)
     workspace_offset = np.asarray(recipe_spec.get('workspace_offset', [0.0, 0.0, 0.0]), dtype=float)
@@ -475,6 +499,7 @@ def build_dual_franka_assembly_batch(
     scene_profile: str | None = None,
     attach_runtime_cameras: bool = False,
     domain_randomization_enabled: bool | None = None,
+    randomization_profile: str | None = None,
     policy_evaluation_mode: bool = False,
 ):
     seeds = [int(seed) for seed in seeds]
@@ -493,6 +518,7 @@ def build_dual_franka_assembly_batch(
             scene_profile=scene_profile,
             attach_runtime_cameras=attach_runtime_cameras,
             domain_randomization_enabled=domain_randomization_enabled,
+            randomization_profile=randomization_profile,
             policy_evaluation_mode=policy_evaluation_mode,
         )
         for index, (seed, layout_seed) in enumerate(zip(seeds, resolved_layout_seeds))

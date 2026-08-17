@@ -120,6 +120,11 @@ metadata:
       requires_held_object: false
       require_success: true
       fallback: fail
+    move_arm_to_joint_positions:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+      requires_held_object: false
+      require_success: true
+      fallback: fail
 
 objects:
   - name: factory_tabletop_visual
@@ -205,6 +210,7 @@ camera_specs:
     video_key: observation.images.isaac_3d
     resolution: [960, 540]
     rgba: true
+    depth: true
     attach_runtime_sensor: true
     translation: [5.0, 0.0, 3.2]
     orientation_euler: [0.0, 1.1868238914, 1.5707963268]
@@ -216,6 +222,7 @@ camera_specs:
     video_key: observation.images.left_wrist
     resolution: [640, 480]
     rgba: true
+    depth: true
     attach_runtime_sensor: true
     translation: [-0.1, 0.0, -0.03]
     orientation_euler: [3.1415926536, -0.0872664626, 0.0]
@@ -230,6 +237,7 @@ camera_specs:
     video_key: observation.images.right_wrist
     resolution: [640, 480]
     rgba: true
+    depth: true
     attach_runtime_sensor: true
     translation: [-0.1, 0.0, -0.03]
     orientation_euler: [3.1415926536, -0.0872664626, 0.0]

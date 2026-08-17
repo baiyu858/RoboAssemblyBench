@@ -17,8 +17,9 @@ import numpy as np
 from internutopia.core.config import Config, SimConfig
 from internutopia.core.util import has_display
 from internutopia.core.vec_env import Env
-from internutopia_extension import import_extensions
+from internutopia_extension import import_fabrica_assembly_extensions
 from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
+from roboassemblybench.core.domain_randomization import RANDOMIZATION_PROFILE_CHOICES
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
 from toolkits.constraint_checking.integration.pipeline import (
     RuntimeConstraintEpisodeHook,
@@ -41,6 +42,8 @@ from toolkits.factory_dual_franka_assembly.task_specs import (
     list_task_recipes,
     load_task_recipe,
 )
+
+RUNTIME_CAMERA_WARMUP_RENDER_STEPS = 8
 
 
 def _to_jsonable(value: Any):
@@ -381,8 +384,21 @@ def _build_env(
         metrics_save_path='none',
         task_configs=task_configs,
     )
-    import_extensions()
+    robot_platforms = {
+        'ur5e' if str(getattr(robot, 'type', '')).lower().startswith('ur5e') else 'franka'
+        for task_config in task_configs
+        for robot in task_config.robots
+    }
+    if len(robot_platforms) != 1:
+        raise ValueError(f'One simulator process cannot mix Fabrica robot platforms: {sorted(robot_platforms)}')
+    import_fabrica_assembly_extensions(robot_platforms.pop())
     return Env(config)
+
+
+def _warm_up_runtime_cameras(env, *, steps: int = RUNTIME_CAMERA_WARMUP_RENDER_STEPS):
+    """Converge newly composed RTX camera history without advancing physics."""
+    env.warm_up(steps=max(int(steps), 1), render=True, physics=False)
+    return env.get_observations()
 
 
 def _run_task_sequence(
@@ -438,6 +454,8 @@ def _run_task_sequence(
     )
     policy = DualFrankaAssemblyDemoPolicy()
     obs_list, task_cfgs = env.reset()
+    if requires_runtime_rendering and task_cfgs and task_cfgs[0] is not None:
+        obs_list = _warm_up_runtime_cameras(env)
     results = []
     if results_output_path is not None:
         _write_json(results_output_path, results)
@@ -615,6 +633,8 @@ def _run_task_sequence(
                 constraint_hook.reset_episode()
                 precheck_hook.reset_episode()
                 obs_list, task_cfgs = env.reset([0])
+                if requires_runtime_rendering and task_cfgs and task_cfgs[0] is not None:
+                    obs_list = _warm_up_runtime_cameras(env)
                 if not task_cfgs or task_cfgs[0] is None:
                     break
         if not results:
@@ -751,6 +771,7 @@ def _build_collect_worker_task_configs(
     scene_profile: str | None,
     attach_runtime_cameras: bool,
     domain_randomization_enabled: bool | None,
+    randomization_profile: str | None = None,
 ):
     """Build a serial episode queue, including heterogeneous recipes."""
     recipes = [str(recipe) for recipe in recipes]
@@ -792,11 +813,21 @@ def _build_collect_worker_task_configs(
             scene_profile=scene_profile,
             attach_runtime_cameras=attach_runtime_cameras,
             domain_randomization_enabled=domain_randomization_enabled,
+            randomization_profile=randomization_profile,
         )
         for episode_idx, (recipe, seed, layout_seed) in enumerate(
             zip(episode_recipes, seeds, resolved_layout_seeds)
         )
     ]
+
+
+def _limit_worker_episode_steps(task_configs, max_steps: int | None) -> None:
+    if max_steps is None:
+        return
+    if int(max_steps) <= 0:
+        raise ValueError('--worker-max-steps must be positive.')
+    for task_config in task_configs:
+        task_config.max_steps = min(int(task_config.max_steps), int(max_steps))
 
 
 def _worker_mode(args, *, headless: bool):
@@ -811,16 +842,19 @@ def _worker_mode(args, *, headless: bool):
     if args.worker_mode == 'search':
         if len(worker_recipes) != 1:
             raise ValueError('Search worker mode supports exactly one recipe.')
-        _run_task_sequence(
-            task_configs=build_dual_franka_assembly_batch(
-                recipe=worker_recipes[0],
-                seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
-                scene_profile=scene_profile,
-                attach_runtime_cameras=bool(
-                    args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb
-                ),
-                domain_randomization_enabled=True if args.domain_randomization else None,
+        task_configs = build_dual_franka_assembly_batch(
+            recipe=worker_recipes[0],
+            seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
+            scene_profile=scene_profile,
+            attach_runtime_cameras=bool(
+                args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb
             ),
+            domain_randomization_enabled=True if args.domain_randomization else None,
+            randomization_profile=args.randomization_profile,
+        )
+        _limit_worker_episode_steps(task_configs, args.worker_max_steps)
+        _run_task_sequence(
+            task_configs=task_configs,
             headless=headless,
             results_output_path=Path(args.worker_results_path).resolve(),
             output_dir=Path(args.output_dir).resolve(),
@@ -864,17 +898,20 @@ def _worker_mode(args, *, headless: bool):
     if args.worker_mode != 'collect':
         raise ValueError(f'Unsupported worker mode: {args.worker_mode!r}')
 
+    task_configs = _build_collect_worker_task_configs(
+        recipes=worker_recipes,
+        seeds=[int(seed) for seed in (args.worker_seeds or [])],
+        layout_seeds=None
+        if not args.worker_layout_seeds
+        else [int(seed) for seed in args.worker_layout_seeds],
+        scene_profile=scene_profile,
+        attach_runtime_cameras=bool(args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb),
+        domain_randomization_enabled=True if args.domain_randomization else None,
+        randomization_profile=args.randomization_profile,
+    )
+    _limit_worker_episode_steps(task_configs, args.worker_max_steps)
     _run_task_sequence(
-        task_configs=_build_collect_worker_task_configs(
-            recipes=worker_recipes,
-            seeds=[int(seed) for seed in (args.worker_seeds or [])],
-            layout_seeds=None
-            if not args.worker_layout_seeds
-            else [int(seed) for seed in args.worker_layout_seeds],
-            scene_profile=scene_profile,
-            attach_runtime_cameras=bool(args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb),
-            domain_randomization_enabled=True if args.domain_randomization else None,
-        ),
+        task_configs=task_configs,
         headless=headless,
         output_dir=Path(args.output_dir).resolve(),
         results_output_path=Path(args.worker_results_path).resolve(),
@@ -952,6 +989,7 @@ def _invoke_worker(
     dataset_frame_stride: int = 8,
     rendering_fps: int = 0,
     domain_randomization: bool = False,
+    randomization_profile: str = 'mixed',
 ):
     command = [
         sys.executable,
@@ -987,6 +1025,7 @@ def _invoke_worker(
         command.extend(['--rendering-fps', str(int(rendering_fps))])
     if domain_randomization:
         command.append('--domain-randomization')
+        command.extend(['--randomization-profile', str(randomization_profile)])
     if runtime_robochecker:
         command.append('--runtime-robochecker')
         command.extend(['--runtime-checker-stride', str(int(runtime_checker_stride))])
@@ -1058,6 +1097,7 @@ def _results_from_worker(
     dataset_frame_stride: int = 8,
     rendering_fps: int = 0,
     domain_randomization: bool = False,
+    randomization_profile: str = 'mixed',
 ) -> list[dict]:
     worker_dir.mkdir(parents=True, exist_ok=True)
     results_path = worker_dir / (
@@ -1102,6 +1142,7 @@ def _results_from_worker(
         dataset_frame_stride=dataset_frame_stride,
         rendering_fps=rendering_fps,
         domain_randomization=domain_randomization,
+        randomization_profile=randomization_profile,
     )
     if not results_path.exists():
         raise RuntimeError(
@@ -1161,6 +1202,12 @@ def main():
         default=None,
         help='Override sparse rendering for worker-only, non-image debug rollouts.',
     )
+    parser.add_argument(
+        '--worker-max-steps',
+        type=int,
+        default=None,
+        help='Cap each worker episode for lifecycle smoke tests; omitted for full collection.',
+    )
     parser.add_argument('--record-live-video', action='store_true')
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)
@@ -1170,6 +1217,12 @@ def main():
     parser.add_argument('--dataset-frame-stride', type=int, default=8)
     parser.add_argument('--rendering-fps', type=int, default=0)
     parser.add_argument('--domain-randomization', action='store_true')
+    parser.add_argument(
+        '--randomization-profile',
+        choices=RANDOMIZATION_PROFILE_CHOICES,
+        default='mixed',
+        help='Select one recorded domain-randomization subset; mixed preserves the legacy behavior.',
+    )
     parser.add_argument(
         '--skip-episode-steps',
         action='store_true',
@@ -1285,6 +1338,7 @@ def main():
                 stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
                 skip_episode_steps=bool(args.skip_episode_steps),
                 domain_randomization=bool(args.domain_randomization),
+                randomization_profile=args.randomization_profile,
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
             if not successful_seeds:
@@ -1334,6 +1388,7 @@ def main():
                 dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
                 rendering_fps=max(int(args.rendering_fps), 0),
                 domain_randomization=bool(args.domain_randomization),
+                randomization_profile=args.randomization_profile,
             )
             runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
             if runtime_failed_results:
@@ -1382,6 +1437,7 @@ def main():
                 'dataset_fps': max(int(args.dataset_fps), 1),
                 'dataset_frame_stride': max(int(args.dataset_frame_stride), 1),
                 'domain_randomization': bool(args.domain_randomization),
+                'randomization_profile': args.randomization_profile,
                 'successful_seeds': successful_seeds,
                 'asset_references': _to_jsonable(recipe_spec.get('asset_references', [])),
                 'metadata': _to_jsonable(recipe_spec.get('metadata', {})),

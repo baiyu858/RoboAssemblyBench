@@ -1,26 +1,26 @@
 profile_name: taoyuan_grscenes_tabletop
-scene_asset_path: ${ASSET_PATH}/scenes/empty.usd
+scene_asset_path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+scene_asset_fallback_path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
 workspace_offset: [0.0, 0.0, 0.99]
 camera_specs: []
 scene_lights:
   - name: warehouse_dome_fill
     kind: dome
-    intensity: 950
-    color: [0.78, 0.84, 1.0]
-  - name: warehouse_sun_fill
-    kind: distant
-    intensity: 420
-    angle: 0.75
-    color: [1.0, 0.95, 0.86]
-    rotation_euler: [-55.0, 0.0, -35.0]
+    intensity: 100
+    exposure: -0.2
+    color: [0.88, 0.91, 0.96]
 
 metadata:
-  scene_family: factory_tabletop_visual
-  description: Factory tabletop workcell using lightweight task-local visual geometry, with the task work surface aligned to the visual table top.
+  scene_family: isaac_simple_warehouse_tabletop
+  fallback_scene_family: roboassemblybench_factory_cell_tabletop
+  description: Isaac Simple Warehouse factory with a task-local tabletop aligned to the Fabrica workspace.
   asset_references:
-    - name: empty_scene
+    - name: isaac_simple_warehouse
       kind: scene
-      path: ${ASSET_PATH}/scenes/empty.usd
+      path: ${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+    - name: factory_cell_fallback
+      kind: scene
+      path: ${BENCHMARK_ROOT}/scenes/usd/factory_cell.usda
 
 objects:
   - name: factory_tabletop_visual

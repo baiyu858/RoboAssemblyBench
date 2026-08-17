@@ -113,7 +113,7 @@ def _worker_command(args, recipes: list[str], results_path: Path) -> list[str]:
         '--stage-precheck-waypoints',
         str(int(args.stage_precheck_waypoints)),
     ]
-    if getattr(args, 'domain_randomization', False):
+    if args.domain_randomization:
         command.append('--domain-randomization')
     if args.record_live_video:
         command.extend(

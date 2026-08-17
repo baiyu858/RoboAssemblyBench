@@ -11,9 +11,14 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+import cv2
 import numpy as np
 
-from roboassemblybench.core.domain_randomization import apply_domain_randomization
+from roboassemblybench.core.domain_randomization import (
+    RANDOMIZATION_PROFILE_CHOICES,
+    apply_domain_randomization,
+    normalize_randomization_profile,
+)
 from roboassemblybench.core.process_lock import exclusive_process_lock
 from roboassemblybench.datasets.cartesian_episode import (
     ACTION_NAMES,
@@ -29,6 +34,32 @@ DEFAULT_OUTPUT = REPO_ROOT / 'outputs' / 'fabrica_plumbers_block_ur5e_right_base
 MANIFEST_NAME = 'collection_manifest.json'
 QUALIFICATION_MANIFEST_NAME = 'qualification_manifest.json'
 QUALIFICATION_STATUS_NAME = 'qualification_status.json'
+FRONT_CAMERA_KEY = 'observation.images.front'
+VISUAL_SAMPLE_FRACTIONS = tuple(index / 16.0 for index in range(17))
+VISUAL_EARLY_FRAME_COUNT = 4
+VISUAL_INITIAL_ROBOT_VISIBILITY_GRACE_FRAMES = 2
+ROBOT_VISIBILITY_REGIONS = {
+    'left': {
+        'anchor': (0.025, 0.235, 0.48, 0.88),
+        'structure': (0.0, 0.52, 0.04, 0.90),
+    },
+    'right': {
+        'anchor': (0.535, 0.765, 0.48, 0.88),
+        'structure': (0.48, 1.0, 0.04, 0.90),
+    },
+}
+ROBOT_ANCHOR_EDGE_MEAN_THRESHOLD = 15.0
+ROBOT_ANCHOR_EDGE_P90_THRESHOLD = 35.0
+ROBOT_ANCHOR_LOCAL_CONTRAST_THRESHOLD = 9.5
+ROBOT_STRUCTURE_BRIGHT_NEUTRAL_FRACTION_THRESHOLD = 0.02
+# Backward-compatible alias for quality reports produced before the anchor detector.
+ROBOT_EDGE_P90_THRESHOLD = ROBOT_ANCHOR_EDGE_P90_THRESHOLD
+HORIZONTAL_LIGHT_STREAK_SPAN_THRESHOLD = 0.35
+VERTICAL_LIGHT_STREAK_SPAN_THRESHOLD = 0.90
+BACKGROUND_EDGE_MEAN_THRESHOLD = 4.0
+RENDER_ARTIFACT_CHROMA_LAPLACIAN_THRESHOLD = 2.1
+RENDER_ARTIFACT_HIGH_CHROMA_FRACTION_THRESHOLD = 0.008
+RENDER_ARTIFACT_LAPLACIAN_RATIO_THRESHOLD = 1.35
 
 
 @contextmanager
@@ -60,11 +91,238 @@ def _available_memory_gib() -> float:
     return float(values.get('MemAvailable', 0)) / (1024.0**2)
 
 
+def _visual_sample_frame_indices(frame_count: int) -> list[int]:
+    if frame_count <= 0:
+        return []
+    uniform_count = min(len(VISUAL_SAMPLE_FRACTIONS), frame_count)
+    uniform_indices = np.linspace(0, frame_count - 1, uniform_count).round().astype(int)
+    early_indices = range(min(VISUAL_EARLY_FRAME_COUNT, frame_count))
+    return sorted({int(value) for value in (*early_indices, *uniform_indices)})
+
+
+def _normalized_roi(array: np.ndarray, bounds: tuple[float, float, float, float]) -> np.ndarray:
+    height, width = array.shape[:2]
+    x_start, x_end, y_start, y_end = bounds
+    return array[
+        int(y_start * height) : int(y_end * height),
+        int(x_start * width) : int(x_end * width),
+    ]
+
+
+def _robot_visibility_metrics(gray: np.ndarray, chroma: np.ndarray, *, side: str) -> dict[str, Any]:
+    regions = ROBOT_VISIBILITY_REGIONS[side]
+    anchor = _normalized_roi(gray, regions['anchor'])
+    structure = _normalized_roi(gray, regions['structure'])
+    structure_chroma = _normalized_roi(chroma, regions['structure'])
+
+    blurred_anchor = cv2.GaussianBlur(anchor, (5, 5), 0)
+    anchor_edges = cv2.magnitude(
+        cv2.Sobel(blurred_anchor, cv2.CV_32F, 1, 0, ksize=3),
+        cv2.Sobel(blurred_anchor, cv2.CV_32F, 0, 1, ksize=3),
+    )
+    local_background = cv2.GaussianBlur(blurred_anchor, (0, 0), 12)
+    local_contrast = cv2.absdiff(blurred_anchor, local_background)
+    bright_neutral = (structure >= 210) & (structure_chroma <= 35)
+
+    edge_mean = float(np.mean(anchor_edges))
+    edge_p90 = float(np.percentile(anchor_edges, 90))
+    local_contrast_mean = float(np.mean(local_contrast))
+    structure_bright_neutral_fraction = float(np.mean(bright_neutral))
+    anchor_visible = bool(
+        edge_mean >= ROBOT_ANCHOR_EDGE_MEAN_THRESHOLD
+        and edge_p90 >= ROBOT_ANCHOR_EDGE_P90_THRESHOLD
+        and local_contrast_mean >= ROBOT_ANCHOR_LOCAL_CONTRAST_THRESHOLD
+    )
+    structure_visible = bool(
+        structure_bright_neutral_fraction >= ROBOT_STRUCTURE_BRIGHT_NEUTRAL_FRACTION_THRESHOLD
+    )
+    return {
+        'anchor_edge_mean': edge_mean,
+        'anchor_edge_p90': edge_p90,
+        'anchor_local_contrast_mean': local_contrast_mean,
+        'structure_bright_neutral_fraction': structure_bright_neutral_fraction,
+        'anchor_visible': anchor_visible,
+        'structure_visible': structure_visible,
+        'visible': bool(anchor_visible and structure_visible),
+    }
+
+
+def _front_visual_quality(video_path: Path) -> dict[str, Any]:
+    """Check representative front frames for rendering and robot visibility failures."""
+
+    result: dict[str, Any] = {
+        'valid': False,
+        'errors': [],
+        'video_path': str(video_path),
+        'sample_frame_indices': [],
+        'luminance_mean': [],
+        'luminance_std': [],
+        'overexposed_fraction': [],
+        'left_robot_roi_edge_mean': [],
+        'left_robot_roi_edge_p90': [],
+        'left_robot_roi_bright_neutral_fraction': [],
+        'left_robot_anchor_local_contrast_mean': [],
+        'left_robot_anchor_visible': [],
+        'left_robot_structure_visible': [],
+        'left_robot_visible': [],
+        'right_robot_roi_edge_mean': [],
+        'right_robot_roi_edge_p90': [],
+        'right_robot_roi_bright_neutral_fraction': [],
+        'right_robot_anchor_local_contrast_mean': [],
+        'right_robot_anchor_visible': [],
+        'right_robot_structure_visible': [],
+        'right_robot_visible': [],
+        'bright_row_span': [],
+        'bright_column_span': [],
+        'background_edge_mean': [],
+        'chroma_laplacian_mean': [],
+        'high_chroma_fraction': [],
+    }
+    capture = cv2.VideoCapture(str(video_path))
+    try:
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        if not capture.isOpened() or frame_count <= 0:
+            result['errors'].append('decode')
+            return result
+
+        frame_indices = _visual_sample_frame_indices(frame_count)
+        expected_sample_count = len(frame_indices)
+
+        for frame_index in frame_indices:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            decoded, frame = capture.read()
+            if not decoded or frame is None or frame.ndim != 3 or min(frame.shape[:2]) < 32:
+                result['errors'].append('decode')
+                continue
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            height, width = gray.shape
+            chroma = np.max(frame, axis=2) - np.min(frame, axis=2)
+
+            result['sample_frame_indices'].append(frame_index)
+            result['luminance_mean'].append(float(np.mean(gray)))
+            result['luminance_std'].append(float(np.std(gray)))
+            result['overexposed_fraction'].append(float(np.mean(gray >= 250)))
+            chroma_laplacian = cv2.Laplacian(chroma.astype(np.float32), cv2.CV_32F)
+            result['chroma_laplacian_mean'].append(float(np.mean(np.abs(chroma_laplacian))))
+            result['high_chroma_fraction'].append(float(np.mean(chroma > 45)))
+
+            for side in ('left', 'right'):
+                robot_metrics = _robot_visibility_metrics(gray, chroma, side=side)
+                result[f'{side}_robot_roi_edge_mean'].append(robot_metrics['anchor_edge_mean'])
+                result[f'{side}_robot_roi_edge_p90'].append(robot_metrics['anchor_edge_p90'])
+                result[f'{side}_robot_roi_bright_neutral_fraction'].append(
+                    robot_metrics['structure_bright_neutral_fraction']
+                )
+                result[f'{side}_robot_anchor_local_contrast_mean'].append(
+                    robot_metrics['anchor_local_contrast_mean']
+                )
+                result[f'{side}_robot_anchor_visible'].append(robot_metrics['anchor_visible'])
+                result[f'{side}_robot_structure_visible'].append(robot_metrics['structure_visible'])
+                result[f'{side}_robot_visible'].append(robot_metrics['visible'])
+
+            bright = gray >= 245
+            result['bright_row_span'].append(
+                float(np.max(np.mean(bright[:, int(0.05 * width) : int(0.95 * width)], axis=1)))
+            )
+            result['bright_column_span'].append(
+                float(np.max(np.mean(bright[int(0.05 * height) : int(0.95 * height), :], axis=0)))
+            )
+            background_roi = gray[
+                int(0.03 * height) : int(0.38 * height),
+                int(0.25 * width) : int(0.75 * width),
+            ]
+            background_edge = cv2.magnitude(
+                cv2.Sobel(background_roi, cv2.CV_32F, 1, 0, ksize=3),
+                cv2.Sobel(background_roi, cv2.CV_32F, 0, 1, ksize=3),
+            )
+            result['background_edge_mean'].append(float(np.mean(background_edge)))
+    finally:
+        capture.release()
+
+    if len(result['sample_frame_indices']) != expected_sample_count:
+        result['errors'].append('decode')
+    if any(value < 8.0 or value > 247.0 for value in result['luminance_mean']):
+        result['errors'].append('luminance')
+    if any(value < 10.0 for value in result['luminance_std']):
+        result['errors'].append('low-variance')
+    if any(value > 0.25 for value in result['overexposed_fraction']):
+        result['errors'].append('overexposed')
+
+    missing_robot_sides = []
+    for side in ('left', 'right'):
+        edge_values = result[f'{side}_robot_roi_edge_mean']
+        result[f'{side}_robot_roi_edge_median'] = float(np.median(edge_values)) if edge_values else 0.0
+        edge_p90_values = result[f'{side}_robot_roi_edge_p90']
+        result[f'{side}_robot_roi_edge_p90_median'] = (
+            float(np.median(edge_p90_values)) if edge_p90_values else 0.0
+        )
+        neutral_values = result[f'{side}_robot_roi_bright_neutral_fraction']
+        result[f'{side}_robot_roi_bright_neutral_fraction_median'] = (
+            float(np.median(neutral_values)) if neutral_values else 0.0
+        )
+        local_contrast_values = result[f'{side}_robot_anchor_local_contrast_mean']
+        result[f'{side}_robot_anchor_local_contrast_mean_median'] = (
+            float(np.median(local_contrast_values)) if local_contrast_values else 0.0
+        )
+        visibility_values = [
+            visible
+            for frame_index, visible in zip(
+                result['sample_frame_indices'],
+                result[f'{side}_robot_visible'],
+            )
+            if frame_index >= VISUAL_INITIAL_ROBOT_VISIBILITY_GRACE_FRAMES
+        ]
+        result[f'{side}_robot_visible_fraction'] = (
+            float(np.mean(visibility_values)) if visibility_values else 0.0
+        )
+        if not visibility_values or not all(visibility_values):
+            missing_robot_sides.append(side)
+            result['errors'].append(f'{side}-robot-not-visible')
+    if missing_robot_sides:
+        result['errors'].append('robot-not-visible')
+    if (
+        max(result['bright_row_span'], default=0.0) >= HORIZONTAL_LIGHT_STREAK_SPAN_THRESHOLD
+        or max(result['bright_column_span'], default=0.0) >= VERTICAL_LIGHT_STREAK_SPAN_THRESHOLD
+    ):
+        result['errors'].append('light-streak')
+    result['chroma_laplacian_median'] = (
+        float(np.median(result['chroma_laplacian_mean'])) if result['chroma_laplacian_mean'] else 0.0
+    )
+    result['high_chroma_fraction_median'] = (
+        float(np.median(result['high_chroma_fraction'])) if result['high_chroma_fraction'] else 0.0
+    )
+    if any(
+        laplacian >= RENDER_ARTIFACT_CHROMA_LAPLACIAN_THRESHOLD
+        and laplacian
+        >= result['chroma_laplacian_median'] * RENDER_ARTIFACT_LAPLACIAN_RATIO_THRESHOLD
+        and high_chroma >= RENDER_ARTIFACT_HIGH_CHROMA_FRACTION_THRESHOLD
+        for laplacian, high_chroma in zip(
+            result['chroma_laplacian_mean'],
+            result['high_chroma_fraction'],
+        )
+    ):
+        result['errors'].append('temporal-render-artifact')
+    result['background_edge_mean_median'] = (
+        float(np.median(result['background_edge_mean'])) if result['background_edge_mean'] else 0.0
+    )
+    result['background_edge_mean_min'] = min(result['background_edge_mean'], default=0.0)
+    if result['background_edge_mean_min'] < BACKGROUND_EDGE_MEAN_THRESHOLD:
+        result['errors'].append('factory-background-not-visible')
+
+    result['errors'] = sorted(set(result['errors']))
+    result['valid'] = not result['errors']
+    return result
+
+
 def _quality_check_episode(
     metadata_path: Path,
     *,
     expected_recipe_fingerprint: str | None = None,
     allowed_layout_seeds: set[int] | None = None,
+    require_extended_observations: bool = False,
+    require_visual_quality: bool = False,
+    expected_randomization_profile: str | None = None,
 ) -> dict[str, Any]:
     metadata = _load_json(metadata_path)
     errors = []
@@ -84,6 +342,38 @@ def _quality_check_episode(
     if not bool((metadata.get('domain_randomization') or {}).get('enabled', False)):
         errors.append('domain_randomization')
     domain_randomization = metadata.get('domain_randomization') or {}
+    actual_randomization_profile = normalize_randomization_profile(domain_randomization.get('profile'))
+    if (
+        expected_randomization_profile is not None
+        and actual_randomization_profile != normalize_randomization_profile(expected_randomization_profile)
+    ):
+        errors.append('randomization_profile')
+    randomized_groups = domain_randomization.get('groups') or {}
+    appearance_groups = domain_randomization.get('appearance_groups') or {}
+    if require_extended_observations and not {'start_parts', 'assembly_base'}.issubset(randomized_groups):
+        errors.append('position_randomization_groups')
+    if require_extended_observations:
+        if actual_randomization_profile == 'mixed':
+            if not {'table_surface', 'background'}.issubset(appearance_groups):
+                errors.append('appearance_randomization_groups')
+            if not domain_randomization.get('visual_distractors'):
+                errors.append('visual_distractors')
+        elif actual_randomization_profile == 'object_distractors':
+            if 'visual_distractors' not in domain_randomization:
+                errors.append('visual_distractors')
+        elif actual_randomization_profile == 'texture':
+            if not (domain_randomization.get('table_texture') or {}).get('path'):
+                errors.append('table_texture')
+        elif actual_randomization_profile == 'lighting':
+            light_count = len(domain_randomization.get('lighting') or [])
+            if not 1 <= light_count <= 4:
+                errors.append('lighting_randomization')
+        elif actual_randomization_profile == 'table_color':
+            if 'table_surface' not in appearance_groups:
+                errors.append('table_color_randomization')
+        elif actual_randomization_profile == 'scene':
+            if not domain_randomization.get('scene') or 'background' not in appearance_groups:
+                errors.append('scene_randomization')
     layout_seed = int(metadata.get('layout_seed', domain_randomization.get('seed', metadata.get('seed', -1))))
     if int(domain_randomization.get('seed', layout_seed)) != layout_seed:
         errors.append('layout_seed_metadata')
@@ -120,32 +410,117 @@ def _quality_check_episode(
     if any(int(value) != frame_count for value in (metadata.get('video_frame_counts') or {}).values()):
         errors.append('video_frame_alignment')
 
+    if require_visual_quality:
+        scene_asset_path = str(metadata.get('scene_asset_path') or '')
+        scene_profile = str(metadata.get('scene_profile') or '')
+        if not metadata.get('scene_profile'):
+            errors.append('visual:scene-profile')
+        if not scene_asset_path or Path(scene_asset_path).name == 'empty.usd':
+            errors.append('visual:scene-asset')
+        if not metadata.get('scene_family'):
+            errors.append('visual:scene-family')
+        if scene_profile == 'taoyuan_grscenes_tabletop':
+            if metadata.get('scene_asset_source') != 'primary':
+                errors.append('visual:scene-source')
+            if Path(scene_asset_path).name != 'warehouse_with_forklifts.usd':
+                errors.append('visual:scene-asset')
+            if metadata.get('scene_family') != 'isaac_simple_warehouse_tabletop':
+                errors.append('visual:scene-family')
+        runtime_integrity = metadata.get('runtime_scene_integrity') or {}
+        if (
+            not isinstance(runtime_integrity, dict)
+            or not bool((runtime_integrity.get('start') or {}).get('valid', False))
+            or not bool((runtime_integrity.get('end') or {}).get('valid', False))
+        ):
+            errors.append('visual:runtime-scene-integrity')
+
+    if require_extended_observations:
+        depth_streams = metadata.get('depth') or {}
+        if set(depth_streams) != set(CAMERA_KEYS):
+            errors.append('depth_camera_keys')
+        for camera_key, depth_metadata in depth_streams.items():
+            if camera_key not in CAMERA_KEYS or not isinstance(depth_metadata, dict):
+                errors.append(f'depth:{camera_key}')
+                continue
+            depth_path = Path(depth_metadata.get('path') or '')
+            shape = depth_metadata.get('shape') or []
+            count = int(depth_metadata.get('count', -1))
+            if (
+                count != frame_count
+                or len(shape) != 2
+                or depth_metadata.get('dtype') != 'float16'
+                or depth_metadata.get('compression') != 'zstd'
+                or not depth_path.is_file()
+                or depth_path.stat().st_size == 0
+            ):
+                errors.append(f'depth:{camera_key}')
+        if not bool((metadata.get('capabilities') or {}).get('depth', False)):
+            errors.append('depth_capability')
+
+        annotation_path = Path(metadata.get('annotation_path') or '')
+        if not annotation_path.is_file():
+            errors.append('annotation_missing')
+        else:
+            annotation = _load_json(annotation_path)
+            if (
+                annotation.get('schema_version') != 'roboassemblybench_long_horizon_annotation_v1'
+                or not annotation.get('assembly_steps')
+                or not annotation.get('phase_annotations')
+                or not annotation.get('robot_roles')
+                or not annotation.get('execution_order')
+                or 'task_result' not in annotation
+            ):
+                errors.append('annotation_schema')
+
     trajectory_path = Path(metadata.get('trajectory_path') or '')
     if not trajectory_path.is_file():
         errors.append('trajectory_missing')
     else:
-        trajectory = np.load(trajectory_path)
-        states = np.asarray(trajectory['observation_state'])
-        actions = np.asarray(trajectory['action'])
-        if states.shape != (frame_count, len(STATE_NAMES)):
-            errors.append('state')
-        if actions.shape != (frame_count, len(ACTION_NAMES)):
-            errors.append('action')
-        if states.shape == (frame_count, len(STATE_NAMES)) and actions.shape == (
-            frame_count,
-            len(ACTION_NAMES),
-        ):
-            trajectory_errors = cartesian_trajectory_errors(
-                states,
-                actions,
-                simulation_steps=trajectory.get('simulation_step'),
-                frame_stride=frame_stride,
-            )
-            errors.extend(f'trajectory:{error}' for error in trajectory_errors)
+        with np.load(trajectory_path) as trajectory:
+            states = np.asarray(trajectory['observation_state'])
+            actions = np.asarray(trajectory['action'])
+            if states.shape != (frame_count, len(STATE_NAMES)):
+                errors.append('state')
+            if actions.shape != (frame_count, len(ACTION_NAMES)):
+                errors.append('action')
+            if states.shape == (frame_count, len(STATE_NAMES)) and actions.shape == (
+                frame_count,
+                len(ACTION_NAMES),
+            ):
+                trajectory_errors = cartesian_trajectory_errors(
+                    states,
+                    actions,
+                    simulation_steps=trajectory.get('simulation_step'),
+                    frame_stride=frame_stride,
+                )
+                errors.extend(f'trajectory:{error}' for error in trajectory_errors)
+            expected_features = {
+                'joint_state': (frame_count, 14),
+                'joint_velocity': (frame_count, 14),
+                'joint_effort': (frame_count, 14),
+                'wrist_wrench': (frame_count, 12),
+                'collision_signal': (frame_count, 4),
+                'subtask_index': (frame_count,),
+                'substage_index': (frame_count,),
+                'waiting_state': (frame_count,),
+                'handoff_state': (frame_count,),
+            }
+            if require_extended_observations:
+                for feature_name, expected_shape in expected_features.items():
+                    if feature_name not in trajectory or np.asarray(trajectory[feature_name]).shape != expected_shape:
+                        errors.append(f'trajectory:{feature_name}')
 
     for camera_key, video_path in (metadata.get('videos') or {}).items():
         if camera_key not in CAMERA_KEYS or not Path(video_path).is_file() or Path(video_path).stat().st_size == 0:
             errors.append(f'video:{camera_key}')
+    visual_quality = None
+    if require_visual_quality:
+        front_video_path = Path((metadata.get('videos') or {}).get(FRONT_CAMERA_KEY) or '')
+        if front_video_path.is_file() and front_video_path.stat().st_size > 0:
+            visual_quality = _front_visual_quality(front_video_path)
+            errors.extend(f'visual:{error}' for error in visual_quality['errors'])
+        else:
+            errors.append('visual:front-video')
     return {
         'valid': not errors,
         'errors': sorted(set(errors)),
@@ -155,6 +530,8 @@ def _quality_check_episode(
         'metadata_path': str(metadata_path.resolve()),
         'recipe_fingerprint': recipe_fingerprint,
         'domain_randomization': domain_randomization,
+        'randomization_profile': actual_randomization_profile,
+        'visual_quality': visual_quality,
     }
 
 
@@ -163,6 +540,9 @@ def _scan_existing(
     *,
     expected_recipe_fingerprint: str | None = None,
     allowed_layout_seeds: set[int] | None = None,
+    require_extended_observations: bool = False,
+    require_visual_quality: bool = False,
+    expected_randomization_profile: str | None = None,
 ) -> dict[int, dict[str, Any]]:
     episodes = {}
     for metadata_path in output_dir.rglob('episode_*_cartesian_raw/metadata.json'):
@@ -170,6 +550,9 @@ def _scan_existing(
             metadata_path,
             expected_recipe_fingerprint=expected_recipe_fingerprint,
             allowed_layout_seeds=allowed_layout_seeds,
+            require_extended_observations=require_extended_observations,
+            require_visual_quality=require_visual_quality,
+            expected_randomization_profile=expected_randomization_profile,
         )
         if quality['valid']:
             episodes[quality['seed']] = quality
@@ -191,6 +574,7 @@ def _initial_manifest(args, existing: dict[int, dict[str, Any]]) -> dict[str, An
         'dataset_frame_stride': int(args.dataset_frame_stride),
         'rendering_fps': int(args.rendering_fps),
         'worker_timeout_seconds': float(getattr(args, 'worker_timeout_seconds', 1800.0)),
+        'worker_stall_timeout_seconds': float(getattr(args, 'worker_stall_timeout_seconds', 0.0)),
         'timing_contract': {
             'physics_fps': int(args.rendering_fps),
             'control_fps': int(args.rendering_fps),
@@ -202,8 +586,11 @@ def _initial_manifest(args, existing: dict[int, dict[str, Any]]) -> dict[str, An
             'camera_state_action_aligned': True,
         },
         'domain_randomization': True,
+        'randomization_profile': normalize_randomization_profile(getattr(args, 'randomization_profile', None)),
         'collection_layout_seeds': [int(seed) for seed in getattr(args, 'layout_seeds', [])],
-        'layout_assignment': 'episode_seed_modulo_round_robin',
+        'layout_assignment': (
+            'episode_seed' if bool(getattr(args, 'unique_layout_seeds', False)) else 'episode_seed_modulo_round_robin'
+        ),
         'single_worker': True,
         'qualification_manifest': str(getattr(args, 'qualification_manifest', '')),
         'successful_episodes': {str(seed): value for seed, value in sorted(existing.items())},
@@ -244,16 +631,7 @@ def _batch_command(
     layout_seeds: list[int] | None = None,
     record_raw: bool = True,
 ) -> list[str]:
-    conda = shutil.which('conda')
-    if conda is None:
-        raise RuntimeError('conda executable was not found.')
-    command = [
-        conda,
-        'run',
-        '--no-capture-output',
-        '-n',
-        args.conda_env,
-        'env',
+    environment = [
         'PYTHONNOUSERSITE=1',
         'PYTHONUNBUFFERED=1',
         'OMP_NUM_THREADS=4',
@@ -261,7 +639,29 @@ def _batch_command(
         'OPENBLAS_NUM_THREADS=4',
         f'UR5E_DEBUG_GRASP={os.environ.get("UR5E_DEBUG_GRASP", "0")}',
         f'UR5E_DEBUG_TRANSPORT_EVERY={os.environ.get("UR5E_DEBUG_TRANSPORT_EVERY", "0")}',
-        'python',
+    ]
+    configured_isaac_python = getattr(args, 'isaac_python', None)
+    if configured_isaac_python:
+        isaac_python = Path(configured_isaac_python).expanduser().resolve()
+        if not isaac_python.is_file():
+            raise RuntimeError(f'Isaac Python executable was not found: {isaac_python}')
+        command = ['env', *environment, str(isaac_python)]
+    else:
+        conda = shutil.which('conda')
+        if conda is None:
+            raise RuntimeError('conda executable was not found; pass --isaac-python for a direct runtime.')
+        command = [
+            conda,
+            'run',
+            '--no-capture-output',
+            '-n',
+            args.conda_env,
+            'env',
+            *environment,
+            'python',
+        ]
+    command.extend(
+        [
         str(REPO_ROOT / 'roboassemblybench' / 'scripts' / 'generate_demos.py'),
         '--worker-mode',
         'collect',
@@ -286,9 +686,12 @@ def _batch_command(
         '--rendering-fps',
         str(args.rendering_fps),
         '--domain-randomization',
+        '--randomization-profile',
+        normalize_randomization_profile(getattr(args, 'randomization_profile', None)),
         '--skip-episode-steps',
         '--headless',
-    ]
+        ]
+    )
     if layout_seeds is not None:
         if len(layout_seeds) != len(seeds):
             raise ValueError('layout_seeds must contain exactly one entry per episode seed.')
@@ -302,8 +705,18 @@ def _batch_command(
     return command
 
 
-def _randomization_feature(recipe_spec: dict[str, Any], seed: int) -> np.ndarray:
-    _, result = apply_domain_randomization(recipe_spec, seed=seed, enabled_override=True)
+def _randomization_feature(
+    recipe_spec: dict[str, Any],
+    seed: int,
+    *,
+    randomization_profile: str | None = None,
+) -> np.ndarray:
+    _, result = apply_domain_randomization(
+        recipe_spec,
+        seed=seed,
+        enabled_override=True,
+        profile=randomization_profile,
+    )
     values = []
     for group_name in sorted(result.get('groups') or {}):
         values.extend(float(value) for value in result['groups'][group_name]['translation'])
@@ -654,7 +1067,10 @@ def _run_worker_with_resource_monitor(command: list[str], *, log_file, args) -> 
     abort_threshold = max(float(args.abort_available_memory_gib), 0.0)
     grace_polls = max(int(args.low_memory_grace_polls), 1)
     timeout_seconds = max(float(getattr(args, 'worker_timeout_seconds', 1800.0)), 0.0)
+    stall_timeout_seconds = max(float(getattr(args, 'worker_stall_timeout_seconds', 0.0)), 0.0)
     started_at = time.monotonic()
+    last_log_activity_at = started_at
+    last_log_size = os.fstat(log_file.fileno()).st_size
     try:
         while process.poll() is None:
             if stop_signal is not None:
@@ -672,9 +1088,21 @@ def _run_worker_with_resource_monitor(command: list[str], *, log_file, args) -> 
                     'threshold_gib': abort_threshold,
                     'consecutive_polls': low_memory_polls,
                 }
-            elif timeout_seconds > 0.0:
-                elapsed_seconds = max(time.monotonic() - started_at, 0.0)
-                if elapsed_seconds >= timeout_seconds:
+            else:
+                now = time.monotonic()
+                log_size = os.fstat(log_file.fileno()).st_size
+                if log_size != last_log_size:
+                    last_log_size = log_size
+                    last_log_activity_at = now
+                stalled_seconds = max(now - last_log_activity_at, 0.0)
+                elapsed_seconds = max(now - started_at, 0.0)
+                if stall_timeout_seconds > 0.0 and stalled_seconds >= stall_timeout_seconds:
+                    resource_abort = {
+                        'reason': 'worker-log-stalled',
+                        'stalled_seconds': stalled_seconds,
+                        'threshold_seconds': stall_timeout_seconds,
+                    }
+                elif timeout_seconds > 0.0 and elapsed_seconds >= timeout_seconds:
                     resource_abort = {
                         'reason': 'worker-wall-timeout',
                         'elapsed_seconds': elapsed_seconds,
@@ -701,11 +1129,18 @@ def collect(args) -> dict[str, Any]:
         args.qualification_manifest = ''
     manifest_path = output_dir / MANIFEST_NAME
     expected_recipe_fingerprint = str(args.recipe_fingerprint)
-    allowed_layout_seeds = {int(seed) for seed in args.layout_seeds}
+    expected_randomization_profile = normalize_randomization_profile(
+        getattr(args, 'randomization_profile', None)
+    )
+    unique_layout_seeds = bool(getattr(args, 'unique_layout_seeds', False))
+    allowed_layout_seeds = None if unique_layout_seeds else {int(seed) for seed in args.layout_seeds}
     existing = _scan_existing(
         output_dir,
         expected_recipe_fingerprint=expected_recipe_fingerprint,
         allowed_layout_seeds=allowed_layout_seeds,
+        require_extended_observations=bool(getattr(args, 'require_extended_observations', False)),
+        require_visual_quality=bool(getattr(args, 'require_visual_quality', False)),
+        expected_randomization_profile=expected_randomization_profile,
     )
     if manifest_path.is_file():
         manifest = _load_json(manifest_path)
@@ -713,15 +1148,28 @@ def collect(args) -> dict[str, Any]:
         if recorded_fingerprint and recorded_fingerprint != expected_recipe_fingerprint:
             raise RuntimeError('Collection manifest recipe fingerprint does not match the current resolved recipe.')
         recorded_layout_seeds = [int(seed) for seed in manifest.get('collection_layout_seeds') or []]
-        if recorded_layout_seeds != list(args.layout_seeds):
+        recorded_randomization_profile = normalize_randomization_profile(manifest.get('randomization_profile'))
+        if recorded_randomization_profile != expected_randomization_profile:
             raise RuntimeError(
-                'Collection manifest layout seed contract does not match --layout-seeds: '
-                f'{recorded_layout_seeds} != {list(args.layout_seeds)}.'
+                'Collection manifest randomization profile does not match this run: '
+                f'{recorded_randomization_profile!r} != {expected_randomization_profile!r}.'
+            )
+        expected_layout_assignment = 'episode_seed' if unique_layout_seeds else 'episode_seed_modulo_round_robin'
+        if (
+            recorded_layout_seeds != list(args.layout_seeds)
+            or manifest.get('layout_assignment') != expected_layout_assignment
+        ):
+            raise RuntimeError(
+                'Collection manifest layout seed contract does not match this run: '
+                f'{recorded_layout_seeds}/{manifest.get("layout_assignment")} != '
+                f'{list(args.layout_seeds)}/{expected_layout_assignment}.'
             )
         manifest['recipe_fingerprint'] = expected_recipe_fingerprint
         _reconcile_manifest_on_resume(manifest, existing)
+        manifest['batch_size'] = int(args.batch_size)
         manifest['max_attempts'] = int(args.max_attempts)
         manifest['worker_timeout_seconds'] = float(args.worker_timeout_seconds)
+        manifest['worker_stall_timeout_seconds'] = float(args.worker_stall_timeout_seconds)
     else:
         manifest = _initial_manifest(args, existing)
     _write_json_atomic(manifest_path, manifest)
@@ -738,7 +1186,11 @@ def collect(args) -> dict[str, Any]:
             )
         count = min(int(args.batch_size), remaining, max_attempt_seed - next_seed)
         seeds = list(range(next_seed, next_seed + count))
-        layout_seeds = [args.layout_seeds[seed % len(args.layout_seeds)] for seed in seeds]
+        layout_seeds = (
+            list(seeds)
+            if unique_layout_seeds
+            else [args.layout_seeds[seed % len(args.layout_seeds)] for seed in seeds]
+        )
         batch_name = f'batch_{seeds[0]:06d}_{seeds[-1]:06d}'
         batch_dir = output_dir / 'batches' / batch_name
         if batch_dir.exists():
@@ -795,11 +1247,24 @@ def collect(args) -> dict[str, Any]:
                 metadata_path,
                 expected_recipe_fingerprint=expected_recipe_fingerprint,
                 allowed_layout_seeds=allowed_layout_seeds,
+                require_extended_observations=bool(getattr(args, 'require_extended_observations', False)),
+                require_visual_quality=bool(getattr(args, 'require_visual_quality', False)),
+                expected_randomization_profile=expected_randomization_profile,
             )
             batch_quality.append(quality)
             if quality['valid']:
                 manifest['successful_episodes'][str(quality['seed'])] = quality
         batch_record['quality'] = batch_quality
+
+        if bool(getattr(args, 'prune_failed_raw', False)):
+            valid_episode_dirs = {
+                str(Path(item['metadata_path']).resolve().parent)
+                for item in batch_quality
+                if item['valid']
+            }
+            for episode_dir in batch_dir.rglob('episode_*_cartesian_raw'):
+                if str(episode_dir.resolve()) not in valid_episode_dirs:
+                    shutil.rmtree(episode_dir, ignore_errors=True)
 
         result_by_seed = {}
         if results_path.is_file():
@@ -856,11 +1321,27 @@ def main() -> None:
         default=None,
         help='Fixed layout seeds assigned round-robin while episode seeds remain unique.',
     )
+    parser.add_argument(
+        '--unique-layout-seeds',
+        action='store_true',
+        help='Use each unique episode seed as its layout/domain-randomization seed.',
+    )
     parser.add_argument('--max-attempts', type=int, default=10000)
     parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument('--conda-env', default='internutopia311')
+    parser.add_argument(
+        '--isaac-python',
+        default=None,
+        help='Run Isaac workers with this Python executable instead of conda run.',
+    )
     parser.add_argument('--recipe', default='fabrica_plumbers_block_ur5e_right_base_prepare')
     parser.add_argument('--scene-profile', default='taoyuan_grscenes_tabletop')
+    parser.add_argument(
+        '--randomization-profile',
+        choices=RANDOMIZATION_PROFILE_CHOICES,
+        default='mixed',
+        help='Select the extra visual domain while retaining position randomization.',
+    )
     parser.add_argument('--dataset-fps', type=int, default=30)
     parser.add_argument('--dataset-frame-stride', type=int, default=8)
     parser.add_argument(
@@ -880,6 +1361,12 @@ def main() -> None:
         default=1800.0,
         help='Terminate and reject an Isaac worker that does not exit within this wall time; 0 disables.',
     )
+    parser.add_argument(
+        '--worker-stall-timeout-seconds',
+        type=float,
+        default=0.0,
+        help='Terminate an Isaac worker whose log has not grown for this duration; 0 disables.',
+    )
     parser.add_argument('--estimated-episode-mib', type=float, default=64.0)
     parser.add_argument('--disk-reserve-gib', type=float, default=80.0)
     parser.add_argument('--qualification-seed-count', type=int, default=None)
@@ -892,6 +1379,21 @@ def main() -> None:
         default=False,
     )
     parser.add_argument('--skip-qualification', action='store_true')
+    parser.add_argument(
+        '--require-extended-observations',
+        action='store_true',
+        help='Require synchronized RGB-D, rich robot state, and long-horizon annotations.',
+    )
+    parser.add_argument(
+        '--require-visual-quality',
+        action='store_true',
+        help='Reject episodes with a missing scene, invalid front render, or invisible robot.',
+    )
+    parser.add_argument(
+        '--prune-failed-raw',
+        action='store_true',
+        help='Delete RGB-D payloads for episodes rejected by quality checks while preserving logs.',
+    )
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
     args.recipe_spec = load_task_recipe(args.recipe, scene_profile=args.scene_profile)
@@ -902,9 +1404,11 @@ def main() -> None:
         args.qualification_seed_count = int(qualification_spec.get('seed_count', 4))
     if args.qualification_required_seeds is None:
         args.qualification_required_seeds = [int(seed) for seed in qualification_spec.get('required_seeds', [17])]
-    if args.layout_seeds is None:
+    if args.unique_layout_seeds:
+        args.layout_seeds = []
+    elif args.layout_seeds is None:
         args.layout_seeds = [int(seed) for seed in collection_spec.get('layout_seeds', [])]
-    if not args.layout_seeds:
+    if not args.unique_layout_seeds and not args.layout_seeds:
         parser.error('--layout-seeds requires at least one seed or recipe collection.layout_seeds.')
     if len(args.layout_seeds) != len(set(args.layout_seeds)):
         parser.error('--layout-seeds values must be unique.')
@@ -918,13 +1422,14 @@ def main() -> None:
         or args.rendering_fps <= 0
         or args.resource_wait_seconds <= 0
         or args.worker_timeout_seconds < 0
+        or args.worker_stall_timeout_seconds < 0
         or args.qualification_seed_count < 0
         or args.qualification_candidate_pool <= 0
     ):
         parser.error(
             'num-episodes, batch-size, dataset-fps, dataset-frame-stride, and rendering-fps must be '
             'positive; qualification-seed-count must be non-negative; qualification-candidate-pool '
-            'and resource-wait-seconds must be positive; worker-timeout-seconds must be non-negative; '
+            'and resource-wait-seconds must be positive; worker timeouts must be non-negative; '
             'max-attempts must cover num-episodes.'
         )
     with _exclusive_collection_lock(Path(args.output_dir).resolve()):

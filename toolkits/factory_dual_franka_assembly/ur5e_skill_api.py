@@ -81,6 +81,12 @@ class UR5eAssemblySkillAPI:
             'Retreat the tool vertically from its current pose before cross-workspace transit.',
         ),
         AtomicSkillDefinition(
+            'move_arm_to_joint_positions',
+            'move_arm_to_joint_positions',
+            'Move an unladen arm to a configured joint-space safe pose.',
+            ('joint_positions',),
+        ),
+        AtomicSkillDefinition(
             'close_gripper',
             'ur5e_close_gripper',
             'Close the gripper while holding the validated grasp pose.',
@@ -150,6 +156,18 @@ class UR5eAssemblySkillAPI:
         'default_max_command_joint_step': 0.035,
         'default_max_command_wrist_joint_step': 0.020,
     }
+    _joint_motion_defaults = {
+        'cartesian_servo': False,
+        'reference_mode': 'current',
+        'max_joint_step': 0.020,
+        'default_max_command_joint_step': 0.020,
+        'default_max_command_wrist_joint_step': 0.015,
+        'limit_command_to_measured_state': True,
+        'max_command_tracking_error': 0.12,
+        'max_wrist_command_tracking_error': 0.08,
+        'joint_position_tolerance': 0.025,
+        'joint_target_stable_steps': 8,
+    }
 
     @classmethod
     def describe(cls) -> list[dict[str, Any]]:
@@ -179,6 +197,8 @@ class UR5eAssemblySkillAPI:
 
         if definition.runtime_name in {'ur5e_close_gripper', 'ur5e_preshape_gripper'}:
             defaults = {}
+        elif definition.runtime_name == 'move_arm_to_joint_positions':
+            defaults = cls._joint_motion_defaults
         elif definition.runtime_name in {'ur5e_move_part_to_table_hover', 'ur5e_move_part_to_staging'}:
             defaults = cls._transport_motion_defaults
         elif definition.runtime_name == 'ur5e_hold_part_end':
@@ -218,3 +238,8 @@ class UR5eAssemblySkillAPI:
 
 def compile_ur5e_skill_plan(calls: Iterable[AtomicSkillCall | dict[str, Any]]) -> list[dict[str, Any]]:
     return UR5eAssemblySkillAPI.compile_plan(calls)
+
+
+# The phase contract and runtime adapter are shared by UR5e and Franka. Keep the
+# legacy class name importable while exposing a platform-neutral API to new tasks.
+AssemblySkillAPI = UR5eAssemblySkillAPI

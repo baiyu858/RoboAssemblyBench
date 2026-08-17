@@ -5,28 +5,93 @@ from internutopia.core.config import TaskCfg
 from internutopia.core.robot.rigid_body import IRigidBody
 from internutopia.core.scene import validate_scene_file
 from internutopia.core.scene.scene import IScene
+from internutopia.core.task_config_manager.base import runtime_root_path
 
 
 class IsaacsimScene(IScene):
     """IsaacSim's implementation on `IScene` class."""
 
     def __init__(self):
-        from omni.isaac.core import World
-        from omni.isaac.core.scenes import Scene
+        try:
+            from isaacsim.core.api import World
+            from isaacsim.core.api.scenes import Scene
+        except ImportError:
+            from omni.isaac.core import World
+            from omni.isaac.core.scenes import Scene
 
         self._scene: Scene = World.instance().scene
+
+    @staticmethod
+    def _set_scene_transform(scene_prim, *, position, orientation, scale) -> None:
+        from pxr import Gf, UsdGeom
+
+        xformable = UsdGeom.Xformable(scene_prim)
+
+        def get_or_add_op(name, add_op):
+            attribute = scene_prim.GetAttribute(f'xformOp:{name}')
+            if attribute.IsValid():
+                return UsdGeom.XformOp(attribute)
+            return add_op()
+
+        translate_op = get_or_add_op('translate', xformable.AddTranslateOp)
+        orient_op = get_or_add_op('orient', xformable.AddOrientOp)
+        scale_op = get_or_add_op('scale', xformable.AddScaleOp)
+
+        def vec3(op, values):
+            values = [float(value) for value in values]
+            if op.GetPrecision() == UsdGeom.XformOp.PrecisionDouble:
+                return Gf.Vec3d(*values)
+            if op.GetPrecision() == UsdGeom.XformOp.PrecisionHalf:
+                return Gf.Vec3h(*values)
+            return Gf.Vec3f(*values)
+
+        def quat(op, values):
+            real, imaginary = float(values[0]), [float(value) for value in values[1:]]
+            if op.GetPrecision() == UsdGeom.XformOp.PrecisionDouble:
+                return Gf.Quatd(real, Gf.Vec3d(*imaginary))
+            if op.GetPrecision() == UsdGeom.XformOp.PrecisionHalf:
+                return Gf.Quath(real, Gf.Vec3h(*imaginary))
+            return Gf.Quatf(real, Gf.Vec3f(*imaginary))
+
+        translate_op.Set(vec3(translate_op, position))
+        orient_op.Set(quat(orient_op, orientation))
+        scale_op.Set(vec3(scale_op, scale))
+        xformable.SetXformOpOrder([translate_op, orient_op, scale_op])
 
     def load(self, task_config: TaskCfg, env_id: int, env_offset: List[float]):
         """See `IScene.load` for documentation."""
         usd_path = self._resolve_scene_asset_path(task_config)
+        fallback_path = getattr(task_config, 'scene_asset_fallback_path', None)
+        resolved_fallback_path = None
+        if fallback_path:
+            try:
+                resolved_fallback_path = self._resolve_isaac_asset_path(fallback_path)
+            except Exception:
+                pass
+        using_fallback = bool(resolved_fallback_path and usd_path == resolved_fallback_path)
+        profile_metadata = getattr(task_config, 'scene_profile_metadata', {}) or {}
+        task_config.scene_asset_source = 'fallback' if using_fallback else 'primary'
+        task_config.resolved_scene_family = str(
+            profile_metadata.get('fallback_scene_family' if using_fallback else 'scene_family', '')
+        )
         task_config.scene_asset_path = usd_path
-        prim_path_root = f'World/env_{env_id}/scene'
+        prim_path_root = f'{runtime_root_path(task_config, env_id).lstrip("/")}/scene'
         source, prim_path = validate_scene_file(usd_path, prim_path_root)
 
-        from omni.isaac.core.utils.prims import create_prim
-
+        try:
+            from isaacsim.core.utils.prims import create_prim
+        except ImportError:
+            from omni.isaac.core.utils.prims import create_prim
         position = [env_offset[idx] + i for idx, i in enumerate(task_config.scene_position)]
         scene_prim = create_prim(prim_path, usd_path=source, scale=task_config.scene_scale, translation=position)
+        orientation = [float(value) for value in task_config.scene_orientation]
+        if orientation != [1.0, 0.0, 0.0, 0.0]:
+            self._set_scene_transform(
+                scene_prim,
+                position=position,
+                orientation=orientation,
+                scale=task_config.scene_scale,
+            )
         self.scene_prim = scene_prim
         self._load_scene_lights(task_config, env_id)
 
@@ -67,7 +132,7 @@ class IsaacsimScene(IScene):
         from pxr import Gf, Sdf, UsdGeom
 
         stage = self.scene_prim.GetStage()
-        lights_root = f'/World/env_{env_id}/lights'
+        lights_root = f'{runtime_root_path(task_config, env_id)}/lights'
         UsdGeom.Scope.Define(stage, Sdf.Path(lights_root))
 
         for index, light_spec in enumerate(scene_lights):
@@ -108,6 +173,13 @@ class IsaacsimScene(IScene):
             suffix = path
         else:
             return path if cls._is_remote_path(path) else os.path.abspath(path)
+
+        assets_root_override = os.environ.get('ISAAC_ASSETS_ROOT', '').strip()
+        if assets_root_override:
+            assets_root_override = os.path.expanduser(os.path.expandvars(assets_root_override))
+            if not cls._is_remote_path(assets_root_override):
+                assets_root_override = os.path.abspath(assets_root_override)
+            return assets_root_override.rstrip('/') + '/' + suffix.lstrip('/')
 
         from isaacsim.storage.native import get_assets_root_path
 
@@ -160,6 +232,25 @@ class IsaacsimScene(IScene):
     def remove(self, target: any, registry_only: bool = False):
         """See `IScene.remove` for documentation."""
         self._scene.remove_object(name=target, registry_only=registry_only)
+
+    def remove_prim_path(self, prim_path: str) -> None:
+        """Delete an exact USD subtree instead of inferring it from a registry object."""
+        try:
+            from isaacsim.core.utils.prims import delete_prim, is_prim_path_valid
+        except ImportError:
+            from omni.isaac.core.utils.prims import delete_prim, is_prim_path_valid
+
+        if prim_path and is_prim_path_valid(prim_path):
+            delete_prim(prim_path)
+
+    def flush_updates(self) -> None:
+        """Let USD, Hydra, and PhysX consume deletions before paths are reused."""
+        try:
+            from isaacsim.core.utils.stage import update_stage
+        except ImportError:
+            from omni.isaac.core.utils.stage import update_stage
+
+        update_stage()
 
     def object_exists(self, target: any) -> bool:
         """See `IScene.object_exists` for documentation."""

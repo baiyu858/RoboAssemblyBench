@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 from collections import OrderedDict, defaultdict
 
 import numpy as np
-import torch
+
+try:
+    import torch
+except ModuleNotFoundError:
+    torch = None
 
 from internutopia.core.robot.robot import BaseRobot
 from internutopia.core.scene.scene import IScene
@@ -162,6 +168,9 @@ class RepCamera(BaseSensor):
         Returns:
             np.ndarray: The point cloud as a 2D numpy array with shape (N, 3), where N is the number of points.
         """
+        if torch is None:
+            raise RuntimeError('PyTorch is required only when RepCamera pointcloud output is enabled.')
+
         # Convert the camera env_offset to a GPU tensor.
         offset = torch.tensor(self._camera.offset, device='cuda')
 
@@ -222,6 +231,7 @@ class RepCamera(BaseSensor):
     def cleanup(self) -> None:
         if self._camera is not None:
             self._camera.cleanup()
+            self._camera = None
 
     def _get_face_to_instances(self, bbox: np.array, idToLabels):
         bbox = self._merge_tuples(bbox)

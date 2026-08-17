@@ -274,8 +274,13 @@ class BaseTask(ABC):
             # Using try here because we want to ignore all exceptions
             log.info(f'[cleanup] cleanup robot {robot.articulation.name}')
             try:
+                robot_prim_path = getattr(robot.config, 'prim_path', None)
                 robot.cleanup()
                 self._scene.remove(robot.articulation.name, registry_only=True)
+                # Isaac's registry object points at the articulation base link.
+                # Deleting through it can leave referenced siblings such as the
+                # gripper behind, so delete the configured robot root exactly.
+                self._scene.remove_prim_path(robot_prim_path)
             finally:
                 log.info('[cleanup] robots cleaned.')
 

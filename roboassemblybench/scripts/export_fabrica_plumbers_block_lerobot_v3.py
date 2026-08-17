@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,11 +22,42 @@ from roboassemblybench.datasets.cartesian_episode import (
     CAMERA_KEYS,
     STATE_NAMES,
     cartesian_trajectory_errors,
+    task_progress_annotations,
 )
 
 DEFAULT_REPO_ID = 'baiyu858/roboassemblybench_fabrica_plumbers_block_ur5e_2k'
 CONVERSION_MANIFEST = 'roboassemblybench_conversion_manifest.json'
 COLLECTION_MANIFEST = 'collection_manifest.json'
+JOINT_NAMES = tuple(f'{side}_joint_{index}' for side in ('left', 'right') for index in range(7))
+EEF_POSE_NAMES = tuple(
+    f'{side}_eef_{field}'
+    for side in ('left', 'right')
+    for field in ('x', 'y', 'z', 'qw', 'qx', 'qy', 'qz')
+)
+GRIPPER_NAMES = ('left_gripper_open', 'right_gripper_open')
+WRIST_WRENCH_NAMES = tuple(
+    f'{side}_wrist_{field}'
+    for side in ('left', 'right')
+    for field in ('force_x', 'force_y', 'force_z', 'torque_x', 'torque_y', 'torque_z')
+)
+COLLISION_SIGNAL_NAMES = (
+    'collision_detected',
+    'left_gripper_contact',
+    'right_gripper_contact',
+    'locked_object_count',
+)
+SCALAR_INT_FEATURES = (
+    'phase_index',
+    'phase_step',
+    'subtask_index',
+    'substage_index',
+    'waiting_state',
+    'handoff_state',
+    'joint_state_available',
+    'joint_velocity_available',
+    'joint_effort_available',
+    'wrist_wrench_available',
+)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -97,7 +130,7 @@ def _validate_timing(metadata: dict[str, Any]) -> None:
         raise ValueError(f"Camera/state/action timing mismatch in {metadata['metadata_path']}.")
 
 
-def _validate_metadata(metadata: dict[str, Any]) -> None:
+def _validate_metadata(metadata: dict[str, Any], *, require_extended_observations: bool = False) -> None:
     _validate_timing(metadata)
     if list(metadata.get('state_names') or []) != list(STATE_NAMES):
         raise ValueError(f"State schema mismatch in {metadata['metadata_path']}.")
@@ -112,6 +145,40 @@ def _validate_metadata(metadata: dict[str, Any]) -> None:
     trajectory_path = Path(metadata.get('trajectory_path') or '')
     if not trajectory_path.is_file():
         raise FileNotFoundError(f"Episode {metadata['metadata_path']} is missing {trajectory_path}.")
+    annotation_path = Path(metadata.get('annotation_path') or '')
+    if require_extended_observations and not annotation_path.is_file():
+        raise FileNotFoundError(f"Episode {metadata['metadata_path']} is missing its annotation sidecar.")
+    depth = metadata.get('depth') or {}
+    if require_extended_observations and set(depth) != set(CAMERA_KEYS):
+        raise ValueError(f"Episode {metadata['metadata_path']} does not contain all metric depth streams.")
+    if require_extended_observations:
+        for camera_key, stream in depth.items():
+            stream_path = Path(stream.get('path') or '')
+            if (
+                stream.get('dtype') != 'float16'
+                or stream.get('compression') != 'zstd'
+                or int(stream.get('count', -1)) != int(metadata['frame_count'])
+                or not stream_path.is_file()
+            ):
+                raise ValueError(f'Invalid metric depth stream {camera_key!r} in {metadata["metadata_path"]}.')
+
+    required_arrays = {
+        'joint_state': (int(metadata['frame_count']), 14),
+        'joint_velocity': (int(metadata['frame_count']), 14),
+        'joint_effort': (int(metadata['frame_count']), 14),
+        'wrist_wrench': (int(metadata['frame_count']), 12),
+        'collision_signal': (int(metadata['frame_count']), 4),
+        'phase_index': (int(metadata['frame_count']),),
+        'phase_step': (int(metadata['frame_count']),),
+        'subtask_index': (int(metadata['frame_count']),),
+        'substage_index': (int(metadata['frame_count']),),
+        'waiting_state': (int(metadata['frame_count']),),
+        'handoff_state': (int(metadata['frame_count']),),
+    }
+    with np.load(trajectory_path) as trajectory:
+        for name, shape in required_arrays.items():
+            if name not in trajectory or np.asarray(trajectory[name]).shape != shape:
+                raise ValueError(f'Missing or invalid {name!r} in {trajectory_path}.')
 
 
 def _conversion_entry(metadata: dict[str, Any], episode_index: int) -> dict[str, Any]:
@@ -122,6 +189,8 @@ def _conversion_entry(metadata: dict[str, Any], episode_index: int) -> dict[str,
         'layout_seed': int(metadata.get('layout_seed', domain_randomization.get('seed', metadata['seed']))),
         'source_metadata': str(Path(metadata['metadata_path']).resolve()),
         'frame_count': int(metadata['frame_count']),
+        'annotation_path': f'annotations/episode_{episode_index:06d}.json',
+        'depth_index_path': f'sensors/depth/index/episode_{episode_index:06d}.json',
         'domain_randomization': domain_randomization,
     }
 
@@ -169,7 +238,48 @@ def _features(first_episode: dict[str, Any]) -> dict[str, dict[str, Any]]:
             'shape': (len(ACTION_NAMES),),
             'names': list(ACTION_NAMES),
         },
+        'observation.eef_pose': {
+            'dtype': 'float32',
+            'shape': (14,),
+            'names': list(EEF_POSE_NAMES),
+        },
+        'observation.gripper_state': {
+            'dtype': 'float32',
+            'shape': (2,),
+            'names': list(GRIPPER_NAMES),
+        },
+        'observation.joint_state': {
+            'dtype': 'float32',
+            'shape': (14,),
+            'names': list(JOINT_NAMES),
+        },
+        'observation.joint_velocity': {
+            'dtype': 'float32',
+            'shape': (14,),
+            'names': list(JOINT_NAMES),
+        },
+        'observation.joint_effort': {
+            'dtype': 'float32',
+            'shape': (14,),
+            'names': list(JOINT_NAMES),
+        },
+        'observation.wrist_wrench': {
+            'dtype': 'float32',
+            'shape': (12,),
+            'names': list(WRIST_WRENCH_NAMES),
+        },
+        'observation.collision_signal': {
+            'dtype': 'float32',
+            'shape': (4,),
+            'names': list(COLLISION_SIGNAL_NAMES),
+        },
     }
+    for feature_name in SCALAR_INT_FEATURES:
+        features[f'observation.{feature_name}'] = {
+            'dtype': 'int64',
+            'shape': (1,),
+            'names': [feature_name],
+        }
     video_shapes = first_episode.get('video_shapes') or {}
     common_shapes = {tuple(int(value) for value in video_shapes[camera_key]) for camera_key in CAMERA_KEYS}
     if len(common_shapes) != 1:
@@ -205,44 +315,125 @@ def _release_video_captures(captures: dict[str, cv2.VideoCapture]) -> None:
         capture.release()
 
 
-def _append_episode(dataset, metadata: dict[str, Any]) -> int:
-    trajectory = np.load(metadata['trajectory_path'])
-    states = np.asarray(trajectory['observation_state'], dtype=np.float32)
-    actions = np.asarray(trajectory['action'], dtype=np.float32)
-    expected_frames = int(metadata['frame_count'])
-    if states.shape != (expected_frames, len(STATE_NAMES)):
-        raise ValueError(f"Invalid state shape in {metadata['trajectory_path']}: {states.shape}.")
-    if actions.shape != (expected_frames, len(ACTION_NAMES)):
-        raise ValueError(f"Invalid action shape in {metadata['trajectory_path']}: {actions.shape}.")
-    trajectory_errors = cartesian_trajectory_errors(
-        states,
-        actions,
-        simulation_steps=trajectory.get('simulation_step'),
-        frame_stride=int(metadata['frame_stride']),
-    )
-    if trajectory_errors:
-        raise ValueError(f"Invalid Cartesian trajectory in {metadata['trajectory_path']}: {trajectory_errors}.")
-
-    captures = _open_video_captures(metadata)
+def _link_or_copy(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        if destination.stat().st_size == source.stat().st_size:
+            return
+        destination.unlink()
     try:
-        for frame_index in range(expected_frames):
-            frame = {
-                'observation.state': states[frame_index],
-                'action': actions[frame_index],
-                'task': str(metadata['task']),
-            }
-            for camera_key, capture in captures.items():
-                ok, bgr = capture.read()
-                if not ok or bgr is None:
-                    raise RuntimeError(
-                        f'{camera_key} ended at frame {frame_index}/{expected_frames} for '
-                        f"{metadata['metadata_path']}."
-                    )
-                frame[camera_key] = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-            dataset.add_frame(frame)
-    finally:
-        _release_video_captures(captures)
+        os.link(source, destination)
+    except OSError:
+        shutil.copy2(source, destination)
 
+
+def _export_episode_sidecars(metadata: dict[str, Any], *, episode_index: int, output_dir: Path) -> None:
+    annotation_destination = output_dir / 'annotations' / f'episode_{episode_index:06d}.json'
+    annotation_source = Path(metadata.get('annotation_path') or '')
+    if annotation_source.is_file():
+        annotation = _load_json(annotation_source)
+        with np.load(metadata['trajectory_path']) as trajectory:
+            annotation.update(
+                task_progress_annotations(
+                    metadata.get('phase_annotations') or annotation.get('phase_annotations') or {},
+                    trajectory['subtask_index'],
+                    trajectory['substage_index'],
+                )
+            )
+        _write_json_atomic(annotation_destination, annotation)
+
+    depth_index = {
+        'schema_version': 'roboassemblybench_metric_depth_index_v1',
+        'episode_index': int(episode_index),
+        'frame_count': int(metadata['frame_count']),
+        'fps': int(metadata['fps']),
+        'streams': {},
+    }
+    chunk = episode_index // 1000
+    for camera_key, stream in (metadata.get('depth') or {}).items():
+        source = Path(stream['path'])
+        relative_path = Path('sensors') / 'depth' / camera_key / f'chunk-{chunk:03d}' / f'episode_{episode_index:06d}.f16.zst'
+        _link_or_copy(source, output_dir / relative_path)
+        depth_index['streams'][camera_key] = {
+            **{key: value for key, value in stream.items() if key != 'path'},
+            'path': relative_path.as_posix(),
+        }
+    _write_json_atomic(
+        output_dir / 'sensors' / 'depth' / 'index' / f'episode_{episode_index:06d}.json',
+        depth_index,
+    )
+
+
+def _append_episode(dataset, metadata: dict[str, Any], *, episode_index: int, output_dir: Path) -> int:
+    expected_frames = int(metadata['frame_count'])
+    with np.load(metadata['trajectory_path']) as trajectory:
+        states = np.asarray(trajectory['observation_state'], dtype=np.float32)
+        actions = np.asarray(trajectory['action'], dtype=np.float32)
+        if states.shape != (expected_frames, len(STATE_NAMES)):
+            raise ValueError(f"Invalid state shape in {metadata['trajectory_path']}: {states.shape}.")
+        if actions.shape != (expected_frames, len(ACTION_NAMES)):
+            raise ValueError(f"Invalid action shape in {metadata['trajectory_path']}: {actions.shape}.")
+        trajectory_errors = cartesian_trajectory_errors(
+            states,
+            actions,
+            simulation_steps=trajectory.get('simulation_step'),
+            frame_stride=int(metadata['frame_stride']),
+        )
+        if trajectory_errors:
+            raise ValueError(f"Invalid Cartesian trajectory in {metadata['trajectory_path']}: {trajectory_errors}.")
+
+        captures = _open_video_captures(metadata)
+        try:
+            for frame_index in range(expected_frames):
+                frame = {
+                    'observation.state': states[frame_index],
+                    'observation.eef_pose': np.concatenate(
+                        [states[frame_index, 0:7], states[frame_index, 8:15]]
+                    ).astype(np.float32, copy=False),
+                    'observation.gripper_state': states[frame_index, [7, 15]],
+                    'observation.joint_state': np.asarray(trajectory['joint_state'][frame_index], dtype=np.float32),
+                    'observation.joint_velocity': np.asarray(
+                        trajectory['joint_velocity'][frame_index], dtype=np.float32
+                    ),
+                    'observation.joint_effort': np.asarray(trajectory['joint_effort'][frame_index], dtype=np.float32),
+                    'observation.wrist_wrench': np.asarray(trajectory['wrist_wrench'][frame_index], dtype=np.float32),
+                    'observation.collision_signal': np.asarray(
+                        trajectory['collision_signal'][frame_index], dtype=np.float32
+                    ),
+                    'action': actions[frame_index],
+                    'task': str(metadata['task']),
+                }
+                for source_name in SCALAR_INT_FEATURES:
+                    scalar = np.asarray(trajectory[source_name][frame_index])
+                    if scalar.size != 1:
+                        raise ValueError(
+                            f'Expected scalar {source_name!r} at frame {frame_index}, got {scalar.shape}.'
+                        )
+                    frame[f'observation.{source_name}'] = np.asarray(
+                        [scalar.reshape(-1)[0]], dtype=np.int64
+                    )
+                for camera_key, capture in captures.items():
+                    ok, bgr = capture.read()
+                    if not ok or bgr is None:
+                        raise RuntimeError(
+                            f'{camera_key} ended at frame {frame_index}/{expected_frames} for '
+                            f"{metadata['metadata_path']}."
+                        )
+                    frame[camera_key] = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                dataset.add_frame(frame)
+        finally:
+            _release_video_captures(captures)
+
+    # LeRobot 0.4.4 validates shape-(1,) numeric frames as arrays but maps them to
+    # Arrow scalar columns. Normalize the validated buffer before its own np.stack().
+    for source_name in SCALAR_INT_FEATURES:
+        feature_name = f'observation.{source_name}'
+        values = dataset.episode_buffer.get(feature_name, [])
+        if len(values) != expected_frames:
+            raise ValueError(f'Invalid buffered frame count for {feature_name!r}: {len(values)}.')
+        dataset.episode_buffer[feature_name] = [int(np.asarray(value).reshape(-1)[0]) for value in values]
+
+    _export_episode_sidecars(metadata, episode_index=episode_index, output_dir=output_dir)
     dataset.save_episode()
     return expected_frames
 
@@ -257,6 +448,7 @@ def export_dataset(
     streaming_encoding: bool,
     encoder_threads: int | None,
     vcodec: str,
+    require_extended_observations: bool = False,
 ) -> dict[str, Any]:
     try:
         import lerobot
@@ -274,7 +466,7 @@ def export_dataset(
     if not episodes:
         raise RuntimeError(f'No successful compact Cartesian episodes found under {input_dir}.')
     for metadata in episodes:
-        _validate_metadata(metadata)
+        _validate_metadata(metadata, require_extended_observations=require_extended_observations)
     expected_video_shapes = episodes[0].get('video_shapes') or {}
     for metadata in episodes[1:]:
         if (metadata.get('video_shapes') or {}) != expected_video_shapes:
@@ -302,7 +494,21 @@ def export_dataset(
         raise ValueError(
             f"Existing conversion manifest repo_id={manifest.get('repo_id')!r} does not match {repo_id!r}."
         )
-    has_dataset = (output_dir / 'meta' / 'info.json').is_file()
+    info_path = output_dir / 'meta' / 'info.json'
+    has_dataset = info_path.is_file()
+    if has_dataset:
+        episode_metadata_dir = output_dir / 'meta' / 'episodes'
+        has_episode_metadata = episode_metadata_dir.is_dir() and any(
+            episode_metadata_dir.rglob('*.parquet')
+        )
+        partial_info = _load_json(info_path)
+        if not has_episode_metadata and int(partial_info.get('total_episodes', 0)) == 0:
+            if manifest_path.exists():
+                raise RuntimeError(
+                    f'Incomplete LeRobot metadata at {output_dir} conflicts with its conversion manifest.'
+                )
+            shutil.rmtree(output_dir)
+            has_dataset = False
     if has_dataset:
         if not resume:
             raise FileExistsError(f'LeRobot dataset already exists at {output_dir}; pass --resume.')
@@ -349,6 +555,8 @@ def export_dataset(
         dataset_episode_count=dataset_episode_count,
     ):
         _write_json_atomic(manifest_path, manifest)
+    for episode_index, metadata in enumerate(episodes[:dataset_episode_count]):
+        _export_episode_sidecars(metadata, episode_index=episode_index, output_dir=output_dir)
     processed_sources = {str(item['source_metadata']) for item in manifest.get('episodes', [])}
 
     added_episodes = 0
@@ -358,8 +566,13 @@ def export_dataset(
             source_metadata = str(Path(metadata['metadata_path']).resolve())
             if source_metadata in processed_sources:
                 continue
-            frame_count = _append_episode(dataset, metadata)
             episode_index = len(manifest['episodes'])
+            frame_count = _append_episode(
+                dataset,
+                metadata,
+                episode_index=episode_index,
+                output_dir=output_dir,
+            )
             manifest['episodes'].append(_conversion_entry(metadata, episode_index))
             processed_sources.add(source_metadata)
             added_episodes += 1
@@ -369,6 +582,24 @@ def export_dataset(
             _write_json_atomic(manifest_path, manifest)
     finally:
         dataset.finalize()
+
+    info_path = output_dir / 'meta' / 'info.json'
+    info = _load_json(info_path)
+    info['roboassemblybench_sidecars'] = {
+        'metric_depth': {
+            'schema_version': 'roboassemblybench_metric_depth_index_v1',
+            'index_path': 'sensors/depth/index/episode_{episode_index:06d}.json',
+            'dtype': 'float16',
+            'compression': 'zstd',
+            'units': 'meters',
+            'camera_keys': list(CAMERA_KEYS),
+        },
+        'long_horizon_annotations': {
+            'schema_version': 'roboassemblybench_long_horizon_annotation_v1',
+            'path': 'annotations/episode_{episode_index:06d}.json',
+        },
+    }
+    _write_json_atomic(info_path, info)
 
     summary = {
         'repo_id': repo_id,
@@ -383,6 +614,11 @@ def export_dataset(
         'total_episodes': len(manifest['episodes']),
         'total_frames': sum(int(item['frame_count']) for item in manifest['episodes']),
         'camera_keys': list(CAMERA_KEYS),
+        'depth_camera_keys': list(CAMERA_KEYS),
+        'depth_dtype': 'float16',
+        'depth_compression': 'zstd',
+        'annotation_schema_version': 'roboassemblybench_long_horizon_annotation_v1',
+        'require_extended_observations': bool(require_extended_observations),
         'state_names': list(STATE_NAMES),
         'action_names': list(ACTION_NAMES),
     }
@@ -400,6 +636,7 @@ def main() -> None:
     parser.add_argument('--no-streaming-encoding', action='store_true')
     parser.add_argument('--encoder-threads', type=int, default=2)
     parser.add_argument('--vcodec', default='h264')
+    parser.add_argument('--require-extended-observations', action='store_true')
     args = parser.parse_args()
 
     summary = export_dataset(
@@ -411,6 +648,7 @@ def main() -> None:
         streaming_encoding=not bool(args.no_streaming_encoding),
         encoder_threads=max(int(args.encoder_threads), 1),
         vcodec=str(args.vcodec),
+        require_extended_observations=bool(args.require_extended_observations),
     )
     print(json.dumps(summary, indent=2))
 

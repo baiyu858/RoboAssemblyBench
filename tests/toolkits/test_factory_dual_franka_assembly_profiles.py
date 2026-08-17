@@ -1,5 +1,6 @@
 import json
 
+from internutopia.core.scene.isaacsim.scene import IsaacsimScene
 from toolkits.factory_dual_franka_assembly.convert_dataset import (
     build_dataset_entries,
     load_episode_payloads,
@@ -11,6 +12,20 @@ from toolkits.factory_dual_franka_assembly.scene_profiles import list_scene_prof
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
 
 ISAAC_PACKING_TABLE_MARKER = '/Isaac/Props/PackingTable/'
+
+
+def test_isaac_scene_asset_root_can_be_overridden_with_a_local_directory(tmp_path, monkeypatch):
+    assets_root = tmp_path / 'isaac_sim_5.1'
+    warehouse_asset = assets_root / 'Isaac/Environments/Simple_Warehouse/warehouse.usd'
+    warehouse_asset.parent.mkdir(parents=True)
+    warehouse_asset.touch()
+    monkeypatch.setenv('ISAAC_ASSETS_ROOT', str(assets_root))
+
+    resolved = IsaacsimScene._resolve_isaac_asset_path(
+        '${ISAAC_ASSETS_ROOT}/Isaac/Environments/Simple_Warehouse/warehouse.usd'
+    )
+
+    assert resolved == str(warehouse_asset)
 
 
 def test_scene_profiles_are_discoverable():
@@ -42,29 +57,25 @@ def test_taoyuan_scene_profile_injects_assets_and_workspace_offset():
 
 
 def test_taoyuan_grscenes_scene_profile_omits_isaac_factory_table_xform():
-    recipe_spec = load_task_recipe('screw_fastening', scene_profile='taoyuan_grscenes_tabletop')
+    recipe = 'fabrica_plumbers_block_ur5e_staged'
+    recipe_spec = load_task_recipe(recipe, scene_profile='taoyuan_grscenes_tabletop')
     assert recipe_spec['scene_profile'] == 'taoyuan_grscenes_tabletop'
-    assert recipe_spec['metadata']['scene_family'] == 'factory_tabletop_visual'
-    assert {light['name'] for light in recipe_spec['scene_lights']} == {
-        'warehouse_dome_fill',
-        'warehouse_sun_fill',
-    }
+    assert recipe_spec['metadata']['scene_family'] == 'isaac_simple_warehouse_tabletop'
+    assert recipe_spec['scene_asset_path'].endswith('/warehouse_with_forklifts.usd')
+    assert {light['name'] for light in recipe_spec['scene_lights']} == {'warehouse_dome_fill'}
     assert not any(ISAAC_PACKING_TABLE_MARKER in reference['path'] for reference in recipe_spec['asset_references'])
     assert not any(object_spec.get('prim_path') == '/factory_packing_table' for object_spec in recipe_spec['objects'])
     assert any(object_spec['name'] == 'factory_tabletop_visual' for object_spec in recipe_spec['objects'])
 
     task_cfg = build_dual_franka_assembly_episode(
-        recipe='screw_fastening',
+        recipe=recipe,
         seed=3,
         episode_idx=0,
         scene_profile='taoyuan_grscenes_tabletop',
     )
     assert task_cfg.scene_profile == 'taoyuan_grscenes_tabletop'
     assert task_cfg.workspace_offset == [0.0, 0.0, 0.99]
-    assert {light['name'] for light in task_cfg.scene_lights} == {
-        'warehouse_dome_fill',
-        'warehouse_sun_fill',
-    }
+    assert {light['name'] for light in task_cfg.scene_lights} == {'warehouse_dome_fill'}
     assert not any(ISAAC_PACKING_TABLE_MARKER in reference['path'] for reference in task_cfg.asset_references)
     assert not any(object_cfg.prim_path == '/factory_packing_table' for object_cfg in task_cfg.objects)
     assert any(object_cfg.name == 'factory_tabletop_visual' for object_cfg in task_cfg.objects)

@@ -27,6 +27,8 @@ _UR5E_ARM_JOINT_NAMES = (
     'wrist_2_joint',
     'wrist_3_joint',
 )
+_FRANKA_ARM_JOINT_NAMES = tuple(f'panda_joint{index}' for index in range(1, 8))
+_SUPPORTED_ARM_JOINT_NAMES = (_FRANKA_ARM_JOINT_NAMES, _UR5E_ARM_JOINT_NAMES)
 _CARTESIAN_SERVO_SKILLS = frozenset(
     {
         'ur5e_move_above_part',
@@ -250,6 +252,15 @@ class UR5eAssemblyAtomicSkillAdapter:
                     openness=gripper_openness,
                 )
             return action
+
+        if skill_name in {'move_arm_to_joint_positions', 'ur5e_move_arm_to_joint_positions'}:
+            return self._move_arm_to_joint_positions_action(
+                phase_key=phase_key,
+                task=task,
+                robot_name=robot_name,
+                skill_name=skill_name,
+                spec=spec,
+            )
 
         target_pose = self._target_pose(
             phase_key=phase_key,
@@ -1321,6 +1332,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 command_target_pose['orientation'],
             )
         ik_position_tolerance, ik_orientation_tolerance = self._ik_solver_tolerances(spec)
+        arm_dynamics = self._current_arm_dynamics(task=task, robot_name=robot_name)
         print(
             '[ur5e-joint-debug] '
             f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
@@ -1341,7 +1353,13 @@ class UR5eAssemblyAtomicSkillAdapter:
             f'ref_to_target_max={_max_abs_delta(reference_q, target_q)} '
             f'ref_to_cmd_max={_max_abs_delta(reference_q, command_q)} '
             f'current_to_cmd_max={_max_abs_delta(current_q, command_q)} '
-            f'current_to_ref_max={_max_abs_delta(current_q, reference_q)}',
+            f'current_to_ref_max={_max_abs_delta(current_q, reference_q)} '
+            f"joint_velocity={arm_dynamics.get('joint_velocity')} "
+            f"measured_effort={arm_dynamics.get('measured_effort')} "
+            f"applied_effort={arm_dynamics.get('applied_effort')} "
+            f"stiffness={arm_dynamics.get('stiffness')} "
+            f"damping={arm_dynamics.get('damping')} "
+            f"max_force={arm_dynamics.get('max_force')}",
             flush=True,
         )
 
@@ -4089,13 +4107,18 @@ class UR5eAssemblyAtomicSkillAdapter:
         if robot is None:
             return None
         controller = robot.controllers.get(_ARM_JOINT_CONTROLLER)
+        arm_joint_names = self._arm_joint_names(robot=robot, controller=controller)
+        arm_joint_count = len(arm_joint_names)
         if controller is not None and hasattr(controller, 'get_joint_subset'):
             subset = controller.get_joint_subset()
         else:
             subset = getattr(controller, 'joint_subset', None) if controller is not None else None
         if subset is not None:
             try:
-                joint_positions = self._coerce_arm_q(subset.get_joint_positions())
+                joint_positions = self._coerce_arm_q(
+                    subset.get_joint_positions(),
+                    joint_count=arm_joint_count,
+                )
                 if joint_positions is not None:
                     return joint_positions
             except Exception:
@@ -4103,10 +4126,11 @@ class UR5eAssemblyAtomicSkillAdapter:
         articulation = getattr(robot, 'articulation', None)
         if articulation is not None:
             try:
-                indices = np.asarray(
-                    [articulation.get_dof_index(name) for name in _UR5E_ARM_JOINT_NAMES], dtype=np.int64
+                indices = np.asarray([articulation.get_dof_index(name) for name in arm_joint_names], dtype=np.int64)
+                joint_positions = self._coerce_arm_q(
+                    articulation.get_joint_positions(joint_indices=indices),
+                    joint_count=arm_joint_count,
                 )
-                joint_positions = self._coerce_arm_q(articulation.get_joint_positions(joint_indices=indices))
                 if joint_positions is not None:
                     return joint_positions
             except Exception:
@@ -4115,12 +4139,18 @@ class UR5eAssemblyAtomicSkillAdapter:
                 all_joint_positions = np.asarray(articulation.get_joint_positions(), dtype=float)
                 dof_names = list(getattr(articulation, 'dof_names', []) or [])
                 if dof_names:
-                    indices = [dof_names.index(name) for name in _UR5E_ARM_JOINT_NAMES if name in dof_names]
-                    if len(indices) == len(_UR5E_ARM_JOINT_NAMES):
-                        joint_positions = self._coerce_arm_q(all_joint_positions[np.asarray(indices, dtype=np.int64)])
+                    indices = [dof_names.index(name) for name in arm_joint_names if name in dof_names]
+                    if len(indices) == arm_joint_count:
+                        joint_positions = self._coerce_arm_q(
+                            all_joint_positions[np.asarray(indices, dtype=np.int64)],
+                            joint_count=arm_joint_count,
+                        )
                         if joint_positions is not None:
                             return joint_positions
-                joint_positions = self._coerce_arm_q(all_joint_positions[: len(_UR5E_ARM_JOINT_NAMES)])
+                joint_positions = self._coerce_arm_q(
+                    all_joint_positions[:arm_joint_count],
+                    joint_count=arm_joint_count,
+                )
                 if joint_positions is not None:
                     return joint_positions
             except Exception:
@@ -4138,17 +4168,122 @@ class UR5eAssemblyAtomicSkillAdapter:
             pass
         return None
 
+    def _current_arm_dynamics(self, *, task, robot_name: str) -> dict[str, list[float]]:
+        """Read optional PhysX drive diagnostics without affecting control."""
+
+        robot = task.robots.get(robot_name)
+        articulation = getattr(robot, 'articulation', None)
+        if articulation is None:
+            return {}
+        controller = robot.controllers.get(_ARM_JOINT_CONTROLLER)
+        joint_names = self._arm_joint_names(robot=robot, controller=controller)
+        try:
+            indices = np.asarray([articulation.get_dof_index(name) for name in joint_names], dtype=np.int64)
+        except Exception:
+            return {}
+
+        result: dict[str, list[float]] = {}
+
+        def _store(name: str, values) -> bool:
+            try:
+                array = np.asarray(values, dtype=float)
+                if array.ndim > 1:
+                    array = array[0]
+                array = array.reshape(-1)
+                if array.size != indices.size:
+                    array = array[indices]
+                if array.size != indices.size or not np.all(np.isfinite(array)):
+                    return False
+                result[name] = array.tolist()
+                return True
+            except Exception:
+                return False
+
+        try:
+            _store('joint_velocity', articulation.get_joint_velocities(joint_indices=indices))
+        except Exception:
+            pass
+
+        try:
+            unwrapped = articulation.unwrap()
+        except Exception:
+            unwrapped = None
+        for result_name, method_names in (
+            ('measured_effort', ('get_measured_joint_efforts', 'get_joint_efforts')),
+            ('applied_effort', ('get_applied_joint_efforts',)),
+        ):
+            for candidate in (unwrapped, articulation):
+                if candidate is None:
+                    continue
+                for method_name in method_names:
+                    method = getattr(candidate, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        values = method(joint_indices=indices)
+                    except TypeError:
+                        try:
+                            values = method()
+                        except Exception:
+                            continue
+                    except Exception:
+                        continue
+                    if _store(result_name, values):
+                        break
+                if result_name in result:
+                    break
+
+        try:
+            physics_view = articulation._articulation_view._physics_view
+        except Exception:
+            physics_view = None
+        if physics_view is not None:
+            for result_name, method_name in (
+                ('stiffness', 'get_dof_stiffnesses'),
+                ('damping', 'get_dof_dampings'),
+                ('max_force', 'get_dof_max_forces'),
+            ):
+                method = getattr(physics_view, method_name, None)
+                if callable(method):
+                    try:
+                        _store(result_name, method())
+                    except Exception:
+                        pass
+        return result
+
     @staticmethod
-    def _coerce_arm_q(joint_positions, *, bound_revolute: bool = True) -> np.ndarray | None:
+    def _arm_joint_names(*, robot, controller=None) -> tuple[str, ...]:
+        configured_names = tuple(getattr(controller, 'joint_names', None) or ())
+        if len(configured_names) in {6, 7}:
+            return configured_names
+        articulation = getattr(robot, 'articulation', None)
+        dof_names = set(getattr(articulation, 'dof_names', []) or [])
+        for names in _SUPPORTED_ARM_JOINT_NAMES:
+            if all(name in dof_names for name in names):
+                return names
+        robot_type = str(getattr(getattr(robot, 'config', None), 'type', '')).lower()
+        if 'franka' in robot_type or 'panda' in robot_type:
+            return _FRANKA_ARM_JOINT_NAMES
+        return _UR5E_ARM_JOINT_NAMES
+
+    @staticmethod
+    def _coerce_arm_q(
+        joint_positions,
+        *,
+        bound_revolute: bool = True,
+        joint_count: int | None = None,
+    ) -> np.ndarray | None:
         if joint_positions is None:
             return None
         try:
             values = np.asarray(joint_positions, dtype=float).reshape(-1)
         except Exception:
             return None
-        if values.shape[0] < len(_UR5E_ARM_JOINT_NAMES):
+        if joint_count is None:
+            joint_count = 7 if values.shape[0] >= 7 else 6
+        if joint_count not in {6, 7} or values.shape[0] < joint_count:
             return None
-        values = values[: len(_UR5E_ARM_JOINT_NAMES)]
+        values = values[:joint_count]
         if not np.all(np.isfinite(values)):
             return None
         if not bound_revolute:
@@ -4295,7 +4430,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 limits = np.full(int(joint_count), scalar_limit, dtype=float)
                 wrist_cap = float(spec.get('default_max_command_wrist_joint_step', 0.025))
                 if wrist_cap > 0.0 and limits.shape[0] >= 6:
-                    limits[3:6] = np.minimum(limits[3:6], wrist_cap)
+                    limits[3:] = np.minimum(limits[3:], wrist_cap)
                 return limits
             return scalar_limit
         limits = np.full(int(joint_count), float(limit_values[-1]), dtype=float)
@@ -4341,7 +4476,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             try:
                 wrist_limit = float(wrist_limit)
                 if np.isfinite(wrist_limit) and wrist_limit > 0.0:
-                    limits[3:6] = np.minimum(limits[3:6], wrist_limit)
+                    limits[3:] = np.minimum(limits[3:], wrist_limit)
             except Exception:
                 pass
         if np.any(limits <= 0.0):
@@ -4363,11 +4498,12 @@ class UR5eAssemblyAtomicSkillAdapter:
         jump_limit = float(spec.get('ik_branch_jump_limit', default_limit))
         if jump_limit <= 0.0:
             return False
-        branch_joint_indices = spec.get('ik_branch_guard_joint_indices', [0, 3, 5])
+        default_branch_joint_indices = [0, 3, reference_q.shape[0] - 1]
+        branch_joint_indices = spec.get('ik_branch_guard_joint_indices', default_branch_joint_indices)
         try:
             indices = [int(index) for index in branch_joint_indices]
         except Exception:
-            indices = [0, 3, 5]
+            indices = default_branch_joint_indices
         deltas = []
         for index in indices:
             if 0 <= index < reference_q.shape[0]:
@@ -4544,6 +4680,105 @@ class UR5eAssemblyAtomicSkillAdapter:
         hold_q = self._command_reference_q(task=task, robot_name=robot_name, current_q=current_q, spec={})
         if hold_q is not None:
             action[_ARM_JOINT_CONTROLLER] = [hold_q.tolist()]
+        return action
+
+    def _move_arm_to_joint_positions_action(
+        self,
+        *,
+        phase_key,
+        task,
+        robot_name: str,
+        skill_name: str,
+        spec: dict,
+    ) -> OrderedDict:
+        current_q = self._current_arm_q(task, robot_name)
+        if current_q is None:
+            return self._failure_or_hold(task, robot_name, spec, 'current_joint_state_unavailable')
+
+        target_q = self._coerce_arm_q(
+            spec.get('joint_positions'),
+            bound_revolute=False,
+            joint_count=current_q.shape[0],
+        )
+        if target_q is None or target_q.shape != current_q.shape:
+            return self._failure_or_hold(
+                task,
+                robot_name,
+                spec,
+                'invalid_joint_target',
+                diagnostics={'joint_positions': spec.get('joint_positions')},
+            )
+
+        reference_q = self._command_reference_q(
+            task=task,
+            robot_name=robot_name,
+            current_q=current_q,
+            spec=spec,
+        )
+        if reference_q is None or reference_q.shape != target_q.shape:
+            reference_q = current_q
+        target_q = self._unwrap_to_reference(
+            target_q=target_q,
+            reference_q=reference_q,
+            preferred_abs_limit=spec.get('preferred_joint_abs_limit'),
+            hard_preferred_abs_limit=False,
+        )
+        step_limits = self._command_joint_step_limits(
+            spec=spec,
+            joint_count=current_q.shape[0],
+        )
+        if step_limits is None:
+            step_limits = float(spec.get('max_joint_step', 0.020))
+        command_q = self._limited_joint_target(
+            current_q=reference_q,
+            target_q=target_q,
+            max_joint_step=step_limits,
+        )
+        command_q = self._continuous_command_q(
+            task=task,
+            robot_name=robot_name,
+            command_q=command_q,
+            spec=spec,
+        )
+        command_q = self._limit_command_to_measured_state(
+            current_q=current_q,
+            command_q=command_q,
+            spec=spec,
+        )
+
+        action = OrderedDict()
+        action[_ARM_JOINT_CONTROLLER] = [command_q.tolist()]
+        action[_GRIPPER_CONTROLLER] = [
+            self._gripper_command_value(
+                task=task,
+                robot_name=robot_name,
+                command=spec.get('gripper_command', 'open'),
+            )
+        ]
+        self._remember_arm_command(task, robot_name, command_q)
+
+        joint_error = float(np.max(np.abs(target_q - current_q)))
+        tolerance = float(spec.get('joint_position_tolerance', 0.025))
+        state = self._completion_state.setdefault(phase_key, {})
+        if joint_error <= tolerance:
+            state['joint_target_stable_steps'] = int(state.get('joint_target_stable_steps', 0)) + 1
+        else:
+            state['joint_target_stable_steps'] = 0
+        stable_steps = int(state['joint_target_stable_steps'])
+        required_stable_steps = max(int(spec.get('joint_target_stable_steps', 8)), 1)
+        if stable_steps >= required_stable_steps:
+            self._mark_complete(
+                task=task,
+                robot_name=robot_name,
+                skill_name=skill_name,
+                detail={
+                    'target_joint_positions': target_q.tolist(),
+                    'joint_error': joint_error,
+                    'joint_position_tolerance': tolerance,
+                    'stable_steps': stable_steps,
+                    'required_stable_steps': required_stable_steps,
+                },
+            )
         return action
 
     def _preshape_gripper_action(
@@ -5045,13 +5280,25 @@ class UR5eAssemblyAtomicSkillAdapter:
     ) -> tuple[bool, dict[str, Any]]:
         min_steps = max(int(spec.get('close_until_contact_min_steps', spec.get('close_ramp_steps', 24))), 0)
         required_stable_steps = max(int(spec.get('close_contact_stable_steps', 8)), 1)
-        stall_delta = float(spec.get('close_contact_stall_joint_delta', 0.0015))
-        blocked_margin = float(spec.get('close_contact_blocked_joint_margin', 0.025))
-        min_closure = float(spec.get('close_contact_min_joint_closure', 0.05))
-        hold_squeeze_margin = float(spec.get('close_contact_hold_squeeze_margin', 0.04))
-
         gripper_q = self._current_gripper_q(task=task, robot_name=robot_name)
         open_q, closed_q = self._gripper_open_closed_q(task=task, robot_name=robot_name)
+        joint_range = None
+        if open_q is not None and closed_q is not None:
+            joint_range = abs(float(open_q) - float(closed_q))
+
+        # The Robotiq drive spans about 0.8 while each Panda finger spans only
+        # 0.04. Scale implicit gates to the configured joint range so a valid
+        # short-stroke gripper can satisfy the same normalized grasp checks.
+        default_stall_delta = 0.0015 if joint_range is None else min(0.0015, 0.05 * joint_range)
+        default_blocked_margin = 0.025 if joint_range is None else min(0.025, 0.25 * joint_range)
+        default_min_closure = 0.05 if joint_range is None else min(0.05, 0.10 * joint_range)
+        default_target_tolerance = 0.025 if joint_range is None else min(0.025, 0.05 * joint_range)
+        stall_delta = float(spec.get('close_contact_stall_joint_delta', default_stall_delta))
+        blocked_margin = float(spec.get('close_contact_blocked_joint_margin', default_blocked_margin))
+        min_closure = float(spec.get('close_contact_min_joint_closure', default_min_closure))
+        target_tolerance = float(spec.get('close_gripper_target_tolerance', default_target_tolerance))
+        hold_squeeze_margin = float(spec.get('close_contact_hold_squeeze_margin', 0.04))
+
         last_q = state.get('last_gripper_q')
         joint_delta = None
         if gripper_q is not None and last_q is not None:
@@ -5077,9 +5324,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             blocked_before_full_close = abs(float(gripper_q) - float(closed_q)) >= blocked_margin
             moved_from_open = abs(float(gripper_q) - float(open_q)) >= min_closure
             target_q = float(closed_q) + float(gripper_openness) * (float(open_q) - float(closed_q))
-            reached_gripper_target = abs(float(gripper_q) - target_q) <= float(
-                spec.get('close_gripper_target_tolerance', 0.025)
-            )
+            reached_gripper_target = abs(float(gripper_q) - target_q) <= target_tolerance
         stalled = bool(joint_delta is not None and joint_delta <= stall_delta)
         contact_candidate = bool(contact_ready and moved_from_open)
         stall_contact = bool(
@@ -5258,6 +5503,11 @@ class UR5eAssemblyAtomicSkillAdapter:
             'gripper_joint_delta': None if joint_delta is None else float(joint_delta),
             'gripper_open_position': None if open_q is None else float(open_q),
             'gripper_closed_position': None if closed_q is None else float(closed_q),
+            'gripper_joint_range': joint_range,
+            'close_contact_stall_joint_delta': stall_delta,
+            'close_contact_blocked_joint_margin': blocked_margin,
+            'close_contact_min_joint_closure': min_closure,
+            'close_gripper_target_tolerance': target_tolerance,
             'blocked_before_full_close': blocked_before_full_close,
             'moved_from_open': moved_from_open,
             'stalled': stalled,
@@ -5406,4 +5656,5 @@ class UR5eAssemblyAtomicSkillAdapter:
 
 
 # Backward-compatible import for existing recipes and downstream code.
+AssemblyAtomicSkillAdapter = UR5eAssemblyAtomicSkillAdapter
 UR5ePlumbersBlockAtomicSkillAdapter = UR5eAssemblyAtomicSkillAdapter
