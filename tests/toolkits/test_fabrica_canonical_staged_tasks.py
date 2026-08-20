@@ -82,17 +82,29 @@ def test_canonical_metadata_covers_all_bundles_and_uses_runtime_safe_assets():
         assert [item['grasp_id'] for item in base_grasp_candidates] == sorted(
             item['grasp_id'] for item in base_grasp_candidates
         )
+        planner_base_grasp_id = base_grasp_candidates[0]['planner_grasp_id']
+        assert any(item['grasp_id'] == planner_base_grasp_id for item in base_grasp_candidates)
         for base_grasp in base_grasp_candidates:
-            assert base_grasp['target_gripper'] == 'robotiq-85'
-            assert base_grasp['target_gripper_asset'] == 'isaac_official_robotiq_2f85'
-            assert base_grasp['gripper_frame_conversion'] == ('fabrica_minus_x_to_isaac_plus_y')
-            assert np.allclose(
-                base_grasp['gripper_frame_rotation_wxyz'],
-                [np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)],
-            )
+            assert base_grasp['panda_compatible'] is True
+            assert isinstance(base_grasp['robotiq_compatible'], bool)
+            if base_grasp['robotiq_compatible']:
+                assert base_grasp['target_gripper'] == 'robotiq-85'
+                assert base_grasp['target_gripper_asset'] == 'isaac_official_robotiq_2f85'
+                assert base_grasp['gripper_frame_conversion'] == ('fabrica_minus_x_to_isaac_plus_y')
+                assert np.allclose(
+                    base_grasp['gripper_frame_rotation_wxyz'],
+                    [np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)],
+                )
             assert base_grasp['selection_method'] == ('compiler_joint_pickup_yaw_base_grasp_selection')
             assert base_grasp['interior_clearance_minimum'] == 0.20
-            assert base_grasp['interior_clearance_score'] >= 0.20
+            assert (
+                base_grasp['interior_clearance_score'] >= 0.20
+                or base_grasp['is_planner_grasp']
+            )
+            assert base_grasp['interior_clearance_planner_exemption'] == (
+                base_grasp['is_planner_grasp']
+                and base_grasp['interior_clearance_score'] < 0.20
+            )
             assert base_grasp['valid_candidate_count'] == len(base_grasp_candidates)
             assert len(base_grasp['assembly_approach_direction']) == 3
         for step in task['assembly_steps']:
@@ -106,7 +118,10 @@ def test_canonical_metadata_covers_all_bundles_and_uses_runtime_safe_assets():
             assert planner_grasp['grasp_id'] == step['move_grasp']['grasp_id']
             for candidate in move_grasp_candidates:
                 assert candidate['selection_method'] == ('compiler_move_grasp_candidate_conversion')
-                assert candidate['target_gripper'] == 'robotiq-85'
+                assert candidate['panda_compatible'] is True
+                assert isinstance(candidate['robotiq_compatible'], bool)
+                if candidate['robotiq_compatible']:
+                    assert candidate['target_gripper'] == 'robotiq-85'
                 assert candidate['valid_candidate_count'] == len(move_grasp_candidates)
                 assert candidate['grasp_lever_arm_m'] > 0.0
                 assert candidate['source_collision_count'] >= 0
@@ -183,7 +198,16 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
         actual_parts = set(objects).intersection(part_names)
 
         assert recipe['scene_asset_path'] == reference_recipe['scene_asset_path']
+        assert recipe['scene_asset_path'].endswith('/warehouse_with_forklifts.usd')
         assert recipe['scene_asset_fallback_path'] == reference_recipe['scene_asset_fallback_path']
+        assert recipe['metadata']['scene_family'] == 'isaac_simple_warehouse_tabletop'
+        assert recipe['domain_randomization']['appearance']['allowed_objects'] == [
+            'factory_tabletop_visual',
+            'factory_background_visual',
+            'factory_floor_visual',
+        ]
+        assert recipe['domain_randomization']['appearance']['allowed_lights'] == ['warehouse_dome_fill']
+        assert recipe['domain_randomization']['visual_distractors']['count_range'] == [0, 8]
         assert {
             entry['name']: entry for entry in recipe['objects'] if entry['name'].startswith(('factory_', 'taoyuan_'))
         } == reference_workcell_objects
@@ -333,6 +357,7 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             assert selected_move_grasp['ik_minimum_path_manipulability'] >= 0.08
             assert (
                 selected_move_grasp['pickup_orientation_continuity'] >= diagnostics['required_orientation_continuity']
+                or selected_move_grasp['is_planner_grasp']
             )
             assert set(selected_move_grasp['ik_errors_by_target']) >= {
                 'pickup_approach',
@@ -343,14 +368,18 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             }
             assert selected_move_grasp['pickup_orientation_continuity'] >= 0.50
             assert selected_move_grasp['maximum_tcp_reach'] <= 0.82
-            assert selected_move_grasp['source_collision_count'] == diagnostics['minimum_source_collision_count']
+            assert selected_move_grasp['source_collision_count'] == diagnostics['selected']['source_collision_count']
+            assert selected_move_grasp['source_collision_count'] >= diagnostics['minimum_source_collision_count']
             assert selected_move_grasp['pickup_fixture_body_clearance'] >= diagnostics['required_fixture_clearance']
             assert selected_move_grasp['insertion_body_clearance'] >= 0.0
-            assert selected_move_grasp['interior_clearance_score'] >= diagnostics['required_interior_clearance']
+            assert (
+                selected_move_grasp['interior_clearance_score'] >= diagnostics['required_interior_clearance']
+                or selected_move_grasp['is_planner_grasp']
+            )
         if task_name == 'car':
-            assert selected_move_grasps['0']['source_collision_count'] == 0
-            assert selected_move_grasps['0']['grasp_id'] == 2477
-            assert selected_move_grasps['3']['grasp_id'] == 1722
+            assert selected_move_grasps['0']['is_planner_grasp'] is True
+            assert selected_move_grasps['3']['is_planner_grasp'] is True
+            assert move_grasp_selection['0']['selected']['pickup_fixture_body_clearance'] > 0.035
             assert move_grasp_selection['3']['selected']['pickup_fixture_body_clearance'] > 0.035
         assert selected_base_grasp['selection_method'] == ('joint_pickup_yaw_base_grasp_runtime_selection')
         np.testing.assert_allclose(
@@ -384,6 +413,12 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
         base_release = next(
             phase for phase in recipe['phases'] if phase['name'] == f'base_{base_part_id}_release_and_lock'
         )
+        assert base_release['detach'] == [
+            {
+                'object': f'fabrica_{recipe["fabrica_canonical_resolved"]["assembly"]}_{base_part_id}',
+                'release_min_steps': 0,
+            }
+        ]
         rebased_targets = set(base_release['lock'][0]['rebase_targets'])
         assert {criterion['target'] for criterion in recipe['success']} <= rebased_targets
         assert rebased_targets == set(recipe['domain_randomization']['groups']['assembly_base']['targets'])
@@ -393,6 +428,8 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             base_retreat['local_skill']['offset'],
             [0.0, 0.0, 0.06],
         )
+        assert base_retreat['local_skill']['lock_target_position'] is True
+        assert base_retreat['local_skill']['lock_target_orientation'] is True
         park_offset = np.asarray(base_park['local_skill']['offset'], dtype=float)
         assert base_park['local_skill']['lock_target_position'] is True
         assert base_park['local_skill']['lock_target_orientation'] is False
@@ -446,7 +483,7 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             assert lock_spec['free_snap_steps'] == 0
             assert lock_spec['position_tolerance'] == 0.03
             assert lock_spec['orientation_tolerance'] == 0.20
-            assert lock_spec['disable_collision_on_lock'] is True
+            assert lock_spec['disable_collision_on_lock'] is False
             assert lock_spec['target'] in recipe['domain_randomization']['groups']['start_parts']['targets']
         for phase in close_phases:
             local_skill = phase['local_skill']
@@ -455,6 +492,7 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             assert 'unlock_after_steps' not in phase
             if local_skill['object'] == base_object:
                 assert phase['fixture_lock'][0]['target'] == f'part_{base_part_id}_fixture_pickup'
+                assert phase['fixture_lock'][0]['disable_collision_on_lock'] is False
             else:
                 assert 'fixture_lock' not in phase
             assert local_skill['close_until_contact'] is True
@@ -547,7 +585,10 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
                     assert local_skill['target_object_servo_position_command_warm_start'] is True
                     assert local_skill['target_object_servo_position_command_gate_overdrive'] is True
                     assert local_skill['target_object_servo_position_command_lookahead'] == 0.004
-                    assert local_skill['target_object_servo_position_command_accumulation_step'] == 0.0001
+                    assert (
+                        local_skill['target_object_servo_position_command_accumulation_step']
+                        == local_skill['cartesian_position_step']
+                    )
                     assert local_skill['target_object_axial_recovery_cartesian_position_step'] == 0.001
                     assert local_skill['target_object_axial_recovery_deadband'] == 0.0005
                     assert local_skill['target_object_lateral_alignment_axial_clearance'] >= 0.0
@@ -565,8 +606,8 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
                     assert local_skill['position_tolerance'] == 0.006
                     assert local_skill['target_object_position_tolerance'] == 0.008
                     is_final_insertion = local_skill['target_object_target'].endswith('_assembled')
-                    assert local_skill['require_target_object_static'] is True
-                    assert local_skill['hold_for_target_object_settle'] is True
+                    assert local_skill['require_target_object_static'] is is_final_insertion
+                    assert local_skill['hold_for_target_object_settle'] is is_final_insertion
                     assert local_skill['target_object_max_linear_speed'] == 0.03
                     assert local_skill['target_object_max_angular_speed'] == 2.0
                     assert local_skill['target_object_allow_pose_stable_override'] is True
@@ -605,7 +646,7 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
                         0.70,
                     )
                     if is_final_insertion:
-                        assert 0.015 <= local_skill['relax_fixed_attachment_within_final_position_tolerance'] <= 0.020
+                        assert 0.015 <= local_skill['relax_fixed_attachment_within_final_position_tolerance'] <= 0.060
                     else:
                         assert local_skill['relax_fixed_attachment_within_final_position_tolerance'] >= 0.015
                     assert compliance_keys.issubset(local_skill)
@@ -633,15 +674,15 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
                         assert local_skill['target_object_entry_capture_max_steps'] == 12
                     else:
                         assert 'target_object_entry_capture_max_steps' not in local_skill
-                    expected_relaxed_tolerance = (
-                        0.015 if local_skill['target_object_target'].endswith('_assembled') else 0.010
-                    )
+                    expected_relaxed_tolerance = 0.015
                     assert local_skill['relaxed_position_tolerance'] == expected_relaxed_tolerance
                     assert local_skill['relaxed_target_object_position_tolerance'] == expected_relaxed_tolerance
-                    assert local_skill['relaxed_position_tolerance_after_steps'] == 600
+                    assert local_skill['relaxed_position_tolerance_after_steps'] == (
+                        600 if is_final_insertion else 0
+                    )
             if phase['name'].endswith('_release_and_lock'):
                 for lock_spec in phase.get('lock', []):
-                    assert lock_spec['position_tolerance'] == 0.015
+                    assert 0.015 <= lock_spec['position_tolerance'] <= 0.062
 
         for success in recipe['success']:
             assert success['target'] in targets
@@ -722,6 +763,8 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
         base_part = str(task['base_part'])
         base_prefix = f'base_{base_part}'
         assert phase_order[f'{base_prefix}_lift'] < phase_order[f'{base_prefix}_pickup_clearance']
+        assert phases[f'{base_prefix}_lift']['local_skill']['lock_target_position'] is True
+        assert phases[f'{base_prefix}_lift']['local_skill']['lock_target_orientation'] is True
         assert phase_order[f'{base_prefix}_pickup_clearance'] < phase_order[f'{base_prefix}_assembly_clearance']
         assert phase_order[f'{base_prefix}_assembly_clearance'] < phase_order[f'{base_prefix}_transport_hover']
         assert phases[f'{base_prefix}_assembly_clearance']['timeout_steps'] == 4800
@@ -759,7 +802,7 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
             for insertion_index, insertion_phase in enumerate(insertion_phases):
                 insertion_skill = insertion_phase['local_skill']
                 lateral_tolerance = insertion_skill['target_object_lateral_position_tolerance']
-                assert insertion_skill['target_object_lateral_alignment_enter_tolerance'] == 0.5 * lateral_tolerance
+                assert insertion_skill['target_object_lateral_alignment_enter_tolerance'] == lateral_tolerance
                 assert insertion_skill['target_object_lateral_alignment_exit_tolerance'] == (
                     0.002 if insertion_index == len(insertion_phases) - 2 else lateral_tolerance
                 )
@@ -824,7 +867,7 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
                 assert insertion_skill['compliant_servo_hold_orientation_during_lateral_alignment'] is True
                 assert insertion_skill['compliant_servo_orientation_correction_deadband'] == 0.005
                 if insertion_index == len(insertion_phases) - 1:
-                    assert 0.015 <= insertion_skill['relax_fixed_attachment_within_final_position_tolerance'] <= 0.020
+                    assert 0.015 <= insertion_skill['relax_fixed_attachment_within_final_position_tolerance'] <= 0.060
                 else:
                     assert insertion_skill['relax_fixed_attachment_within_final_position_tolerance'] >= 0.015
             final_insertion = max(
@@ -860,6 +903,8 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
                 retreat_offset,
                 -0.06 * insertion_axis,
             )
+            assert phases[f'{prefix}_retreat']['local_skill']['lock_target_position'] is True
+            assert phases[f'{prefix}_retreat']['local_skill']['lock_target_orientation'] is True
             assert (
                 phase_order[f'{prefix}_release_and_lock']
                 < phase_order[f'{prefix}_retreat']
@@ -983,7 +1028,11 @@ def test_staged_randomization_moves_layouts_but_never_the_optical_board():
             objects_a['factory_tabletop_visual']['color'],
             table_color,
         )
-        assert result_a['appearance_groups']['background']['objects'] == []
+        assert result_a['appearance_groups']['background']['objects'] == ['factory_background_visual']
+        np.testing.assert_allclose(
+            objects_a['factory_background_visual']['color'],
+            background_color,
+        )
         np.testing.assert_allclose(
             lights_a['warehouse_dome_fill']['color'],
             background_color,

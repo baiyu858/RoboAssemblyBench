@@ -1,6 +1,10 @@
+from types import SimpleNamespace
+
 from toolkits.constraint_checking.integration.models import (
+    FRANKA_MODEL,
     UR5E_ROBOTIQ_MODEL,
     get_robot_collision_model,
+    infer_task_robot_collision_model,
 )
 
 
@@ -54,3 +58,15 @@ def test_gripper_links_have_root_and_wrist_mount_prim_candidates():
     )
     assert outer_paths[0] == '/ur5e_left/Gripper/Robotiq_2F_85/left_outer_finger'
     assert '/ur5e_left/wrist_3_link/Gripper/Robotiq_2F_85/left_outer_finger' in outer_paths
+
+
+def test_franka_robot_type_selects_panda_collision_model():
+    task = SimpleNamespace(
+        robots={
+            'left': SimpleNamespace(config=SimpleNamespace(type='FrankaRobot', name='franka_left')),
+            'right': SimpleNamespace(config=SimpleNamespace(type='FrankaRobot', name='franka_right')),
+        }
+    )
+
+    assert get_robot_collision_model('FrankaRobot') is FRANKA_MODEL
+    assert infer_task_robot_collision_model(task) is FRANKA_MODEL

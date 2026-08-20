@@ -28,6 +28,20 @@ def _load_xform_reader_cls():
     return SingleXFormPrim
 
 
+def _prim_path_exists(prim_path: str) -> bool:
+    """Check a stage prim without letting an XForm wrapper create it."""
+
+    try:
+        from isaacsim.core.utils.prims import get_prim_at_path
+    except ImportError:
+        try:
+            from omni.isaac.core.utils.prims import get_prim_at_path
+        except ImportError:
+            return True
+    prim = get_prim_at_path(str(prim_path))
+    return bool(prim and prim.IsValid())
+
+
 def _load_static_scene_boxes(prim_path: str, object_name: str) -> list[dict]:
     """Read world AABBs for boundable leaves under one static scene object."""
 
@@ -257,6 +271,9 @@ class RuntimeConstraintMonitor:
                 candidate_paths = self.robot_model.prim_paths_for_link(root_prim_path, link_name)
                 last_error = None
                 for prim_path in candidate_paths:
+                    if not _prim_path_exists(prim_path):
+                        last_error = 'prim_unavailable'
+                        continue
                     try:
                         try:
                             reader = xform_cls(prim_path=prim_path)

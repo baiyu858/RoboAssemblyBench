@@ -1,42 +1,76 @@
-# RoboAssemblyBench
+# RoboAssemblyBench: Dual-Franka Fabrica Handoff
 
-RoboAssemblyBench is a reproduction branch of InternUtopia focused on atomic-skill based robotic assembly. The current checkpoint contains a dual-UR5e + Robotiq 2F-85 Fabrica plumbers-block task:
+本分支只面向双 Franka Panda 的 Fabrica 装配、调试和数据生成。目标是让接手者能够从零恢复当前环境，继续完成七个任务的物理验收，并批量生成带域随机化的 LeRobot v3 数据。
 
-`fabrica_plumbers_block_ur5e_right_base_prepare`
+- GitHub: https://github.com/baiyu858/RoboAssemblyBench
+- Branch: `franka-fabrica-handoff`
+- Reproduction assets: https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets
+- Simulator: NVIDIA Isaac Sim 5.1.0
+- Robot: two official Franka Panda assets with `panda_hand`
 
-The task stages part 2 with the right arm, then uses the left arm to place part 0 into the staged part-2 slot, stack part 3, and insert parts 4 and 1 into the remaining holes.
+## Current Checkpoint
 
-## Quick Preview
+七个 canonical recipe 已接入同一套编译器和原子技能：
 
-The linked rollout is a physically validated checkpoint: it completes without a
-timeout or recovery. Grasp completion requires strict bilateral finger geometry,
-blocked gripper closure, and bounded object motion. Placement completion requires
-object-pose convergence, and release does not snap parts to their targets.
+| Task | Recipe | Static compile | Full physical episode |
+| --- | --- | --- | --- |
+| beam | `fabrica_beam_franka_staged` | ready | needs final acceptance |
+| car | `fabrica_car_franka_staged` | ready | in progress |
+| cooling_manifold | `fabrica_cooling_manifold_franka_staged` | ready | needs final acceptance |
+| duct | `fabrica_duct_franka_staged` | ready | needs final acceptance |
+| gamepad | `fabrica_gamepad_franka_staged` | ready | needs final acceptance |
+| plumbers_block | `fabrica_plumbers_block_franka_staged` | ready | needs final acceptance |
+| stool_circular | `fabrica_stool_circular_franka_staged` | ready | needs final acceptance |
 
-Videos are stored with the reproduction assets:
+这里的 `ready` 表示资产、recipe、技能图、Franka 关节控制、Panda 夹爪、接触检查、相机和记录器可以构建；只有 `results.json` 明确包含 `"success": true`，并通过视频物理检查，才算完整调通。不要把“运行到后半段”或旧的 UR5e 视频当作 Franka 成功证据。
 
-- Front view: https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/observation_images_front.mp4
-- Left wrist: https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/observation_images_left_wrist.mp4
-- Right wrist: https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/observation_images_right_wrist.mp4
+当前 `car` 使用 seed/layout seed `5412` 验证了真实 Franka 资产、`base_2` 和 `part_1` 的抓取、运输、插入、释放和锁定，随后进入 `part_3`；完整 episode 仍需继续验收。当前官方布局为：
 
-After restoring assets, the same files appear under:
+| Role | Robot | Base position | Base orientation, WXYZ |
+| --- | --- | --- | --- |
+| hold/base | `franka_left` | `[0.05, 0.25, 0.998051]` | `[0.707106781, 0, 0, -0.707106781]` |
+| move/assembly | `franka_right` | `[0.95, 0.25, 0.998051]` | `[0.707106781, 0, 0, -0.707106781]` |
+
+两臂平行同向，yaw 均为 `-90 deg`，X 方向间距 `0.90 m`；pickup/board origin 为 `[0.50, 0.05, 0.0125]`，assembly origin 为 `[0.50, -0.10, 0.0125]`。该覆盖目前只写在 `car` recipe 中，其余任务继续使用共享 Franka 默认布局，除非完整路径验证证明必须覆盖。
+
+## Code Map
+
+- `roboassemblybench/tasks/_shared/_fabrica_canonical_franka.yaml`: Franka 平台参数、Panda home、IK 连续性、夹持和插入策略。
+- `roboassemblybench/tasks/fabrica_*_franka_staged/recipe.yaml`: 七个薄任务入口，只保留 assembly、左右臂角色和必要的任务覆盖。
+- `roboassemblybench/core/fabrica_canonical.py`: 从 Fabrica metadata 编译目标、grasp、phase graph、随机化和成功条件。
+- `toolkits/factory_dual_franka_assembly/plumbers_block_ur5e_skills.py`: 历史文件名未改，但适配器已同时支持 6-DOF UR5e 和 7-DOF Panda。
+- `internutopia_extension/tasks/factory_dual_franka_assembly_task.py`: 物理 attach、compliant insertion、接触、碰撞和完成条件。
+- `toolkits/factory_dual_franka_assembly/generate_demos.py`: 单进程 rollout、实时 MP4、trajectory-only 和 replay。
+- `roboassemblybench/core/domain_randomization.py`: 位置、纹理、灯光、桌面颜色、背景场景和干扰物。
+- `roboassemblybench/datasets/cartesian_episode.py`: 多视角 RGB-D、机器人状态、控制和阶段标注。
+- `roboassemblybench/scripts/generate_fabrica_canonical_franka_demo.sh`: 单任务复现入口。
+- `roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_multigpu.sh`: 一阶段多 GPU 采集。
+- `roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_twostage_multigpu.sh`: trajectory-first 两阶段加速采集。
+
+## Requirements
+
+推荐配置：
+
+- Ubuntu 22.04
+- NVIDIA driver compatible with Isaac Sim 5.1.0
+- NVIDIA Isaac Sim standalone 5.1.0
+- Conda or Miniconda
+- Git LFS
+- 至少 32 GiB system RAM per Isaac worker for conservative collection
+- 每个 Isaac worker 至少预留 8-12 GiB VRAM，实际值按场景和相机分辨率测量
+- 足够的数据盘；不要把 50k 输出写进 Git 工作树
+
+## Install
+
+克隆本分支：
 
 ```bash
-outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/
+git clone --branch franka-fabrica-handoff \
+  https://github.com/baiyu858/RoboAssemblyBench.git
+cd RoboAssemblyBench
 ```
 
-## Environment
-
-This checkpoint is meant to be reproduced locally with NVIDIA Isaac Sim and Conda.
-
-Required:
-
-- Ubuntu 20.04/22.04 with an NVIDIA GPU and working driver
-- NVIDIA Isaac Sim 5.1.0
-- Conda
-- Git LFS, for the external asset bundle
-
-Create the Python environment:
+创建测试、调度和 LeRobot 导出环境：
 
 ```bash
 conda env create -f environment.yml
@@ -44,342 +78,295 @@ conda activate internutopia311
 pip install -e .
 ```
 
-Set Isaac Sim location if your install is not in the default path used on the development machine:
+设置 standalone Isaac Sim：
 
 ```bash
-export ISAAC_SIM_ROOT=/path/to/isaac-sim
-export PYTHONNOUSERSITE=1
+export ISAAC_SIM_ROOT=/absolute/path/to/isaac-sim-5.1.0
+test -x "$ISAAC_SIM_ROOT/python.sh"
 ```
+
+为 Isaac 自带 Python 准备少量运行依赖：
+
+```bash
+mkdir -p .runtime_python
+"$ISAAC_SIM_ROOT/python.sh" -m pip install --target .runtime_python \
+  ikpy==3.4.2 httpx==0.25.2 zstandard rsl-rl-lib
+```
+
+`pyarrow` 只在导出 Parquet/LeRobot 时需要，不再是实时 MP4 的前置依赖。它已包含在 `environment.yml` 中。
 
 ## Assets
 
-Large binary assets are kept outside GitHub in the Hugging Face dataset:
+大文件不进入 GitHub。最小 Franka 复现需要四组 HF 资产：
 
-https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets
+1. 七任务 canonical bundle 和 grasp/precedence metadata。
+2. Franka plumbers-block bundle，提供当前随机纹理贴图。
+3. InternUtopia Franka USD、URDF 和 Lula 配置。
+4. Isaac Simple Warehouse 离线场景和视觉干扰物。
 
-Restore them into the repository root while preserving relative paths:
+下载到仓库中的固定相对路径：
 
 ```bash
-git lfs install
-git clone https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets /tmp/InternUtopia-repro-assets
-
-mkdir -p roboassemblybench/assets/Fabrica outputs
-rsync -a /tmp/InternUtopia-repro-assets/roboassemblybench/assets/Fabrica/ roboassemblybench/assets/Fabrica/
-rsync -a /tmp/InternUtopia-repro-assets/outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/ outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --repo-id baiyu858/InternUtopia-repro-assets \
+  --include 'roboassemblybench/assets/Fabrica/canonical_7_bundles/**' \
+  --include 'roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/**' \
+  --include 'internutopia/assets/robots/franka/**' \
+  --include 'roboassemblybench/assets/isaac_sim_5.1/Isaac/Environments/Simple_Warehouse/**'
 ```
 
-The required asset paths are:
+配置路径：
+
+```bash
+export INTERNUTOPIA_ASSETS_PATH="$PWD/internutopia/assets"
+export ISAAC_ASSETS_ROOT="$PWD/roboassemblybench/assets/isaac_sim_5.1"
+```
+
+验证：
+
+```bash
+test -f internutopia/assets/robots/franka/franka.usd
+test -f internutopia/assets/robots/franka/lula_franka_gen.urdf
+test -f roboassemblybench/assets/Fabrica/canonical_7_bundles/canonical_tasks.json
+test -f roboassemblybench/assets/isaac_sim_5.1/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+
+cd roboassemblybench/assets/Fabrica/canonical_7_bundles
+sha256sum -c SHA256SUMS
+cd ../../../..
+```
+
+`third_part/Fabrica` 只用于回查官方 planner/log，不是 staged runtime 的最小依赖。需要时单独下载：
+
+```bash
+python roboassemblybench/scripts/download_repro_assets_from_hf.py \
+  --include 'third_part/Fabrica/**'
+```
+
+## Static Verification
+
+先在不启动 Isaac 的情况下验证七任务编译和共享技能契约：
+
+```bash
+conda run -n internutopia311 python -m pytest -q \
+  --confcutdir=tests/toolkits \
+  tests/toolkits/test_fabrica_canonical_franka_staged_tasks.py \
+  tests/toolkits/test_factory_dual_franka_physical_contact.py \
+  tests/toolkits/test_factory_dual_franka_assembly_profiles.py \
+  tests/toolkits/test_gripper_controller.py
+```
+
+这一步必须确认：两台 `FrankaRobot`、每臂 7 个 arm joints + 2 个 finger joints、`panda_hand`、共享 phase graph 和随机化约束均正确。
+
+## Reproduce One Episode
+
+默认以 80 Hz、headless、trajectory + 三视角 MP4 运行 `car`：
+
+```bash
+ISAAC_SIM_ROOT=/absolute/path/to/isaac-sim-5.1.0 \
+  bash roboassemblybench/scripts/generate_fabrica_canonical_franka_demo.sh car
+```
+
+输出：
 
 ```text
-roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/
-roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/
-roboassemblybench/assets/Fabrica/fabrica_ur5e_cooling_optical_board_black_fullbundle_sdf001/assets/ur5e_robotiq_2f85_wrist_mount_task.usda
-roboassemblybench/assets/Fabrica/canonical_7_bundles/task_bundles/
-roboassemblybench/assets/Fabrica/canonical_7_bundles/canonical_tasks.json
+outputs/fabrica_franka_validation/car/results.json
+outputs/fabrica_franka_validation/car/rollout.log
+outputs/fabrica_franka_validation/car/episode_000000_cartesian_raw/
+outputs/fabrica_franka_validation/car/episode_0000_live_videos/
 ```
 
-## Run
-
-Open the task scene in Isaac Sim UI without running the policy:
+快速无图像验证：
 
 ```bash
-bash roboassemblybench/scripts/view_fabrica_plumbers_block_ur5e_right_base_prepare_scene_ui.sh
+RECORD_LIVE_VIDEO=0 CONTROL_FPS=80 DATASET_FPS=20 DATASET_FRAME_STRIDE=4 \
+  bash roboassemblybench/scripts/generate_fabrica_canonical_franka_demo.sh car
 ```
 
-Generate one demo:
+保守的 240 Hz 物理验证：
 
 ```bash
-bash roboassemblybench/scripts/generate_fabrica_plumbers_block_ur5e_right_base_prepare_demo.sh
+CONTROL_FPS=240 DATASET_FPS=30 DATASET_FRAME_STRIDE=8 \
+LIVE_VIDEO_FPS=30 LIVE_VIDEO_FRAME_STRIDE=8 \
+  bash roboassemblybench/scripts/generate_fabrica_canonical_franka_demo.sh car
 ```
 
-For a lower-resource headless run:
+切换任务只替换最后一个参数：
 
 ```bash
-HEADLESS=1 NUM_DEMOS=1 MAX_TRIALS=1 LIVE_VIDEO_FRAME_STRIDE=8 \
-  bash roboassemblybench/scripts/generate_fabrica_plumbers_block_ur5e_right_base_prepare_demo.sh \
-  --skip-episode-steps
-```
-
-`--skip-episode-steps` keeps result metrics and live videos but omits the large
-per-step observation/action list from `episode_0000.json`.
-
-Outputs are written to:
-
-```text
-outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/
-outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/collect_results.json
-outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000.json
-outputs/fabrica_plumbers_block_ur5e_right_base_prepare_demo/episode_0000_live_videos/
-```
-
-All seven canonical Fabrica assemblies use one shared staged-task compiler.
-Replace `<task>` with `beam`, `car`, `cooling_manifold`, `duct`, `gamepad`,
-`plumbers_block`, or `stool_circular`:
-
-```bash
-bash roboassemblybench/scripts/view_fabrica_canonical_ur5e_scene_ui.sh <task>
-bash roboassemblybench/scripts/generate_fabrica_canonical_ur5e_demo.sh <task>
-```
-
-These commands randomize the pickup layout, assembly targets, table color, and
-background color by default. The optical board always remains at its fixed world
-pose. Pickup layouts move by 5-12 cm and assembly targets move by 5-15 cm in XY;
-constraint sampling keeps the fixture and final assembly on the fixed board and
-keeps all generated TCP targets inside the configured UR5e reach envelope. Set
-`DOMAIN_RANDOMIZATION=0` for the nominal layout.
-The generator defaults to `SKIP_EPISODE_STEPS=1` to keep memory bounded while
-still executing the complete rollout and recording videos. Set it to `0` only
-when the large per-step JSON trace is required.
-
-## Six-Task Demo Data
-
-The current validated position-randomized checkpoint contains one successful
-demo for each of the six remaining Fabrica tasks. The optical board stays fixed;
-the start-parts and assembly-target groups are sampled independently in XY.
-The recorded layout seeds are pinned below so the same demos can be reproduced:
-
-| Task | `layout_seed` | Local output | Front-view preview |
-| --- | ---: | --- | --- |
-| `beam` | 505 | `outputs/fabrica_position_randomized_videos/beam/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/beam/episode_0000_live_videos/observation_images_front.mp4) |
-| `car` | 303 | `outputs/fabrica_position_randomized_videos/car/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/car/episode_0000_live_videos/observation_images_front.mp4) |
-| `cooling_manifold` | 101 | `outputs/fabrica_position_randomized_videos/cooling_manifold/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/cooling_manifold/episode_0000_live_videos/observation_images_front.mp4) |
-| `duct` | 202 | `outputs/fabrica_position_randomized_videos/duct/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/duct/episode_0000_live_videos/observation_images_front.mp4) |
-| `gamepad` | 606 | `outputs/fabrica_position_randomized_videos/gamepad/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/gamepad/episode_0000_live_videos/observation_images_front.mp4) |
-| `stool_circular` | 412 | `outputs/fabrica_position_randomized_videos/stool_circular/` | [MP4](https://huggingface.co/datasets/baiyu858/InternUtopia-repro-assets/resolve/main/outputs/fabrica_position_randomized_videos/stool_circular/episode_0000_live_videos/observation_images_front.mp4) |
-
-### Download The Validated Bundles
-
-The demo bundles are public in the reproduction-assets dataset. From the
-repository root, run:
-
-```bash
-huggingface-cli download baiyu858/InternUtopia-repro-assets \
-  --repo-type dataset \
-  --include 'outputs/fabrica_position_randomized_videos/**' \
-  --local-dir .
-```
-
-Each task directory contains `episode_0000.json`, validation results and logs,
-and three videos under `episode_0000_live_videos/`:
-`observation_images_front.mp4`, `observation_images_left_wrist.mp4`, and
-`observation_images_right_wrist.mp4`.
-
-### Reproduce The Six Bundles
-
-Run each task in its own Isaac process. This keeps Isaac visual assets isolated
-between heterogeneous Fabrica scenes and avoids stale robot-visual hierarchies
-when switching tasks:
-
-```bash
-declare -A LAYOUT_SEEDS=(
-  [beam]=505 [car]=303 [cooling_manifold]=101
-  [duct]=202 [gamepad]=606 [stool_circular]=412
-)
-
-for task in beam car cooling_manifold duct gamepad stool_circular; do
-  python roboassemblybench/scripts/validate_fabrica_canonical_ur5e.py \
-    --tasks "$task" \
-    --conda-env internutopia311 \
-    --output-dir "outputs/fabrica_position_randomized_videos/$task" \
-    --seed 0 \
-    --layout-seed "${LAYOUT_SEEDS[$task]}" \
-    --domain-randomization \
-    --record-live-video \
-    --live-video-fps 30 \
-    --live-video-frame-stride 8
+for task in beam cooling_manifold duct gamepad plumbers_block stool_circular; do
+  RECORD_LIVE_VIDEO=0 OUTPUT_DIR="outputs/fabrica_franka_validation/$task" \
+    bash roboassemblybench/scripts/generate_fabrica_canonical_franka_demo.sh "$task"
 done
 ```
 
-The validated run uses `seed=0`, `domain_randomization=true`, and generates a
-complete rollout with `success-criteria-met`. The published bundles use
-`--skip-episode-steps` to keep the download small; `episode_0000.json` therefore
-contains episode metadata and metrics but not the large per-step trace. To
-collect full state/action steps for a task, use the generic generator with:
+## Acceptance Contract
+
+每个任务必须同时满足：
+
+1. `results.json` 包含 `success=true` 和 `success-criteria-met`。
+2. metadata 中 `replay_robot_names == ["franka_left", "franka_right"]`。
+3. `replay_joint_widths == [9, 9]`，总关节宽度为 18；不能只根据文件名判断机器人类型。
+4. 前视角能看到两台 Panda，腕部画面不为空、不出现贯穿画面的光条。
+5. 夹爪两侧与物体形成物理接触；不得隔空 attach、穿模抓取或释放时瞬移吸附。
+6. 所有零件最终位姿、插入深度、静止性和 precedence 均通过。
+7. 无 `local-skill-failure`、`timeout-failure`、IK branch jump 或未解释的碰撞。
+
+查看关键日志：
 
 ```bash
-SKIP_EPISODE_STEPS=0 DOMAIN_RANDOMIZATION=1 NUM_DEMOS=1 \
-  bash roboassemblybench/scripts/generate_fabrica_canonical_ur5e_demo.sh beam
+grep -E '\[rollout-progress\]|\[assembly-(ik|prealign)|local-skill-failure|timeout-failure|Traceback' \
+  outputs/fabrica_franka_validation/car/rollout.log | tail -100
+cat outputs/fabrica_franka_validation/car/results.json
 ```
 
-## Dataset And ACT
+## Finish The Remaining Tasks
 
-The six-task position-randomized demos translate the complete start-parts group
-and the assembly targets independently in XY. The sampled offsets are constrained
-to 5-12 cm for pickup layouts and 5-15 cm for assembly layouts; the optical board
-remains fixed. The 2,000-episode collector below is a separate plumbers-block
-dataset workflow and uses its own four qualified layout seeds.
-Each accepted episode contains three `640x480` RGB streams, a 16D dual-arm
-Cartesian state, and a 16D next-sample absolute Cartesian action. Physics and
-control run at 240 Hz; cameras and dataset samples are synchronized at 30 Hz
-with `frame_stride=8` and `rendering_interval=7`.
+按以下顺序调试，避免为单一零件不断添加特例：
 
-Collect exactly 2,000 successful episodes with one memory-guarded Isaac worker:
+1. 先运行静态测试，确认 recipe 编译和完整 grasp/IK waypoint 集合。
+2. 固定 nominal seed，关闭随机化和视频，找到第一个失败 phase。
+3. 判断失败属于 reachability、IK branch、夹爪接触、碰撞、插入捕获还是 success gate。
+4. 优先修改共享 Franka 参数或通用候选选择器；只有几何证据证明任务不同，才在任务 recipe 中覆盖 base pose、role 或 terminal retreat。
+5. nominal full episode 通过后，至少验证 4 个 layout seeds。
+6. 最后逐个打开六类随机化，并人工审核前视角和腕部 RGB-D。
+
+不要只扩大 timeout。phase 长时间不收敛时，记录当前关节、目标关节、TCP/物体误差和接触，再决定修改路径、等待位或容差。`car` 当前最明显的性能问题是 assembly arm 在连续零件之间反复回默认 home；后续应只在真实等待、角色切换或任务结束时 park。
+
+建议先完成 `car` 的 `part_3/part_0/part_5/part_4`，再把同一修复回归到其余六任务。单任务验收结果应保存 seed、layout seed、commit SHA、结果 JSON、前视角 MP4 和失败 phase。
+
+## Domain Randomization
+
+启用随机化：
 
 ```bash
-bash roboassemblybench/scripts/collect_fabrica_plumbers_block_2k.sh
+DOMAIN_RANDOMIZATION=1 RANDOMIZATION_PROFILE=position LAYOUT_SEED=1001 \
+  bash roboassemblybench/scripts/generate_fabrica_canonical_franka_demo.sh car
 ```
 
-The worker is rejected and retried if available system memory remains below
-`1.5 GiB`; the systemd service also caps the complete pipeline at `12 GiB`.
+支持的 profile：
 
-The collector uses only four prevalidated, near-nominal layouts, pinned in the
-recipe as seeds `4906`, `485`, `34`, and `12`. The unique episode seed remains
-independent, so 2,000 episodes can be indexed without treating repeated layouts
-as duplicate episodes. Before formal collection, all four layouts must pass
-qualification. A failure writes
-`qualification_status.json` and stops without recording formal data; the same
-failed fingerprint is not restarted automatically. After qualification, the
-collector assigns the four layouts round-robin, is resumable, rejects failed,
-misaligned, or out-of-contract episodes, and writes:
+| Profile | Effect |
+| --- | --- |
+| `position` | pickup group 平移 5-12 cm，assembly targets 平移 5-15 cm |
+| `object_distractors` | 位置随机化 + 桌面视觉干扰物 |
+| `texture` | 位置随机化 + 桌面、墙面、地面纹理 |
+| `lighting` | 位置随机化 + 多灯数量、位置、强度和颜色 |
+| `table_color` | 位置随机化 + 桌面颜色 |
+| `scene` | 位置随机化 + 工厂背景场景、轻微位置和 yaw |
+| `mixed` | 同时启用所有配置组，用于抽样检查，不建议直接作为五类均衡数据标签 |
 
-```text
-outputs/fabrica_plumbers_block_ur5e_right_base_prepare_2k_raw_v3/
-```
+光学底板固定不动。fixture 与 pickup parts 作为一组移动，assembly targets 作为另一组移动；约束采样会检查桌面边界、Panda 可达范围和组内相对几何。
 
-For the complete unattended workflow, run the pipeline watcher instead of the
-standalone collector. It runs qualification, resumes collection after transient
-resource exits, waits for all 2,000 successes, exports LeRobot v3, trains ACT,
-then evaluates 50 randomized episodes using the automatic task success detector.
-It does not restart a failed recipe qualification. The collection lock prevents
-a second Isaac worker from being launched:
+## Recorded Data
+
+每个 raw episode 保存：
+
+- front、left wrist、right wrist RGB-D；
+- 双臂关节位置、速度、可用时的 effort/torque；
+- TCP position/orientation、夹爪状态和专家控制指令；
+- 可用时的 wrist wrench、碰撞信号及 availability mask；
+- phase、subtask、substage、左右臂角色、waiting/handoff 状态；
+- 前置条件、完成条件、任务目标、装配顺序和最终结果；
+- randomization profile、seed、layout seed 和 recipe fingerprint。
+
+导出单个 raw 目录为 LeRobot v3：
 
 ```bash
-bash roboassemblybench/scripts/run_fabrica_plumbers_block_act_pipeline.sh
+conda run -n internutopia311 python \
+  roboassemblybench/scripts/export_fabrica_lerobot_v3.py \
+  --input-dir /path/to/raw \
+  --output-dir /path/to/lerobot_v3 \
+  --repo-id baiyu858/roboassemblybench_fabrica_car_franka_position
 ```
 
-For multi-day collection, install the memory-limited user service. It survives
-terminal closure and resumes on user login:
+## Batch Collection
+
+正式采集前，先在每个 task/profile 上生成 1 条：
 
 ```bash
-bash roboassemblybench/scripts/install_fabrica_plumbers_block_pipeline_service.sh
-systemctl --user status roboassemblybench-fabrica-pipeline.service
-journalctl --user -fu roboassemblybench-fabrica-pipeline.service
+FRANKA_MACHINE_ID="$(hostname -s)" \
+GPU_IDS=0,1 GPU_WORKERS_PER_GPU=1 \
+ISAAC_PYTHON="$ISAAC_SIM_ROOT/python.sh" \
+LEROBOT_PYTHON="$(conda run -n internutopia311 which python)" \
+  bash roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_multigpu.sh smoke
 ```
 
-Monitor both processes:
+只调试指定组合：
 
 ```bash
-cat outputs/fabrica_plumbers_block_ur5e_right_base_prepare_2k_raw_v3/qualification_status.json
-tail -f outputs/fabrica_plumbers_block_ur5e_right_base_prepare_2k_raw_v3/collector.log
-jq . outputs/fabrica_plumbers_block_pipeline/pipeline_state.json
+TASK_FILTER=car PROFILE_FILTER=texture,lighting TARGET_PER_SUBSET=2 \
+FRANKA_MACHINE_ID="$(hostname -s)" GPU_IDS=0 \
+ISAAC_PYTHON="$ISAAC_SIM_ROOT/python.sh" EXPORT_LEROBOT=0 \
+  bash roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_multigpu.sh formal
 ```
 
-The validated ACT environment uses Python 3.11, LeRobot 0.4.4 dataset schema
-v3.0, PyTorch 2.7.0 with CUDA 12.8, and PyAV 15.1.0. The stage entry points are:
-
-```text
-roboassemblybench/scripts/export_fabrica_plumbers_block_lerobot_v3.py
-roboassemblybench/scripts/train_fabrica_plumbers_block_act.sh
-roboassemblybench/scripts/evaluate_fabrica_plumbers_block_act.sh
-```
-
-## Task Design
-
-The current task is configured as layered YAML recipes:
-
-```text
-fabrica_plumbers_block_ur5e_right_base_prepare
-  extends fabrica_plumbers_block_ur5e_wrist_mount
-    extends fabrica_plumbers_block_ur5e
-      extends fabrica_plumbers_block
-```
-
-Important files:
-
-```text
-roboassemblybench/tasks/fabrica_plumbers_block_ur5e_right_base_prepare/recipe.yaml
-roboassemblybench/tasks/fabrica_plumbers_block_ur5e_wrist_mount/recipe.yaml
-toolkits/factory_dual_franka_assembly/plumbers_block_ur5e_skills.py
-toolkits/factory_dual_franka_assembly/ur5e_skill_api.py
-roboassemblybench/scripts/generate_fabrica_plumbers_block_ur5e_right_base_prepare_demo.sh
-roboassemblybench/scripts/view_fabrica_plumbers_block_ur5e_right_base_prepare_scene_ui.sh
-```
-
-The logical robot names remain `franka_left` and `franka_right` for compatibility with the original factory task code, but both are instantiated as `UR5eRobot`. The wrist-mount recipe replaces the previous gripper setup with a Robotiq 2F-85 asset fixed under `wrist_3_link`.
-
-The task uses local atomic skills registered in recipe metadata:
-
-```text
-ur5e_move_above_part
-ur5e_retreat_vertical
-ur5e_preshape_gripper
-ur5e_descend_to_grasp
-ur5e_close_gripper
-ur5e_move_part_to_staging
-ur5e_move_part_to_table_hover
-ur5e_hold_part_end
-```
-
-All of them route through:
-
-```text
-toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:UR5eAssemblyAtomicSkillAdapter
-```
-
-Planner code can compile typed calls through the `UR5eAssemblySkillAPI` class in
-`toolkits.factory_dual_franka_assembly.ur5e_skill_api` instead of constructing
-recipe phases or adapter paths directly.
-
-Current generic safeguards include joint-space IK tracking, IK branch-jump and
-wrist-flip limiting, bounded per-step joint targets, shared-workspace arm
-clearance, TCP-frame object slip checks, strict dual-finger physical-contact gates,
-object-relative approach-axis hover poses, multi-sample interior contact checks,
-and object-pose convergence before placement completion. Force probes are queried
-only for recipes that require them; Isaac 5.1 force values are not used as a
-substitute for bilateral grasp geometry. Physical attachment
-filters only gripper/object collisions, and every release uses
-`snap_on_open: false`.
-
-The task-specific grasp poses remain recipe data rather than hard-coded policy
-branches. In particular, part 1 is grasped on its shaft with an object-local TCP
-offset while the gripper keeps a world-frame vertical orientation. This pattern
-allows new objects to adjust grasp geometry independently of placement geometry.
-
-## Add A New Assembly Task
-
-Use the current task as the template:
-
-1. Add a new task folder under `roboassemblybench/tasks/<task_name>/`.
-2. Start its `recipe.yaml` with `extends: fabrica_plumbers_block_ur5e_wrist_mount` if it uses the same dual-UR5e + Robotiq setup.
-3. Define task objects, world targets, and ordered `phases`.
-4. Compile planner calls with `UR5eAssemblySkillAPI`, or register reusable local skills in `metadata.local_skills` with `UR5eAssemblyAtomicSkillAdapter`.
-5. Prefer YAML parameters over code changes for new pick/place variants: `object`, `grasp_relative_position`, `grasp_relative_orientation`, `approach_clearance`, `gripper_openness`, `target_object_target`, `offset`, `cartesian_servo`, `position_tolerance`, `require_target_object_pose_convergence`, `attach`, and `release`. Insert `retreat_vertical` between a placement and the next cross-workspace pickup.
-6. Add a wrapper script in `roboassemblybench/scripts/` that calls `roboassemblybench/scripts/generate_demos.py` with the new recipe name.
-
-Keep direct Cartesian IK disabled unless a specific task has been validated with `allow_direct_arm_ik_controller: true`; the default joint-space guarded path is the safer reusable setting for UR5e pick/place skills.
-
-For a canonical Fabrica bundle, use the smaller generic interface instead of
-copying a long phase list: extend `_fabrica_canonical_ur5e.yaml` and set
-`fabrica_canonical.assembly`. The compiler reads
-`canonical_7_bundles/canonical_tasks.json`, stages the base, converts the
-official Panda grasp candidates to Robotiq 2F-85 object-relative grasps,
-selects every moving-part grasp from UR5e reach, orientation continuity,
-insertion-axis alignment, gripper sweep clearance, and full-pose UR5e IK at
-pickup approach, pickup, lift, assembly clearance, every insertion waypoint, and
-final placement. The IK path must remain warm-start connected and above the
-shared UR5e Jacobian-manipulability threshold, so a mathematically reachable but
-near-singular grasp is rejected before rollout. The compiler then
-reverses the official disassembly tree into assembly order and follows each
-insertion path. No task name or part ID is handled by a policy branch. A new
-canonical task supplies only assets, part bounds, assembly relations, grasp
-candidates, and insertion paths; the compiler rejects incomplete or unreachable
-task data before simulation. The optical board remains fixed and is never
-position-randomized.
-Regenerate the JSON only in the `fabrica` environment:
+七任务 x 五视觉 profile 的默认 formal 配额精确合计 50,000 条。这五类数据都包含受约束的位置随机化，再分别叠加干扰物、纹理、灯光、桌面颜色或背景场景。正式采集必须显式指定数据盘，安全起步使用 1 worker/GPU：
 
 ```bash
-PYTHONPATH=third_part/Fabrica conda run -n fabrica \
-  python roboassemblybench/scripts/build_fabrica_canonical_metadata.py
+FRANKA_MACHINE_ID="$(hostname -s)" \
+FRANKA_DATA_ROOT=/data/a17/baiyongjie/data/franka \
+GPU_IDS=0,1 GPU_WORKERS_PER_GPU=1 BATCH_SIZE=8 \
+ISAAC_PYTHON="$ISAAC_SIM_ROOT/python.sh" \
+LEROBOT_PYTHON=/path/to/internutopia311/bin/python \
+  bash roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_multigpu.sh formal
 ```
 
-## Repository Layout
+80 Hz 加速采集必须保持 timing contract：
 
-```text
-environment.yml                         # exported Conda environment
-internutopia_extension/                 # simulator robot/task extensions
-roboassemblybench/tasks/                # assembly task recipes
-roboassemblybench/scripts/              # UI and demo-generation entry points
-toolkits/factory_dual_franka_assembly/  # policy, scene builder, and local skills
+```bash
+RENDERING_FPS=80 DATASET_FPS=10 DATASET_FRAME_STRIDE=8 \
+  bash roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_multigpu.sh formal
 ```
 
-The GitHub repository contains code and lightweight configuration. Reproduction assets and preview videos are in the Hugging Face dataset listed above.
+多个节点共享任务时设置相同 `NODE_COUNT`，每台设置不同 `NODE_INDEX` 和 `FRANKA_MACHINE_ID`。每台机器写入独立子目录，避免共享盘并发覆盖。
+
+采集脚本按 manifest 和 LeRobot `meta/info.json` 断点续跑，重复执行同一命令不会从零开始。查看进度和资源：
+
+```bash
+find "$FRANKA_DATA_ROOT" -name '*.status' -type f -print -exec tail -n 1 {} \;
+find "$FRANKA_DATA_ROOT" -name collection_manifest.json -type f | wc -l
+watch -n 5 nvidia-smi
+```
+
+## Two-Stage Acceleration
+
+推荐的大规模方案是 trajectory-first：
+
+1. 80 Hz 只求解并保存一次成功的位置随机化 trajectory。
+2. 对同一 trajectory 分别 replay `object_distractors/texture/lighting/table_color/scene`。
+3. replay 生成 RGB-D 后再并行导出 LeRobot v3。
+
+这样不会为五个视觉 profile 重复执行五次长程装配：
+
+```bash
+ROBOT_PLATFORM=franka GPU_IDS=0,1 \
+INITIAL_GPU_WORKERS=1 GPU_WORKERS_PER_GPU=2 \
+ISAAC_PYTHON="$ISAAC_SIM_ROOT/python.sh" \
+OUTPUT_ROOT=/data/a17/baiyongjie/data/franka/twostage_50k \
+  bash roboassemblybench/scripts/collect_fabrica_franka_7tasks_50k_twostage_multigpu.sh
+```
+
+两阶段脚本默认按七任务 x 六组数据 x 每组 1,430 条生成 60,060 条，其中包含额外的 `position` 轨迹组；`TARGET_PER_TASK=1190` 可生成 49,980 条，`TARGET_PER_TASK=1191` 可生成 50,022 条。一阶段脚本使用非均匀配额，才是精确的 50,000 条。先用小 `TARGET_PER_TASK` 在所有七任务上 smoke；完整物理验收前不要直接启动大批量采集。
+
+若显存和内存稳定，再逐步将 `GPU_WORKERS_PER_GPU` 从 1 调到 2；每次只增加一个 worker，至少观察 20 分钟的 RSS、显存、episode 成功率和 worker restart。不要一开始使用脚本允许的最大并发。
+
+## Performance Notes
+
+- 240 Hz + live video 的 `car` 预计约 55-75 min/episode。
+- 240 Hz trajectory-only 预计约 45-60 min/episode。
+- 80 Hz 会自动把 phase counts 缩小到三分之一，并把 motion step 放大 3 倍；目标约 15-25 min/episode，但必须重新验证接触稳定性。
+- 去掉连续同臂任务之间无意义的 park，有机会进一步降到约 10-15 min/episode。
+- live video 只用于验收抽样；正式采集使用 raw camera cadence 或 trajectory-first replay。
+- GPU 利用率低通常是单 Isaac 进程受 CPU/PhysX 限制。增加独立 worker 提高总吞吐，但先观察 system RAM、VRAM 和 worker 稳定性。
+- 不要在同一 `ISAACSIM_PORTABLE_ROOT` 下并发启动多个 Isaac 进程。
+
+## Handoff Checklist
+
+- [ ] 七任务 static tests 通过。
+- [ ] 七任务 nominal episode 均有 `success=true`。
+- [ ] 每个任务至少 4 个位置 seeds 通过。
+- [ ] 六类随机化逐类通过视觉和物理抽样。
+- [ ] 视频确认双 Panda、无光条、无空抓、无穿模、无吸附放置。
+- [ ] 80 Hz 与 240 Hz 结果一致性完成抽查。
+- [ ] smoke batch 和 LeRobot v3 schema 通过。
+- [ ] 再启动多 GPU 50k，并持续监控 manifest、失败率、内存、显存和磁盘。

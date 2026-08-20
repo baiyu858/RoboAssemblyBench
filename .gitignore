@@ -157,3 +157,11 @@ checkpoints/
 recordings/
 ppt/
 /tests/*.png
+
+# Large reproducibility assets are published through Hugging Face, not GitHub.
+/IsaacLab/
+/third_part/Fabrica/
+/third_part/factory_dual_franka_peg_transfer/
+/internutopia/assets/
+/roboassemblybench/assets/isaac_sim_5.1/
+/roboassemblybench/assets/robofactory_native/downloads/**/*.usdz

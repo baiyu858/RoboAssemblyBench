@@ -163,6 +163,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._policy_release_cooldown_until = {name: 0 for name in config.robot_names}
         self._policy_interaction_history = []
         self._policy_attach_specs = self._collect_policy_attach_specs(config.phase_specs)
+        self._preconfigured_attachment_collision_filters = {}
 
     @property
     def cfg(self) -> FactoryDualFrankaAssemblyTaskCfg:
@@ -192,6 +193,29 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 seen.add(key)
                 specs.append(copy.deepcopy(entry))
         return specs
+
+    def set_up_scene(self, scene: IScene) -> None:
+        super().set_up_scene(scene)
+        self._preconfigure_attachment_gripper_collision_filters()
+
+    def _preconfigure_attachment_gripper_collision_filters(self) -> None:
+        """Author fixed-transport collision pairs before PhysX builds its view."""
+
+        for attach_spec in self._policy_attach_specs:
+            if not bool(attach_spec.get('filter_gripper_collisions_on_attach', False)):
+                continue
+            object_name = attach_spec.get('object') or attach_spec.get('name')
+            robot_name = attach_spec.get('robot') or attach_spec.get('robot_name')
+            if object_name is None or robot_name is None:
+                continue
+            key = (str(object_name), str(robot_name))
+            paths = self._set_attachment_gripper_collision_filter(
+                key[0],
+                key[1],
+                enabled=True,
+            )
+            if paths:
+                self._preconfigured_attachment_collision_filters[key] = list(paths)
 
     def _policy_evaluation_interactions(self) -> None:
         if not self._policy_auto_grasp:
@@ -260,14 +284,31 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             attached_by_robot[robot_name] = object_name
 
     def mark_local_skill_complete(self, robot_name: str, skill_name: str, detail: dict | None = None):
-        self._local_skill_completions[
-            (
-                self.phase_index,
-                self.phase_entry_step,
-                str(robot_name),
-                str(skill_name),
+        completion_key = (
+            self.phase_index,
+            self.phase_entry_step,
+            str(robot_name),
+            str(skill_name),
+        )
+        first_completion = completion_key not in self._local_skill_completions
+        completion_detail = copy.deepcopy(detail or {})
+        self._local_skill_completions[completion_key] = completion_detail
+        if first_completion and os.environ.get('ROBOASSEMBLYBENCH_DEBUG_SKILL_COMPLETION') == '1':
+            print(
+                '[assembly-skill-complete-debug] '
+                + json.dumps(
+                    {
+                        'phase': self.phase,
+                        'phase_index': int(self.phase_index),
+                        'phase_step': int(self.phase_step_counter),
+                        'robot': str(robot_name),
+                        'skill': str(skill_name),
+                        'detail': completion_detail,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
             )
-        ] = copy.deepcopy(detail or {})
 
     def is_local_skill_complete(self, robot_name: str, skill_name: str) -> bool:
         return (
@@ -750,21 +791,25 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         break_force,
         break_torque,
     ):
-        import omni
-        from omni.isaac.core import World
+        try:
+            from isaacsim.core.api import World
+            from isaacsim.core.utils.prims import get_prim_at_path, is_prim_path_valid
+        except ImportError:
+            from omni.isaac.core import World
+            from omni.isaac.core.utils.prims import get_prim_at_path, is_prim_path_valid
         from pxr import Gf, PhysxSchema, Sdf, UsdPhysics
 
         stage = World.instance().stage
         joint = getattr(UsdPhysics, joint_type).Define(stage, joint_path)
         if body0 is not None:
-            if not omni.isaac.core.utils.prims.is_prim_path_valid(body0):
+            if not is_prim_path_valid(body0):
                 raise ValueError(f'Invalid configured joint body0 path: {body0}')
             joint.GetBody0Rel().SetTargets([Sdf.Path(body0)])
-        if not omni.isaac.core.utils.prims.is_prim_path_valid(body1):
+        if not is_prim_path_valid(body1):
             raise ValueError(f'Invalid configured joint body1 path: {body1}')
         joint.GetBody1Rel().SetTargets([Sdf.Path(body1)])
 
-        joint_prim = omni.isaac.core.utils.prims.get_prim_at_path(joint_path)
+        joint_prim = get_prim_at_path(joint_path)
         PhysxSchema.PhysxJointAPI.Apply(joint_prim)
         self._set_joint_attr(joint_prim, 'physics:localPos0', Gf.Vec3f(*parent_pos), Sdf.ValueTypeNames.Point3f)
         self._set_joint_attr(joint_prim, 'physics:localRot0', Gf.Quatf(*parent_quat), Sdf.ValueTypeNames.Quatf)
@@ -882,7 +927,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if joint_path is None:
             return
 
-        from omni.isaac.core.utils.prims import get_prim_at_path
+        try:
+            from isaacsim.core.utils.prims import get_prim_at_path
+        except ImportError:
+            from omni.isaac.core.utils.prims import get_prim_at_path
 
         joint_prim = get_prim_at_path(joint_path)
         if joint_prim is None or not joint_prim.IsValid():
@@ -1248,7 +1296,8 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     rigid_body_api = UsdPhysics.RigidBodyAPI(cursor)
                     enabled_attr = rigid_body_api.GetRigidBodyEnabledAttr()
                     enabled = enabled_attr.Get() if enabled_attr.HasAuthoredValueOpinion() else True
-                    return bool(enabled)
+                    if bool(enabled):
+                        return True
             except Exception:
                 return False
             cursor = cursor.GetParent()
@@ -1262,7 +1311,6 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         except Exception:
             return False
 
-        dynamic_body = self._prim_has_enabled_rigid_body(prim)
         unsupported_approximations = {'', 'none', 'meshsimplification', 'trianglemesh'}
         handled = False
 
@@ -1273,7 +1321,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if current_prim.IsA(UsdGeom.Mesh) and current_prim.HasAPI(UsdPhysics.CollisionAPI):
                 try:
                     collision_enabled = bool(enabled)
-                    if dynamic_body and enabled:
+                    dynamic_body = self._prim_has_enabled_rigid_body(current_prim)
+                    approximation_name = None
+                    if enabled and dynamic_body:
                         mesh_collision_api = (
                             UsdPhysics.MeshCollisionAPI(current_prim)
                             if current_prim.HasAPI(UsdPhysics.MeshCollisionAPI)
@@ -1286,11 +1336,31 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                             collision_enabled = False
                     collision_attr = UsdPhysics.CollisionAPI(current_prim).GetCollisionEnabledAttr()
                     current_enabled = collision_attr.Get()
+                    if os.environ.get('ROBOASSEMBLYBENCH_DEBUG_COLLIDERS') == '1':
+                        print(
+                            '[assembly-collider-debug] '
+                            + json.dumps(
+                                {
+                                    'path': str(current_prim.GetPath()),
+                                    'requested_enabled': bool(enabled),
+                                    'dynamic_body': bool(dynamic_body),
+                                    'approximation': approximation_name,
+                                    'current_enabled': current_enabled,
+                                    'resolved_enabled': bool(collision_enabled),
+                                },
+                                sort_keys=True,
+                            ),
+                            flush=True,
+                        )
                     if current_enabled is None or bool(current_enabled) != collision_enabled:
                         collision_attr.Set(collision_enabled)
                     handled = True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    if os.environ.get('ROBOASSEMBLYBENCH_DEBUG_COLLIDERS') == '1':
+                        print(
+                            f'[assembly-collider-debug] failed path={current_prim.GetPath()} error={exc!r}',
+                            flush=True,
+                        )
             for child in current_prim.GetChildren():
                 _walk(child)
 
@@ -1325,7 +1395,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         filtered_paths: list[str] | None = None,
     ) -> list[str]:
         try:
-            from pxr import Sdf, UsdPhysics
+            from pxr import Sdf, Usd, UsdPhysics
         except Exception:
             return []
 
@@ -1335,8 +1405,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             object_prim = self._object_prims.get(object_name)
         if object_prim is None or not object_prim.IsValid():
             return []
-        filtered_pairs_api = UsdPhysics.FilteredPairsAPI.Apply(object_prim)
-        relation = filtered_pairs_api.GetFilteredPairsRel()
+        source_prims = []
+        for candidate_prim in Usd.PrimRange.AllPrims(object_prim):
+            if candidate_prim.HasAPI(UsdPhysics.RigidBodyAPI) or candidate_prim.HasAPI(
+                UsdPhysics.CollisionAPI
+            ):
+                source_prims.append(candidate_prim)
+        if not source_prims:
+            source_prims.append(object_prim)
 
         if filtered_paths is None:
             rigid_bodies = [
@@ -1354,17 +1430,51 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     continue
                 if prim_path and prim_path not in paths:
                     paths.append(prim_path)
+            if not paths:
+                stage = object_prim.GetStage()
+                link_suffixes = {
+                    f'/{self._robot_hand_link_name(robot_name)}',
+                    f'/{self._robot_left_finger_link_name(robot_name)}',
+                    f'/{self._robot_right_finger_link_name(robot_name)}',
+                }
+                robot_path_token = f'/{robot_name}/'
+                for candidate_prim in stage.Traverse():
+                    prim_path = str(candidate_prim.GetPath())
+                    if robot_path_token not in prim_path:
+                        continue
+                    if not any(prim_path.endswith(suffix) for suffix in link_suffixes):
+                        continue
+                    if prim_path not in paths:
+                        paths.append(prim_path)
         else:
             paths = [str(path) for path in filtered_paths if path]
 
-        for prim_path in paths:
-            try:
-                if enabled:
-                    relation.AddTarget(Sdf.Path(prim_path))
-                else:
-                    relation.RemoveTarget(Sdf.Path(prim_path))
-            except Exception:
-                continue
+        for source_prim in source_prims:
+            filtered_pairs_api = UsdPhysics.FilteredPairsAPI.Apply(source_prim)
+            relation = filtered_pairs_api.GetFilteredPairsRel()
+            for prim_path in paths:
+                try:
+                    if enabled:
+                        relation.AddTarget(Sdf.Path(prim_path))
+                    else:
+                        relation.RemoveTarget(Sdf.Path(prim_path))
+                except Exception:
+                    continue
+        if os.environ.get('ROBOASSEMBLYBENCH_DEBUG_COLLIDERS') == '1':
+            print(
+                '[assembly-attachment-filter-debug] '
+                + json.dumps(
+                    {
+                        'object': object_name,
+                        'robot': robot_name,
+                        'enabled': bool(enabled),
+                        'source_paths': [str(prim.GetPath()) for prim in source_prims],
+                        'filtered_paths': paths,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
         return paths
 
     def _robot_rigid_body_by_suffix(self, robot_name: str, suffix: str):
@@ -1507,7 +1617,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         return probe
 
     def _get_contact_sensor(self, prim_path: str):
-        from omni.isaac.core.utils.prims import is_prim_path_valid
+        try:
+            from isaacsim.core.utils.prims import is_prim_path_valid
+        except ImportError:
+            from omni.isaac.core.utils.prims import is_prim_path_valid
 
         if not is_prim_path_valid(prim_path):
             return None
@@ -2266,12 +2379,36 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             for axis in allowed_axes
         )
 
-    def _attachment_joint_path(self, object_name: str) -> str:
+    def _attachment_joint_path(self, object_name: str, *, compliant: bool = False) -> str:
+        """Return a stable, mode-specific attachment joint path.
+
+        PhysX processes USD prim deletion asynchronously while a simulation is
+        playing.  Replacing a FixedJoint with a generic Joint at the same path
+        in one control tick can therefore remove relationships authored for the
+        new joint.  Keep the two lifetimes separate so this transition is safe
+        for every robot and assembly part.
+        """
+
         object_rigid_body = self._resolve_object(object_name)
-        return f'{object_rigid_body.unwrap().prim_path}/assembly_attachment_joint'
+        joint_name = 'assembly_compliant_attachment_joint' if compliant else 'assembly_attachment_joint'
+        return f'{object_rigid_body.unwrap().prim_path}/{joint_name}'
+
+    @staticmethod
+    def _joint_has_expected_bodies(joint_prim, *, body0: str, body1: str) -> bool:
+        """Verify that a newly-authored joint retained both rigid-body targets."""
+
+        try:
+            body0_targets = [str(path) for path in joint_prim.GetRelationship('physics:body0').GetTargets()]
+            body1_targets = [str(path) for path in joint_prim.GetRelationship('physics:body1').GetTargets()]
+        except Exception:
+            return False
+        return body0_targets == [str(body0)] and body1_targets == [str(body1)]
 
     def _remove_attachment_joint(self, object_name: str):
-        from omni.isaac.core.utils.prims import delete_prim
+        try:
+            from isaacsim.core.utils.prims import delete_prim
+        except ImportError:
+            from omni.isaac.core.utils.prims import delete_prim
 
         joint_path = self._attachment_joints.pop(object_name, None)
         if joint_path is None:
@@ -2312,10 +2449,15 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             attach_spec['compliant_hold_locked_linear_world_direction'] = (
                 locked_direction / locked_direction_norm
             ).tolist()
-        contact_metrics = self._gripper_contact_metrics(
-            str(object_name),
-            str(robot_name),
-            attach_spec=attach_spec,
+        collision_disabled = bool(attachment_state.get('collision_disabled', False))
+        contact_metrics = (
+            copy.deepcopy(attachment_state.get('contact_metrics') or {})
+            if collision_disabled
+            else self._gripper_contact_metrics(
+                str(object_name),
+                str(robot_name),
+                attach_spec=attach_spec,
+            )
         )
         strict_contact = self._strict_physical_grasp_contact(
             str(object_name),
@@ -2363,10 +2505,13 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 'orientation': normalize_quat(relative_orientation).tolist(),
                 'attach_spec': attach_spec,
                 'filtered_gripper_collision_paths': list(filtered_paths),
+                'collision_disabled': False,
                 'attach_step': int(self.step_counter),
                 'relaxed_from_fixed_joint_step': int(self.step_counter),
             }
         )
+        if collision_disabled:
+            self._set_object_collision(str(object_name), True)
         return True
 
     def _create_compliant_attachment_joint(
@@ -2381,7 +2526,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if hand_rigid_body is None:
             return None
 
-        joint_path = self._attachment_joint_path(object_name)
+        # Use a distinct prim from the fixed joint that is being removed in
+        # relax_fixed_attachment_to_physical_hold().
+        joint_path = self._attachment_joint_path(object_name, compliant=True)
         object_position, object_orientation = object_rigid_body.get_pose()
         hand_position, hand_orientation = hand_rigid_body.get_pose()
         hand_relative_position, hand_relative_orientation = relative_pose(
@@ -2445,6 +2592,12 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 joint_frame_in_child_frame_pos=np.asarray(hand_relative_position, dtype=float),
                 joint_frame_in_child_frame_quat=child_frame_orientation,
             )
+            if not self._joint_has_expected_bodies(
+                joint_prim,
+                body0=object_rigid_body.unwrap().prim_path,
+                body1=hand_rigid_body.unwrap().prim_path,
+            ):
+                raise RuntimeError('created compliant joint is missing one or both rigid-body relationships')
             linear_limit = drive_parameters['linear_limit']
             locked_linear_limit = drive_parameters['locked_linear_limit']
             angular_limit_degrees = drive_parameters['angular_limit_degrees']
@@ -2653,8 +2806,21 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         attachment_state = self._attachments.pop(object_name, None)
         self._remove_attachment_joint(object_name)
         if attachment_state is not None:
+            # A fixed joint can leave a dynamic mesh with one stale solver
+            # impulse when it is removed. Release phases are intentionally
+            # quasi-static, so clear that impulse before re-enabling contact.
+            self._zero_object_velocity(object_name)
             filtered_paths = attachment_state.get('filtered_gripper_collision_paths') or []
-            if filtered_paths:
+            preconfigured_key = (
+                str(object_name),
+                str(attachment_state.get('robot_name', '')),
+            )
+            filter_is_preconfigured = preconfigured_key in getattr(
+                self,
+                '_preconfigured_attachment_collision_filters',
+                {},
+            )
+            if filtered_paths and not filter_is_preconfigured:
                 self._set_attachment_gripper_collision_filter(
                     object_name,
                     str(attachment_state.get('robot_name', '')),
@@ -2668,7 +2834,9 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
     def _get_robot_eef_pose(self, robot_name: str):
         return self.robots[robot_name].articulation.end_effector.get_pose()
 
-    def _get_robot_task_pose(self, robot_name: str):
+    def _get_robot_kinematics_pose(self, robot_name: str):
+        """Return Lula's Panda hand pose when the IK controller exposes one."""
+
         robot = self.robots[robot_name]
         controller = robot.controllers.get(self._ARM_IK_CONTROLLER_NAME)
         if controller is not None:
@@ -2681,6 +2849,48 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 orientation = controller_obs.get('eef_orientation')
                 if position is not None and orientation is not None:
                     return np.asarray(position, dtype=float), np.asarray(orientation, dtype=float)
+        return None
+
+    def _get_robot_pose_frame_diagnostic(self, robot_name: str) -> dict:
+        """Expose the physical-hand versus Lula-frame agreement for rollouts."""
+
+        physical_position, physical_orientation = self._get_robot_eef_pose(robot_name)
+        diagnostic = {
+            'physical_position': np.asarray(physical_position, dtype=float),
+            'physical_orientation': np.asarray(physical_orientation, dtype=float),
+            'kinematics_position': None,
+            'kinematics_orientation': None,
+            'position_error': None,
+            'orientation_error': None,
+        }
+        kinematics_pose = self._get_robot_kinematics_pose(robot_name)
+        if kinematics_pose is None:
+            return diagnostic
+        kinematics_position, kinematics_orientation = kinematics_pose
+        position_error, orientation_error = pose_error(
+            current_position=np.asarray(physical_position, dtype=float),
+            current_orientation=np.asarray(physical_orientation, dtype=float),
+            target_position=np.asarray(kinematics_position, dtype=float),
+            target_orientation=np.asarray(kinematics_orientation, dtype=float),
+        )
+        diagnostic.update(
+            {
+                'kinematics_position': np.asarray(kinematics_position, dtype=float),
+                'kinematics_orientation': np.asarray(kinematics_orientation, dtype=float),
+                'position_error': position_error,
+                'orientation_error': orientation_error,
+            }
+        )
+        return diagnostic
+
+    def _get_robot_task_pose(self, robot_name: str):
+        """Use the simulated hand frame for contact, attachment, and completion.
+
+        Lula is the IK solver, not the source of truth for physical interaction.
+        Keeping this contract explicit prevents a solver/USD TCP mismatch from
+        producing visually plausible but physically detached grasps.
+        """
+
         return self._get_robot_eef_pose(robot_name)
 
     def _get_robot_attach_reference_position(self, robot_name: str) -> np.ndarray:
@@ -3538,10 +3748,20 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         if collision_disabled:
             self._set_object_collision(object_name, False)
         filtered_gripper_collision_paths = []
+        if uses_joint_attachment and bool(
+            attach_spec.get('filter_gripper_collisions_on_attach', True)
+        ):
+            filtered_gripper_collision_paths = list(
+                getattr(self, '_preconfigured_attachment_collision_filters', {}).get(
+                    (str(object_name), str(robot_name)),
+                    [],
+                )
+            )
         if (
             uses_joint_attachment
             and not collision_disabled
             and bool(attach_spec.get('filter_gripper_collisions_on_attach', True))
+            and not filtered_gripper_collision_paths
         ):
             filtered_gripper_collision_paths = self._set_attachment_gripper_collision_filter(
                 object_name,
@@ -3704,6 +3924,11 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def _lock_object(self, object_name: str, target_name: str, *, lock_spec: dict | None = None):
         lock_spec = lock_spec or {}
+        if (
+            self._locked_targets.get(object_name) == target_name
+            and not bool(lock_spec.get('force_relock', False))
+        ):
+            return
         if not hasattr(self, '_locked_collision_states'):
             self._locked_collision_states = {}
         current_position, current_orientation = self._resolve_object(object_name).get_pose()
@@ -4042,7 +4267,18 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         )
         gripper_closed_threshold = float(attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD))
         debug_payload['gripper_opening_limit'] = gripper_opening_limit
-        if gripper_opening is not None and gripper_opening > gripper_opening_limit:
+        strict_contact_ready = bool(strict_contact.get('physical_contact_ready'))
+        allow_contact_blocked_opening = bool(
+            attach_spec.get('allow_contact_blocked_gripper_opening', True)
+        )
+        contact_blocked_opening = bool(strict_contact_ready and allow_contact_blocked_opening)
+        debug_payload['allow_contact_blocked_gripper_opening'] = allow_contact_blocked_opening
+        debug_payload['contact_blocked_gripper_opening'] = contact_blocked_opening
+        if (
+            gripper_opening is not None
+            and gripper_opening > gripper_opening_limit
+            and not contact_blocked_opening
+        ):
             debug_payload['blocked_by'] = 'gripper_open'
             self._maybe_write_attach_debug(debug_payload)
             return False
@@ -4221,14 +4457,64 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             ),
             default_orientation_tolerance=lock_spec.get('orientation_tolerance'),
         )
-        if pose_within_tolerance(
+        # Target tolerances are the benchmark-wide defaults. A release phase
+        # may provide a geometry-derived placement envelope, which must take
+        # precedence or an insertion accepted by that same envelope can never
+        # be locked on the following step.
+        if 'position_tolerance' in lock_spec or 'tolerance' in lock_spec:
+            position_tolerance = float(
+                lock_spec.get('position_tolerance', lock_spec.get('tolerance'))
+            )
+        if 'orientation_tolerance' in lock_spec:
+            orientation_tolerance = (
+                None
+                if lock_spec.get('orientation_tolerance') is None
+                else float(lock_spec['orientation_tolerance'])
+            )
+        lock_position_error, lock_orientation_error = pose_error(
             current_position=object_position,
             current_orientation=object_orientation,
             target_position=target_position,
             target_orientation=target_orientation,
-            position_tolerance=position_tolerance,
-            orientation_tolerance=orientation_tolerance,
+        )
+        lock_pose_ready = bool(
+            lock_position_error <= position_tolerance
+            and (
+                orientation_tolerance is None
+                or (
+                    lock_orientation_error is not None
+                    and lock_orientation_error <= orientation_tolerance
+                )
+            )
+        )
+        if (
+            os.environ.get('ROBOASSEMBLYBENCH_DEBUG_COLLIDERS') == '1'
+            and self.phase_step_counter <= 2
         ):
+            print(
+                '[assembly-lock-debug] '
+                + json.dumps(
+                    {
+                        'phase': self.phase,
+                        'phase_step': int(self.phase_step_counter),
+                        'object': object_name,
+                        'target': target_name,
+                        'attached': attachment_state is not None,
+                        'object_position': np.asarray(object_position, dtype=float).tolist(),
+                        'target_position': np.asarray(target_position, dtype=float).tolist(),
+                        'position_error': float(lock_position_error),
+                        'position_tolerance': float(position_tolerance),
+                        'orientation_error': None
+                        if lock_orientation_error is None
+                        else float(lock_orientation_error),
+                        'orientation_tolerance': orientation_tolerance,
+                        'pose_ready': lock_pose_ready,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+        if lock_pose_ready:
             return True
 
         if bool(lock_spec.get('snap_free_object', False)) and attachment_state is None:
@@ -4325,18 +4611,29 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         for lock_spec in self._as_list(phase_spec.get('lock')):
             if not isinstance(lock_spec, dict):
                 continue
+            target_name = lock_spec.get('target') or lock_spec.get('target_name')
+            if target_name is None:
+                continue
+            if (
+                self._locked_targets.get(lock_spec.get('object')) == target_name
+                and not bool(lock_spec.get('force_relock', False))
+            ):
+                continue
             if self._lock_ready(phase_spec, lock_spec):
-                target_name = lock_spec.get('target') or lock_spec.get('target_name')
-                if target_name is not None:
-                    self._lock_object(
-                        object_name=lock_spec['object'],
-                        target_name=target_name,
-                        lock_spec=lock_spec,
-                    )
+                self._lock_object(
+                    object_name=lock_spec['object'],
+                    target_name=target_name,
+                    lock_spec=lock_spec,
+                )
 
         for object_entry in self._as_list(phase_spec.get('detach')):
             object_name = self._extract_object_name(object_entry)
-            if object_name is None or object_name in lock_targets:
+            if object_name is None:
+                continue
+            if (
+                object_name in lock_targets
+                and self._locked_targets.get(object_name) == lock_targets[object_name]
+            ):
                 continue
             if self._detach_ready(phase_spec, object_name, object_entry):
                 self._detach_object(object_name)
@@ -5257,6 +5554,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             if self.phase_index + 1 < len(self.phase_specs):
                 self._set_phase(self.phase_index + 1, reason='advance', transition_type='advance', status='running')
                 self._initialize_phase()
+                # Apply entry interactions before the next control action. In
+                # particular, release phases must remove a transport joint or
+                # lock the payload before the gripper starts opening.
+                self._process_phase_interactions(self.get_current_phase_spec())
                 self._sync_object_states()
                 if self.success or self.failed:
                     return
@@ -5264,9 +5565,17 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 self.success = self._check_success()
                 if self.success and self.phase != 'complete':
                     self._set_terminal_state('complete', reason='success-criteria-met', status='success')
+                elif self._handle_phase_timeout(phase_spec):
+                    if not self.failed:
+                        self._initialize_phase()
+                        self._process_phase_interactions(self.get_current_phase_spec())
+                        self._sync_object_states()
+                        if self.success or self.failed:
+                            return
         elif self._handle_phase_timeout(phase_spec):
             if not self.failed:
                 self._initialize_phase()
+                self._process_phase_interactions(self.get_current_phase_spec())
                 self._sync_object_states()
                 if self.success or self.failed:
                     return
@@ -5306,7 +5615,10 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
     def cleanup(self) -> None:
         try:
-            from omni.isaac.core.utils.prims import delete_prim
+            try:
+                from isaacsim.core.utils.prims import delete_prim
+            except ImportError:
+                from omni.isaac.core.utils.prims import delete_prim
 
             for joint_path in list(self._configured_joint_paths.values()):
                 delete_prim(joint_path)

@@ -71,6 +71,10 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
     panda_position_cm = np.asarray(grasp.pos, dtype=float)
     panda_orientation_wxyz = np.asarray(grasp.quat, dtype=float)
     panda_open_ratio = float(grasp.open_ratio)
+    panda_position_m = (panda_position_cm - assembly_center_cm) * 0.01
+    panda_rotation = Rotation.from_quat(panda_orientation_wxyz[[1, 2, 3, 0]])
+    panda_object_in_tcp_position = panda_rotation.inv().apply(-panda_position_m)
+    panda_object_in_tcp_orientation = _wxyz_from_xyzw(panda_rotation.inv().as_quat())
     grasp_info = get_grasp_info_from_gripper_state(
         'panda',
         panda_position_cm,
@@ -86,9 +90,22 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
             grasp_info['grasp_center'] + grasp_info['l2r_direction'] * half_width,
         ]
     )
+    converted = {
+        'source_gripper': 'panda',
+        'grasp_id': int(grasp.grasp_id),
+        'panda_compatible': True,
+        'panda_open_ratio': panda_open_ratio,
+        'panda_tcp_in_assembly_position': _as_floats(panda_position_m),
+        'panda_tcp_in_assembly_orientation': _as_floats(panda_orientation_wxyz),
+        'panda_object_in_tcp_position': _as_floats(panda_object_in_tcp_position),
+        'panda_object_in_tcp_orientation': panda_object_in_tcp_orientation,
+        'grasp_width_m': grasp_width_cm * 0.01,
+        'assembly_approach_direction': _as_floats(grasp_info['base_direction']),
+    }
     robotiq_open_ratio = get_gripper_open_ratio('robotiq-85', antipodal_points)
+    converted['robotiq_compatible'] = robotiq_open_ratio is not None
     if robotiq_open_ratio is None:
-        raise ValueError(f'Panda grasp {grasp.grasp_id} is wider than the Robotiq 2F-85 workspace.')
+        return converted
 
     gripper_position_cm, gripper_orientation_wxyz = get_gripper_pos_quat(
         'robotiq-85',
@@ -104,23 +121,22 @@ def _convert_panda_grasp(grasp: Any, *, assembly_center_cm: np.ndarray) -> dict[
     gripper_orientation_wxyz = _wxyz_from_xyzw(gripper_rotation.as_quat())
     object_in_tcp_position = gripper_rotation.inv().apply(-gripper_position_m)
     object_in_tcp_orientation = _wxyz_from_xyzw(gripper_rotation.inv().as_quat())
-
-    return {
-        'source_gripper': 'panda',
-        'target_gripper': 'robotiq-85',
-        'target_gripper_asset': 'isaac_official_robotiq_2f85',
-        'gripper_frame_conversion': 'fabrica_minus_x_to_isaac_plus_y',
-        'gripper_frame_rotation_wxyz': _wxyz_from_xyzw(FABRICA_TO_ISAAC_ROBOTIQ_ROTATION.as_quat()),
-        'grasp_id': int(grasp.grasp_id),
-        'panda_open_ratio': panda_open_ratio,
-        'robotiq_open_ratio': float(robotiq_open_ratio),
-        'grasp_width_m': grasp_width_cm * 0.01,
-        'tcp_in_assembly_position': _as_floats(gripper_position_m),
-        'tcp_in_assembly_orientation': gripper_orientation_wxyz,
-        'object_in_tcp_position': _as_floats(object_in_tcp_position),
-        'object_in_tcp_orientation': object_in_tcp_orientation,
-        'assembly_approach_direction': _as_floats(grasp_info['base_direction']),
-    }
+    converted.update(
+        {
+            'target_gripper': 'robotiq-85',
+            'target_gripper_asset': 'isaac_official_robotiq_2f85',
+            'gripper_frame_conversion': 'fabrica_minus_x_to_isaac_plus_y',
+            'gripper_frame_rotation_wxyz': _wxyz_from_xyzw(
+                FABRICA_TO_ISAAC_ROBOTIQ_ROTATION.as_quat()
+            ),
+            'robotiq_open_ratio': float(robotiq_open_ratio),
+            'tcp_in_assembly_position': _as_floats(gripper_position_m),
+            'tcp_in_assembly_orientation': gripper_orientation_wxyz,
+            'object_in_tcp_position': _as_floats(object_in_tcp_position),
+            'object_in_tcp_orientation': object_in_tcp_orientation,
+        }
+    )
+    return converted
 
 
 def _source_collision_count(grasp: Any) -> int:
@@ -175,13 +191,10 @@ def _build_base_grasp_candidates(
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for grasp in grasps[part_id]['hold']:
-        try:
-            converted = _convert_panda_grasp(
-                grasp,
-                assembly_center_cm=assembly_center_cm,
-            )
-        except ValueError:
-            continue
+        converted = _convert_panda_grasp(
+            grasp,
+            assembly_center_cm=assembly_center_cm,
+        )
         geometry = _grasp_geometry(
             grasp,
             assembly_center_cm=assembly_center_cm,
@@ -192,6 +205,7 @@ def _build_base_grasp_candidates(
             {
                 'selection_method': 'compiler_joint_pickup_yaw_base_grasp_selection',
                 'planner_grasp_id': int(planner_grasp.grasp_id),
+                'is_planner_grasp': int(grasp.grasp_id) == int(planner_grasp.grasp_id),
                 'assembly_approach_cosine': float(converted['assembly_approach_direction'][2]),
                 **geometry,
             }
@@ -199,14 +213,21 @@ def _build_base_grasp_candidates(
         candidates.append(converted)
 
     if not candidates:
-        raise ValueError(f'No Robotiq-compatible hold grasp found for base part {part_id}.')
+        raise ValueError(f'No Panda hold grasp found for base part {part_id}.')
+    # The pickup fixture is generated around the optimizer's hold grasp. Keep
+    # that grasp even when the conservative axis-aligned bbox heuristic places
+    # its center just outside the generic interior threshold. Runtime still
+    # requires the complete physical/IK path before selecting it.
     valid_candidates = [
-        item for item in candidates if item['interior_clearance_score'] >= MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE
+        item
+        for item in candidates
+        if item['is_planner_grasp']
+        or item['interior_clearance_score'] >= MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE
     ]
     if not valid_candidates:
         best_interior_score = max(item['interior_clearance_score'] for item in candidates)
         raise ValueError(
-            f'No interior-safe Robotiq hold grasp found for base part {part_id}; '
+            f'No interior-safe Panda hold grasp found for base part {part_id}; '
             f'best normalized interior clearance is {best_interior_score:.3f}, '
             f'required {MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE:.3f}.'
         )
@@ -214,6 +235,10 @@ def _build_base_grasp_candidates(
         candidate.update(
             {
                 'interior_clearance_minimum': MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE,
+                'interior_clearance_planner_exemption': bool(
+                    candidate['is_planner_grasp']
+                    and candidate['interior_clearance_score'] < MINIMUM_BASE_INTERIOR_CLEARANCE_SCORE
+                ),
                 'valid_candidate_count': len(valid_candidates),
             }
         )
@@ -239,13 +264,10 @@ def _build_move_grasp_candidates(
         if grasp_id in seen_grasp_ids:
             continue
         seen_grasp_ids.add(grasp_id)
-        try:
-            converted = _convert_panda_grasp(
-                grasp,
-                assembly_center_cm=assembly_center_cm,
-            )
-        except ValueError:
-            continue
+        converted = _convert_panda_grasp(
+            grasp,
+            assembly_center_cm=assembly_center_cm,
+        )
         geometry = _grasp_geometry(
             grasp,
             assembly_center_cm=assembly_center_cm,
@@ -266,11 +288,9 @@ def _build_move_grasp_candidates(
         candidates.append(converted)
 
     if not candidates:
-        raise ValueError(f'No Robotiq-compatible move grasp found for moving part {part_id}.')
+        raise ValueError(f'No Panda move grasp found for moving part {part_id}.')
     if not any(candidate['is_planner_grasp'] for candidate in candidates):
-        raise ValueError(
-            f'Planner move grasp {planner_grasp.grasp_id} for part {part_id} is not ' 'Robotiq-compatible.'
-        )
+        raise ValueError(f'Planner move grasp {planner_grasp.grasp_id} for part {part_id} is missing.')
     for candidate in candidates:
         candidate['valid_candidate_count'] = len(candidates)
     return sorted(candidates, key=lambda item: item['grasp_id'])

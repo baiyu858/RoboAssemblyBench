@@ -108,6 +108,7 @@ def _install_fakes(monkeypatch):
     FakeDetector.raise_on_check = False
     monkeypatch.setattr(runtime_monitor, '_load_collision_detector_cls', lambda: FakeDetector)
     monkeypatch.setattr(runtime_monitor, '_load_xform_reader_cls', lambda: FakeXform)
+    monkeypatch.setattr(runtime_monitor, '_prim_path_exists', lambda _path: True)
 
 
 def test_stride_registration_environment_filtering_and_summary(monkeypatch):

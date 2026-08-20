@@ -72,3 +72,15 @@ def test_monitor_exception_is_recorded_without_changing_success():
     assert metrics['success'] is True
     assert metrics['status'] == 'success'
     assert metrics['runtime_constraint_monitor']['monitor_error'][0]['stage'] == 'observe'
+
+
+def test_default_monitor_infers_franka_model_from_task_robot_config():
+    task = SimpleNamespace(
+        step_counter=0,
+        robots={'left': SimpleNamespace(config=SimpleNamespace(type='FrankaRobot'))},
+    )
+    hook = RuntimeConstraintEpisodeHook(enabled=True)
+
+    monitor = hook._get_monitor(task)
+
+    assert monitor.robot_model.name == 'franka_panda'

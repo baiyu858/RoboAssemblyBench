@@ -35,6 +35,7 @@ class RuntimeConstraintEpisodeHook:
         collision_threshold: float = 0.0,
         include_ground: bool = False,
         ignore_pairs: list[str] | None = None,
+        robot_model: str | None = None,
         monitor_factory: Callable[[], object] | None = None,
     ):
         self.enabled = bool(enabled)
@@ -43,13 +44,14 @@ class RuntimeConstraintEpisodeHook:
         self.collision_threshold = float(collision_threshold)
         self.include_ground = bool(include_ground)
         self.ignore_pairs = list(ignore_pairs or [])
+        self.robot_model = robot_model
         self._monitor_factory = monitor_factory
         self._monitor = None
 
     def observe(self, task) -> dict | None:
         if not self.enabled:
             return None
-        monitor = self._get_monitor()
+        monitor = self._get_monitor(task)
         try:
             return monitor.observe(task)
         except Exception as exc:
@@ -75,24 +77,29 @@ class RuntimeConstraintEpisodeHook:
     def reset_episode(self) -> None:
         self._monitor = None
 
-    def _get_monitor(self):
+    def _get_monitor(self, task=None):
         if self._monitor is not None:
             return self._monitor
         try:
-            self._monitor = self._monitor_factory() if self._monitor_factory else self._build_monitor()
+            self._monitor = self._monitor_factory() if self._monitor_factory else self._build_monitor(task)
         except Exception as exc:
             self._monitor = _StaticReportMonitor(self._failure_report('initialize', exc))
         return self._monitor
 
-    def _build_monitor(self):
+    def _build_monitor(self, task=None):
+        from .models import infer_task_robot_collision_model
         from .runtime_monitor import (
             PairFilter,
             RuntimeConstraintConfig,
             RuntimeConstraintMonitor,
         )
 
+        robot_model = self.robot_model
+        if robot_model is None and task is not None:
+            robot_model = infer_task_robot_collision_model(task).name
         return RuntimeConstraintMonitor(
             RuntimeConstraintConfig(
+                robot_model=robot_model or 'ur5e_robotiq_2f85',
                 check_stride=self.check_stride,
                 threshold=self.threshold,
                 collision_threshold=self.collision_threshold,

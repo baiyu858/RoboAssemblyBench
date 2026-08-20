@@ -1144,13 +1144,14 @@ class UR5eRobot(BaseRobot):
         eef_pose = self.articulation.end_effector.get_pose()
         obs["eef_body_position"] = eef_pose[0]
         obs["eef_body_orientation"] = eef_pose[1]
+        # Keep recorded state in the physical TCP frame.  Lula FK remains
+        # available for controller-frame diagnostics.
+        obs["eef_position"] = eef_pose[0]
+        obs["eef_orientation"] = eef_pose[1]
         if "arm_ik_controller" in self.controllers:
             ik_obs = self.controllers["arm_ik_controller"].get_obs()
-            obs["eef_position"] = ik_obs.get("eef_position", eef_pose[0])
-            obs["eef_orientation"] = ik_obs.get("eef_orientation", eef_pose[1])
-        else:
-            obs["eef_position"] = eef_pose[0]
-            obs["eef_orientation"] = eef_pose[1]
+            obs["eef_kinematics_position"] = ik_obs.get("eef_position")
+            obs["eef_kinematics_orientation"] = ik_obs.get("eef_orientation")
 
         for c_obs_name, controller_obs in self.controllers.items():
             obs["controllers"][c_obs_name] = controller_obs.get_obs()

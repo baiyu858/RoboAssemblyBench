@@ -20,10 +20,16 @@ from internutopia_extension.configs.controllers import InverseKinematicsControll
 class InverseKinematicsController(BaseController):
     def __init__(self, config: InverseKinematicsControllerCfg, robot: BaseRobot, scene: IScene):
 
-        from omni.isaac.motion_generation import (
-            ArticulationKinematicsSolver,
-            LulaKinematicsSolver,
-        )
+        try:
+            from isaacsim.robot_motion.motion_generation import (
+                ArticulationKinematicsSolver,
+                LulaKinematicsSolver,
+            )
+        except ImportError:
+            from omni.isaac.motion_generation import (
+                ArticulationKinematicsSolver,
+                LulaKinematicsSolver,
+            )
 
         class KinematicsSolver(ArticulationKinematicsSolver):
             """Kinematics Solver for robot.  This class loads a LulaKinematicsSovler object
@@ -194,7 +200,10 @@ class InverseKinematicsController(BaseController):
             - success: if solver converged successfully
             - finished: applied action has been finished
         """
-        from omni.isaac.core.utils.numpy.rotations import rot_matrices_to_quats
+        try:
+            from isaacsim.core.utils.numpy.rotations import rot_matrices_to_quats
+        except ImportError:
+            from omni.isaac.core.utils.numpy.rotations import rot_matrices_to_quats
 
         ik_base_pose = self.get_ik_base_world_pose()
         self._kinematics_solver.set_robot_base_pose(

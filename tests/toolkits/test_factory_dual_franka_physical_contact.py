@@ -1,7 +1,9 @@
 from collections import deque
+import sys
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from internutopia_extension.tasks.factory_dual_franka_assembly_task import (
     FactoryDualFrankaAssemblyTask,
@@ -142,6 +144,277 @@ def _task() -> FactoryDualFrankaAssemblyTask:
     return task
 
 
+def test_attachment_collision_filters_are_authored_before_physics_initialization(monkeypatch):
+    task = _task()
+    task._policy_attach_specs = [
+        {
+            'object': 'part',
+            'robot': 'franka_right',
+            'filter_gripper_collisions_on_attach': True,
+        },
+        {
+            'object': 'other_part',
+            'robot': 'franka_left',
+            'filter_gripper_collisions_on_attach': False,
+        },
+    ]
+    task._preconfigured_attachment_collision_filters = {}
+    calls = []
+    monkeypatch.setattr(
+        task,
+        '_set_attachment_gripper_collision_filter',
+        lambda *args, **kwargs: calls.append((args, kwargs))
+        or ['/World/franka_right/panda_hand', '/World/franka_right/panda_leftfinger'],
+    )
+
+    task._preconfigure_attachment_gripper_collision_filters()
+
+    assert calls == [(('part', 'franka_right'), {'enabled': True})]
+    assert task._preconfigured_attachment_collision_filters[('part', 'franka_right')] == [
+        '/World/franka_right/panda_hand',
+        '/World/franka_right/panda_leftfinger',
+    ]
+
+
+def test_task_pose_uses_physical_hand_and_reports_lula_frame_delta():
+    task = _task()
+    physical_position = np.asarray([0.4, -0.2, 1.1], dtype=float)
+    physical_orientation = np.asarray([1.0, 0.0, 0.0, 0.0], dtype=float)
+    kinematic_position = physical_position + np.asarray([0.001, 0.0, 0.0], dtype=float)
+    kinematic_orientation = np.asarray([0.9999500037, 0.0, 0.0099998333, 0.0], dtype=float)
+    task.robots = {
+        'franka_right': SimpleNamespace(
+            articulation=SimpleNamespace(
+                end_effector=SimpleNamespace(get_pose=lambda: (physical_position, physical_orientation))
+            ),
+            controllers={
+                'arm_ik_controller': SimpleNamespace(
+                    get_obs=lambda: {
+                        'eef_position': kinematic_position,
+                        'eef_orientation': kinematic_orientation,
+                    }
+                )
+            },
+        )
+    }
+
+    position, orientation = task._get_robot_task_pose('franka_right')
+    diagnostic = task._get_robot_pose_frame_diagnostic('franka_right')
+
+    np.testing.assert_allclose(position, physical_position)
+    np.testing.assert_allclose(orientation, physical_orientation)
+    np.testing.assert_allclose(diagnostic['kinematics_position'], kinematic_position)
+    assert np.isclose(diagnostic['position_error'], 0.001)
+    assert diagnostic['orientation_error'] > 0.0
+
+
+def test_compliant_attachment_uses_a_distinct_joint_prim_path(monkeypatch):
+    task = _task()
+    rigid_body = SimpleNamespace(unwrap=lambda: SimpleNamespace(prim_path='/World/part'))
+    monkeypatch.setattr(task, '_resolve_object', lambda _name: rigid_body)
+
+    fixed_path = task._attachment_joint_path('part')
+    compliant_path = task._attachment_joint_path('part', compliant=True)
+
+    assert fixed_path == '/World/part/assembly_attachment_joint'
+    assert compliant_path == '/World/part/assembly_compliant_attachment_joint'
+    assert fixed_path != compliant_path
+
+
+def test_enabled_rigid_body_lookup_ignores_disabled_nested_api(monkeypatch):
+    class _Attr:
+        def __init__(self, value):
+            self.value = value
+
+        def HasAuthoredValueOpinion(self):
+            return True
+
+        def Get(self):
+            return self.value
+
+    class _RigidBodyAPI:
+        def __init__(self, prim):
+            self.prim = prim
+
+        def GetRigidBodyEnabledAttr(self):
+            return _Attr(self.prim.rigid_body_enabled)
+
+    class _Prim:
+        def __init__(self, rigid_body_enabled, parent=None):
+            self.rigid_body_enabled = rigid_body_enabled
+            self.parent = parent
+
+        def IsValid(self):
+            return True
+
+        def HasAPI(self, _api):
+            return self.rigid_body_enabled is not None
+
+        def GetParent(self):
+            return self.parent
+
+    usd_physics = SimpleNamespace(RigidBodyAPI=_RigidBodyAPI)
+    monkeypatch.setitem(sys.modules, 'pxr', SimpleNamespace(UsdPhysics=usd_physics))
+    dynamic_root = _Prim(True)
+    nested_mesh = _Prim(False, parent=dynamic_root)
+
+    assert FactoryDualFrankaAssemblyTask._prim_has_enabled_rigid_body(nested_mesh) is True
+
+
+def test_release_detaches_lock_target_when_lock_pose_is_not_ready(monkeypatch):
+    task = _task()
+    task._attachments = {'part': {'robot_name': 'franka_right', 'mode': 'fixed_joint'}}
+    task._locked_targets = {}
+    detached = []
+    monkeypatch.setattr(task, '_lock_ready', lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(task, '_detach_ready', lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(task, '_detach_object', lambda object_name: detached.append(object_name))
+
+    task._process_phase_interactions(
+        {
+            'gripper_commands': {'franka_right': 'open'},
+            'lock': [{'object': 'part', 'target': 'part_assembled'}],
+            'detach': [{'object': 'part', 'release_min_steps': 0}],
+        }
+    )
+
+    assert detached == ['part']
+
+
+def test_release_does_not_detach_again_after_lock_wins(monkeypatch):
+    task = _task()
+    task._attachments = {'part': {'robot_name': 'franka_right', 'mode': 'fixed_joint'}}
+    task._locked_targets = {}
+    detached = []
+    monkeypatch.setattr(task, '_lock_ready', lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        task,
+        '_lock_object',
+        lambda object_name, target_name, **_kwargs: task._locked_targets.update({object_name: target_name}),
+    )
+    monkeypatch.setattr(task, '_detach_ready', lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(task, '_detach_object', lambda object_name: detached.append(object_name))
+
+    task._process_phase_interactions(
+        {
+            'gripper_commands': {'franka_right': 'open'},
+            'lock': [{'object': 'part', 'target': 'part_assembled'}],
+            'detach': [{'object': 'part', 'release_min_steps': 0}],
+        }
+    )
+
+    assert task._locked_targets == {'part': 'part_assembled'}
+    assert detached == []
+
+
+def test_release_does_not_relock_an_already_locked_target(monkeypatch):
+    task = _task()
+    task._attachments = {}
+    task._locked_targets = {'part': 'part_assembled'}
+    lock_calls = []
+    monkeypatch.setattr(task, '_lock_ready', lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        task,
+        '_lock_object',
+        lambda object_name, target_name, **_kwargs: lock_calls.append((object_name, target_name)),
+    )
+
+    task._process_phase_interactions(
+        {'lock': [{'object': 'part', 'target': 'part_assembled'}]}
+    )
+
+    assert lock_calls == []
+
+
+def test_lock_object_is_idempotent_for_the_same_target(monkeypatch):
+    task = _task()
+    task._locked_targets = {'part': 'part_assembled'}
+    monkeypatch.setattr(
+        task,
+        '_resolve_object',
+        lambda _name: pytest.fail('an already locked object must not be resolved again'),
+    )
+
+    task._lock_object('part', 'part_assembled')
+
+
+def test_phase_entry_interactions_run_before_next_control_step(monkeypatch):
+    task = _task()
+    task.success = False
+    task.failed = False
+    task.policy_evaluation_mode = False
+    task.phase_specs = [{'name': 'place'}, {'name': 'release_and_lock'}]
+    task.phase_index = 0
+    task.phase = 'place'
+    task.phase_step_counter = 10
+    task.step_counter = 20
+    interaction_phases = []
+
+    monkeypatch.setattr(task, '_initialize_phase', lambda: None)
+    monkeypatch.setattr(task, '_sync_object_states', lambda: None)
+    monkeypatch.setattr(
+        task,
+        '_process_phase_interactions',
+        lambda phase_spec: interaction_phases.append(phase_spec['name']),
+    )
+    monkeypatch.setattr(task, '_advance_condition_met', lambda _phase_spec: True)
+
+    def _set_phase(new_phase_index, **_kwargs):
+        task.phase_index = new_phase_index
+        task.phase = task.phase_specs[new_phase_index]['name']
+        task.phase_step_counter = 0
+
+    monkeypatch.setattr(task, '_set_phase', _set_phase)
+
+    task._update_task_state()
+
+    assert interaction_phases == ['place', 'release_and_lock']
+
+
+def test_final_phase_timeout_is_checked_while_waiting_for_success_stability(monkeypatch):
+    task = _task()
+    task.success = False
+    task.failed = False
+    task.policy_evaluation_mode = False
+    task.phase_specs = [{'name': 'release_and_lock', 'timeout_steps': 2}]
+    task.phase_index = 0
+    task.phase = 'release_and_lock'
+    task.phase_step_counter = 2
+    task.step_counter = 20
+    timeout_calls = []
+
+    monkeypatch.setattr(task, '_initialize_phase', lambda: None)
+    monkeypatch.setattr(task, '_sync_object_states', lambda: None)
+    monkeypatch.setattr(task, '_process_phase_interactions', lambda _phase_spec: None)
+    monkeypatch.setattr(task, '_advance_condition_met', lambda _phase_spec: True)
+    monkeypatch.setattr(task, '_check_success', lambda: False)
+
+    def _handle_timeout(phase_spec):
+        timeout_calls.append(phase_spec['name'])
+        task.failed = True
+        return True
+
+    monkeypatch.setattr(task, '_handle_phase_timeout', _handle_timeout)
+
+    task._update_task_state()
+
+    assert timeout_calls == ['release_and_lock']
+    assert task.failed is True
+
+
+def test_clear_attachment_state_zeroes_release_velocity(monkeypatch):
+    task = _task()
+    task._attachments = {'part': {'robot_name': 'franka_right', 'mode': 'fixed_joint'}}
+    calls = []
+    monkeypatch.setattr(task, '_remove_attachment_joint', lambda object_name: calls.append(('remove', object_name)))
+    monkeypatch.setattr(task, '_zero_object_velocity', lambda object_name: calls.append(('zero', object_name)))
+    monkeypatch.setattr(task, '_set_object_collision', lambda object_name, enabled: calls.append(('collision', enabled)))
+
+    task._clear_attachment_state('part')
+
+    assert calls == [('remove', 'part'), ('zero', 'part'), ('collision', True)]
+
+
 def test_pose_stability_checks_the_full_history_window(monkeypatch):
     task = _task()
     task._object_pose_history = {
@@ -259,6 +532,61 @@ def test_fixed_attachment_relaxes_to_contact_preserving_compliant_hold(monkeypat
     assert compliant_specs[0] is state['attach_spec']
     np.testing.assert_allclose(state['position'], [0.01, 0.02, 0.03])
     assert filters == []
+
+
+def test_collision_disabled_transport_restores_world_collision_at_compliant_hold(monkeypatch):
+    task = _task()
+    task.step_counter = 42
+    stored_contact = {'contact_ready': True, 'source': 'attach'}
+    task._attachments = {
+        'part': {
+            'mode': 'fixed_joint',
+            'robot_name': 'franka_left',
+            'joint_path': '/World/part/assembly_attachment_joint',
+            'attach_spec': {'require_dual_finger_contact': True},
+            'contact_metrics': stored_contact,
+            'collision_disabled': True,
+            'filtered_gripper_collision_paths': ['/World/left', '/World/right'],
+        }
+    }
+    collisions = []
+    strict_inputs = []
+    monkeypatch.setattr(
+        task,
+        '_gripper_contact_metrics',
+        lambda *_args, **_kwargs: pytest.fail('disabled transport must reuse attach contact'),
+    )
+    monkeypatch.setattr(
+        task,
+        '_strict_physical_grasp_contact',
+        lambda _object_name, metrics, **_kwargs: strict_inputs.append(metrics)
+        or {'physical_contact_ready': True},
+    )
+    monkeypatch.setattr(
+        task,
+        '_current_relative_pose',
+        lambda *_args, **_kwargs: (
+            np.asarray([0.01, 0.02, 0.03]),
+            np.asarray([1.0, 0.0, 0.0, 0.0]),
+        ),
+    )
+    monkeypatch.setattr(task, '_remove_attachment_joint', lambda _name: None)
+    monkeypatch.setattr(
+        task,
+        '_create_compliant_attachment_joint',
+        lambda *_args, **_kwargs: '/World/part/assembly_compliant_attachment_joint',
+    )
+    monkeypatch.setattr(
+        task,
+        '_set_object_collision',
+        lambda object_name, enabled: collisions.append((object_name, enabled)),
+    )
+
+    assert task.relax_fixed_attachment_to_physical_hold('part') is True
+
+    assert strict_inputs == [stored_contact]
+    assert collisions == [('part', True)]
+    assert task._attachments['part']['collision_disabled'] is False
 
 
 def test_compliant_hold_filters_gripper_collisions_when_fixed_hold_did_not(monkeypatch):
@@ -420,9 +748,10 @@ def test_insertion_compliance_waits_for_stable_object_motion(monkeypatch):
             spec=spec,
             tracked_objects={},
         )
-        is True
+        is False
     )
     assert relaxed == ['part']
+    assert (id(task), 'part') in adapter._completed_insertion_compliance_transitions
     assert (
         adapter._maybe_relax_insertion_attachment(
             task=task,
@@ -495,7 +824,7 @@ def test_insertion_compliance_waits_for_current_waypoint_proximity(monkeypatch):
             spec=spec,
             tracked_objects={},
         )
-        is True
+        is False
     )
     assert relaxed == ['part']
 
@@ -555,7 +884,7 @@ def test_insertion_compliance_uses_split_axial_and_lateral_capture(monkeypatch):
             spec=spec,
             tracked_objects={},
         )
-        is True
+        is False
     )
     assert relaxed == ['part']
 
@@ -668,7 +997,7 @@ def test_insertion_compliance_locks_gravity_for_horizontal_insertion(monkeypatch
             },
             tracked_objects={},
         )
-        is True
+        is False
     )
     assert relaxed == [
         (
@@ -725,7 +1054,7 @@ def test_insertion_compliance_accepts_vertical_gravity_alignment(monkeypatch):
             },
             tracked_objects={},
         )
-        is True
+        is False
     )
     assert relaxed == [('part', {'locked_linear_world_direction': None})]
 
@@ -1365,6 +1694,87 @@ def test_compliant_hold_completion_ignores_tcp_pose_but_requires_object_pose(mon
         ik_target_pose=target_pose,
         current_pose=current_pose,
         tracked_objects=tracked_objects,
+        current_q=None,
+        target_q=None,
+    )
+    assert completed == []
+
+
+def test_insertion_completion_splits_axial_contact_and_lateral_capture_tolerances(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    completed = []
+    task = SimpleNamespace(phase_step_counter=700)
+    target_pose = {
+        'position': np.zeros(3),
+        'orientation': np.asarray([1.0, 0.0, 0.0, 0.0]),
+    }
+    current_pose = {
+        'position': np.zeros(3),
+        'orientation': target_pose['orientation'].copy(),
+    }
+    object_pose = {
+        'position': np.asarray([0.005, 0.0, 0.020]),
+        'orientation': target_pose['orientation'].copy(),
+    }
+    monkeypatch.setattr(adapter, '_object_pose', lambda **_: object_pose)
+    monkeypatch.setattr(adapter, '_target_object_pose', lambda **_: target_pose)
+    monkeypatch.setattr(adapter, '_mark_complete', lambda **kwargs: completed.append(kwargs))
+    spec = {
+        'object': 'part',
+        'require_target_object_pose_convergence': True,
+        'position_tolerance': 0.015,
+        'target_object_position_tolerance': 0.015,
+        'target_object_convergence_axis': [0.0, 0.0, 1.0],
+        'target_object_axial_position_tolerance': 0.025,
+        'target_object_lateral_position_tolerance': 0.006,
+    }
+
+    adapter._maybe_mark_complete(
+        phase_key=('split-insertion-tolerance',),
+        task=task,
+        robot_name='franka_left',
+        skill_name='ur5e_move_part_to_staging',
+        spec=spec,
+        target_pose=target_pose,
+        ik_target_pose=target_pose,
+        current_pose=current_pose,
+        tracked_objects={},
+        current_q=None,
+        target_q=None,
+    )
+    assert len(completed) == 1
+    assert completed[0]['detail']['object_position_error'] > 0.015
+    assert completed[0]['detail']['object_axial_position_error'] == pytest.approx(0.020)
+    assert completed[0]['detail']['target_object_axial_position_tolerance'] == pytest.approx(0.025)
+
+    completed.clear()
+    object_pose['position'] = np.asarray([0.007, 0.0, 0.020])
+    adapter._maybe_mark_complete(
+        phase_key=('split-insertion-lateral-failure',),
+        task=task,
+        robot_name='franka_left',
+        skill_name='ur5e_move_part_to_staging',
+        spec=spec,
+        target_pose=target_pose,
+        ik_target_pose=target_pose,
+        current_pose=current_pose,
+        tracked_objects={},
+        current_q=None,
+        target_q=None,
+    )
+    assert completed == []
+
+    object_pose['position'] = np.asarray([0.005, 0.0, 0.026])
+    adapter._maybe_mark_complete(
+        phase_key=('split-insertion-axial-failure',),
+        task=task,
+        robot_name='franka_left',
+        skill_name='ur5e_move_part_to_staging',
+        spec=spec,
+        target_pose=target_pose,
+        ik_target_pose=target_pose,
+        current_pose=current_pose,
+        tracked_objects={},
         current_q=None,
         target_q=None,
     )
@@ -2808,6 +3218,61 @@ def test_compliant_axial_servo_keeps_independent_lateral_correction(monkeypatch)
     assert adapter._insertion_lateral_alignment_active[phase_key] is False
 
 
+def test_compliant_axial_servo_can_progress_above_final_lateral_tolerance(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    identity = np.asarray([1.0, 0.0, 0.0, 0.0])
+    current_pose = {
+        'position': np.zeros(3),
+        'orientation': identity.copy(),
+    }
+    monkeypatch.setattr(adapter, '_object_name_from_spec', lambda _: 'part')
+    monkeypatch.setattr(
+        adapter,
+        '_object_pose',
+        lambda **_: {
+            'position': np.zeros(3),
+            'orientation': identity.copy(),
+        },
+    )
+    monkeypatch.setattr(
+        adapter,
+        '_target_object_pose',
+        lambda **_: {
+            'position': np.asarray([0.0028, 0.0, -0.010]),
+            'orientation': identity.copy(),
+        },
+    )
+    phase_key = ('compliant-axial-progress-gate',)
+
+    command_pose = adapter._target_object_servo_pose(
+        phase_key=phase_key,
+        task=SimpleNamespace(),
+        robot_name='franka_left',
+        spec={
+            'object': 'part',
+            'target_object_target': 'target',
+            'target_object_convergence_axis': [0.0, 0.0, -1.0],
+            'target_object_lateral_position_tolerance': 0.002,
+            'target_object_lateral_alignment_enter_tolerance': 0.0035,
+            'target_object_lateral_alignment_exit_tolerance': 0.0035,
+            'target_object_lateral_alignment_cartesian_position_step': 0.001,
+            'target_object_lateral_alignment_stable_steps': 1,
+            'cartesian_position_step': 0.001,
+            'cartesian_orientation_step': 0.1,
+        },
+        tracked_robots={},
+        tracked_objects={'part': {'attachment': {'mode': 'compliant_joint'}}},
+        current_pose=current_pose,
+        target_pose={
+            'position': np.zeros(3),
+            'orientation': identity.copy(),
+        },
+    )
+
+    assert command_pose['position'][2] < 0.0
+    assert adapter._insertion_lateral_alignment_active[phase_key] is False
+
+
 def test_transport_servo_recovers_axial_waypoint_overshoot(monkeypatch):
     adapter = UR5eAssemblyAtomicSkillAdapter({})
     current_pose = {
@@ -2988,6 +3453,14 @@ def test_transport_settle_hold_latches_then_retries_servo(monkeypatch):
     }
     phase_key = ('insert-settle',)
     task = SimpleNamespace(phase_step_counter=10)
+    adapter._cartesian_command_positions[phase_key] = np.ones(3)
+    adapter._cartesian_command_orientations[phase_key] = np.asarray([1.0, 0.0, 0.0, 0.0])
+    adapter._insertion_lateral_alignment_active[phase_key] = True
+    adapter._insertion_lateral_alignment_stable_steps[phase_key] = 2
+    adapter._insertion_axial_anchors[phase_key] = 0.004
+    adapter._insertion_lateral_orientation_anchors[phase_key] = np.asarray([1.0, 0.0, 0.0, 0.0])
+    adapter._insertion_lateral_clearance_required[phase_key] = True
+    adapter._insertion_lateral_clearance_anchors[phase_key] = 0.006
 
     assert adapter._target_object_settle_ready(
         phase_key=phase_key,
@@ -2997,6 +3470,16 @@ def test_transport_settle_hold_latches_then_retries_servo(monkeypatch):
         current_pose=current_pose,
         tracked_objects={},
     )
+    assert phase_key not in adapter._cartesian_command_positions
+    assert phase_key not in adapter._cartesian_command_orientations
+    assert adapter._insertion_lateral_alignment_active[phase_key] is False
+    assert phase_key not in adapter._insertion_lateral_alignment_stable_steps
+    assert phase_key not in adapter._insertion_axial_anchors
+    assert phase_key not in adapter._insertion_lateral_orientation_anchors
+    assert phase_key not in adapter._insertion_lateral_clearance_required
+    assert phase_key not in adapter._insertion_lateral_clearance_anchors
+    adapter._cartesian_command_positions[phase_key] = np.ones(3)
+    adapter._cartesian_command_orientations[phase_key] = np.asarray([1.0, 0.0, 0.0, 0.0])
     object_pose['position'][0] = 0.004
     assert adapter._target_object_settle_ready(
         phase_key=phase_key,
@@ -3006,6 +3489,8 @@ def test_transport_settle_hold_latches_then_retries_servo(monkeypatch):
         current_pose=current_pose,
         tracked_objects={},
     )
+    assert phase_key in adapter._cartesian_command_positions
+    assert phase_key in adapter._cartesian_command_orientations
     assert adapter._target_object_settle_ready(
         phase_key=phase_key,
         task=task,
@@ -3014,6 +3499,8 @@ def test_transport_settle_hold_latches_then_retries_servo(monkeypatch):
         current_pose=current_pose,
         tracked_objects={},
     )
+    assert phase_key not in adapter._cartesian_command_positions
+    assert phase_key not in adapter._cartesian_command_orientations
     assert not adapter._target_object_settle_ready(
         phase_key=phase_key,
         task=task,
@@ -3452,6 +3939,67 @@ def test_attach_accepts_bounded_contact_refined_target_after_strict_close(monkey
     assert task._attach_ready(phase_spec, attach_spec) is False
 
 
+def test_attach_accepts_object_blocked_franka_opening_with_strict_dual_contact(monkeypatch):
+    task = _task()
+    task._attachments = {}
+    task.step_counter = 100
+    task.phase_step_counter = 100
+    phase_spec = {
+        'name': 'close_and_attach',
+        'gripper_commands': {'franka_left': 'close'},
+    }
+    attach_spec = {
+        'object': 'part',
+        'robot': 'franka_left',
+        'attachment_mode': 'fixed_joint',
+        'require_contact': True,
+        'require_physical_contact': True,
+        'require_target_reached_for_attach': True,
+        'gripper_closed_threshold': 0.0086,
+        'physical_attach_surface_gap': 0.006,
+        'support_height_tolerance': None,
+        'top_clearance': None,
+    }
+    contact_metrics = {
+        'contact_ready': True,
+        'pinch_axis': 'y',
+        'left_finger': {},
+        'right_finger': {},
+    }
+
+    monkeypatch.setattr(task, '_current_gripper_command', lambda *_: 'close')
+    monkeypatch.setattr(
+        task,
+        '_resolve_attach_target_info',
+        lambda **_: {
+            'target_reached': True,
+            'position_error': 0.001,
+            'orientation_error': 0.01,
+        },
+    )
+    monkeypatch.setattr(task, '_get_robot_gripper_opening', lambda *_: 0.0188)
+    monkeypatch.setattr(task, '_attach_proximity_metrics', lambda **_: {'within_proximity': True})
+    monkeypatch.setattr(task, '_sampled_object_position', lambda *_: None)
+    monkeypatch.setattr(task, '_gripper_contact_metrics', lambda *_, **__: contact_metrics)
+    monkeypatch.setattr(task, '_contact_box_scale', lambda *_, **__: np.asarray([0.012, 0.012, 0.076]))
+    monkeypatch.setattr(
+        task,
+        '_strict_physical_grasp_contact',
+        lambda *_, **__: {'physical_contact_ready': True},
+    )
+    monkeypatch.setattr(task, '_is_slender_attach_object', lambda *_, **__: False)
+
+    assert task._gripper_opening_limit(
+        'part',
+        attach_spec,
+        contact_metrics=contact_metrics,
+    ) < 0.0188
+    assert task._attach_ready(phase_spec, attach_spec) is True
+
+    attach_spec['allow_contact_blocked_gripper_opening'] = False
+    assert task._attach_ready(phase_spec, attach_spec) is False
+
+
 def test_strict_grasp_allows_calibrated_margin_at_a_physical_edge():
     task = _task()
     contact_metrics = {
@@ -3678,6 +4226,169 @@ def test_close_contact_latches_hold_only_after_contact_and_motion_are_stable(mon
     assert state['hold_gripper_openness'] == 0.5
 
 
+def test_close_contact_scales_implicit_joint_gates_for_short_stroke_gripper(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_: 0.0373)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **_: (0.04, 0.0))
+    monkeypatch.setattr(adapter, '_grasp_contact_ready', lambda **_: (True, {}))
+
+    ready, detail = adapter._close_until_contact_ready(
+        state={'last_gripper_q': 0.0373},
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec={
+            'object': 'part',
+            'close_until_contact_min_steps': 1,
+            'close_contact_stable_steps': 1,
+            'require_strict_physical_contact': True,
+        },
+        tracked_objects={},
+        close_elapsed_steps=1,
+        gripper_openness=0.465,
+    )
+
+    assert ready is True
+    assert detail['moved_from_open'] is True
+    assert detail['contact_candidate'] is True
+    assert detail['gripper_joint_range'] == pytest.approx(0.04)
+    assert detail['close_contact_min_joint_closure'] == pytest.approx(0.0025)
+    assert detail['close_contact_short_command_max_joint_closure'] == pytest.approx(0.004)
+    assert detail['close_contact_blocked_joint_margin'] == pytest.approx(0.01)
+    assert detail['close_gripper_target_tolerance'] == pytest.approx(0.002)
+
+
+def test_close_contact_keeps_explicit_joint_gate_for_short_stroke_gripper(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_: 0.0186)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **_: (0.04, 0.0))
+    monkeypatch.setattr(adapter, '_grasp_contact_ready', lambda **_: (True, {}))
+
+    ready, detail = adapter._close_until_contact_ready(
+        state={'last_gripper_q': 0.0186},
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec={
+            'object': 'part',
+            'close_until_contact_min_steps': 1,
+            'close_contact_stable_steps': 1,
+            'close_contact_min_joint_closure': 0.05,
+        },
+        tracked_objects={},
+        close_elapsed_steps=1,
+        gripper_openness=0.465,
+    )
+
+    assert ready is False
+    assert detail['moved_from_open'] is False
+    assert detail['close_contact_min_joint_closure'] == pytest.approx(0.05)
+
+
+def test_close_accepts_initial_strict_contact_when_commanded_stroke_is_short(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_: 0.04)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **_: (0.04, 0.0))
+    monkeypatch.setattr(
+        adapter,
+        '_grasp_contact_ready',
+        lambda **_: (True, {'strict_contact_ready': True}),
+    )
+
+    ready, detail = adapter._close_until_contact_ready(
+        state={'last_gripper_q': 0.04},
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec={
+            'object': 'wide_part',
+            'close_until_contact_min_steps': 1,
+            'close_contact_stable_steps': 1,
+            'require_strict_physical_contact': True,
+            'allow_initial_strict_contact_for_short_close': True,
+        },
+        tracked_objects={},
+        close_elapsed_steps=1,
+        gripper_openness=0.9025,
+    )
+
+    assert ready is True
+    assert detail['moved_from_open'] is False
+    assert detail['commanded_closure_from_open'] == pytest.approx(0.0039)
+    assert detail['initial_strict_contact_candidate'] is True
+    assert detail['contact_candidate'] is True
+
+
+@pytest.mark.parametrize(
+    ('enabled', 'strict_contact_ready'),
+    ((False, True), (True, False)),
+)
+def test_close_rejects_initial_contact_without_explicit_strict_short_close_gate(
+    monkeypatch,
+    enabled,
+    strict_contact_ready,
+):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_: 0.04)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **_: (0.04, 0.0))
+    monkeypatch.setattr(
+        adapter,
+        '_grasp_contact_ready',
+        lambda **_: (True, {'strict_contact_ready': strict_contact_ready}),
+    )
+
+    ready, detail = adapter._close_until_contact_ready(
+        state={'last_gripper_q': 0.04},
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec={
+            'object': 'wide_part',
+            'close_until_contact_min_steps': 1,
+            'close_contact_stable_steps': 1,
+            'require_strict_physical_contact': True,
+            'allow_initial_strict_contact_for_short_close': enabled,
+        },
+        tracked_objects={},
+        close_elapsed_steps=1,
+        gripper_openness=0.9025,
+    )
+
+    assert ready is False
+    assert detail['initial_strict_contact_candidate'] is False
+    assert detail['contact_candidate'] is False
+
+
+def test_strict_close_does_not_complete_from_joint_stall_without_contact(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_: 0.03)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **_: (0.04, 0.0))
+    monkeypatch.setattr(
+        adapter,
+        '_grasp_contact_ready',
+        lambda **_: (False, {'strict_contact_ready': False}),
+    )
+
+    ready, detail = adapter._close_until_contact_ready(
+        state={'last_gripper_q': 0.03},
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec={
+            'object': 'part',
+            'require_strict_physical_contact': True,
+            'close_until_contact_min_steps': 1,
+            'close_contact_stable_steps': 1,
+        },
+        tracked_objects={},
+        close_elapsed_steps=1,
+        gripper_openness=0.0,
+    )
+
+    assert ready is False
+    assert detail['stalled'] is True
+    assert detail['moved_from_open'] is True
+    assert detail['blocked_before_full_close'] is True
+    assert detail['stall_contact'] is False
+    assert detail['detected_clamp'] is False
+    assert detail['require_strict_physical_contact'] is True
+
+
 def test_close_can_defer_latch_until_contact_is_stable(monkeypatch):
     adapter = UR5eAssemblyAtomicSkillAdapter({})
     monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_: 0.4)
@@ -3807,3 +4518,119 @@ def test_descend_aligns_orientation_before_translating():
         )
         is None
     )
+
+
+def test_object_tcp_slip_gate_remains_strict_for_fixed_grasp():
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    phase_key = ('task', 'phase')
+    spec = {
+        'object': 'part',
+        'max_object_tcp_slip': 0.04,
+        'require_target_object_pose_convergence': True,
+    }
+    current_pose = {
+        'position': np.zeros(3),
+        'orientation': np.asarray([1.0, 0.0, 0.0, 0.0]),
+    }
+    tracked_objects = {
+        'part': {
+            'position': [0.0, 0.0, 0.20],
+            'orientation': [1.0, 0.0, 0.0, 0.0],
+            'attachment': {'mode': 'fixed_joint'},
+        }
+    }
+
+    assert (
+        adapter._object_tcp_slip_failure(
+            phase_key=phase_key,
+            task=SimpleNamespace(),
+            robot_name='franka_left',
+            spec=spec,
+            tracked_objects=tracked_objects,
+            current_pose=current_pose,
+        )
+        is None
+    )
+    tracked_objects['part']['position'] = [0.05, 0.0, 0.20]
+
+    detail = adapter._object_tcp_slip_failure(
+        phase_key=phase_key,
+        task=SimpleNamespace(),
+        robot_name='franka_left',
+        spec=spec,
+        tracked_objects=tracked_objects,
+        current_pose=current_pose,
+    )
+
+    assert detail is not None
+    assert detail['slip'] == pytest.approx(0.05)
+
+
+def test_object_tcp_slip_gate_allows_target_gated_compliant_insertion():
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    tracked_objects = {
+        'part': {
+            'position': [0.05, 0.0, 0.20],
+            'orientation': [1.0, 0.0, 0.0, 0.0],
+            'attachment': {
+                'mode': 'compliant_joint',
+                'attach_spec': {'compliant_hold_linear_limit': 0.006},
+            },
+        }
+    }
+
+    detail = adapter._object_tcp_slip_failure(
+        phase_key=('task', 'phase'),
+        task=SimpleNamespace(),
+        robot_name='franka_left',
+        spec={
+            'object': 'part',
+            'max_object_tcp_slip': 0.04,
+            'require_target_object_pose_convergence': True,
+        },
+        tracked_objects=tracked_objects,
+        current_pose={
+            'position': np.zeros(3),
+            'orientation': np.asarray([1.0, 0.0, 0.0, 0.0]),
+        },
+    )
+
+    assert detail is None
+
+
+def test_release_lock_uses_explicit_geometry_tolerance(monkeypatch):
+    task = _task()
+    task._attachments = {}
+    task._locked_targets = {}
+    monkeypatch.setattr(
+        task,
+        '_resolve_object',
+        lambda _name: SimpleNamespace(
+            get_pose=lambda: (
+                np.asarray([0.012, 0.0, 0.0]),
+                np.asarray([1.0, 0.0, 0.0, 0.0]),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        task,
+        '_resolve_target_pose_spec',
+        lambda _name: (
+            None,
+            np.zeros(3),
+            np.asarray([1.0, 0.0, 0.0, 0.0]),
+            {'position_tolerance': 0.008, 'orientation_tolerance': 0.1},
+        ),
+    )
+
+    ready = task._lock_ready(
+        {'name': 'release_and_lock'},
+        {
+            'object': 'part',
+            'target': 'part_assembled',
+            'position_tolerance': 0.015,
+            'orientation_tolerance': 0.12,
+        },
+    )
+
+    assert ready is True

@@ -102,6 +102,10 @@ def _download_with_resolve_urls(args: argparse.Namespace, include_patterns: list
 def main() -> None:
     args = parse_args()
     include_patterns = args.include or [
+        "roboassemblybench/assets/Fabrica/canonical_7_bundles/**",
+        "roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001/**",
+        "internutopia/assets/robots/franka/**",
+        "roboassemblybench/assets/isaac_sim_5.1/Isaac/Environments/Simple_Warehouse/**",
         "third_part/Fabrica/**",
         "third_part/factory_dual_franka_peg_transfer/**",
         "IsaacLab/**",

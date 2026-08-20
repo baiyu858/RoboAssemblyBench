@@ -4,8 +4,30 @@ from typing import Dict, List, Optional, Union
 from internutopia.core.config import Config, DistributedConfig, TaskCfg
 
 
-def setup_offset_for_assets(task_config: TaskCfg, env_id: int, offset: List[float]):
+def runtime_root_path(task_config: TaskCfg, env_id: int) -> str:
     root_path = f'/World/env_{str(env_id)}'
+    episode_idx = getattr(task_config, 'episode_idx', None)
+    if episode_idx is not None:
+        root_path += f'/episode_{int(episode_idx):06d}'
+    return root_path
+
+
+def _runtime_scoped_sensor_path(prim_path: str, root_path: str) -> str:
+    """Move environment-owned absolute sensor paths into the active episode."""
+    parts = str(prim_path).split('/')
+    if (
+        len(parts) >= 4
+        and parts[0] == ''
+        and parts[1] == 'World'
+        and parts[2].startswith('env_')
+        and parts[2].removeprefix('env_').isdigit()
+    ):
+        return root_path.rstrip('/') + '/' + '/'.join(parts[3:])
+    return str(prim_path)
+
+
+def setup_offset_for_assets(task_config: TaskCfg, env_id: int, offset: List[float]):
+    root_path = runtime_root_path(task_config, env_id)
 
     task_config.robots = [r.model_copy(deep=True) for r in task_config.robots]
     task_config.objects = [o.model_copy(deep=True) for o in task_config.objects if task_config.objects]
@@ -14,6 +36,9 @@ def setup_offset_for_assets(task_config: TaskCfg, env_id: int, offset: List[floa
         r.name = f'{r.name}_{env_id}'
         r.prim_path = root_path + task_config.robots_root_path + r.prim_path
         r.position = [offset[idx] + pos for idx, pos in enumerate(r.position)]
+        for sensor in r.sensors or []:
+            if getattr(sensor, 'prim_path', None):
+                sensor.prim_path = _runtime_scoped_sensor_path(sensor.prim_path, root_path)
     if task_config.objects is not None:
         for o in task_config.objects:
             o.name = f'{o.name}_{env_id}'

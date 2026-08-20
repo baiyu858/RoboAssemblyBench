@@ -15,6 +15,17 @@ from huggingface_hub import HfApi
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPO_ID = "baiyu858/InternUtopia-repro-assets"
 DEFAULT_ASSETS = {
+    "roboassemblybench/assets/Fabrica/canonical_7_bundles": (
+        REPO_ROOT / "roboassemblybench/assets/Fabrica/canonical_7_bundles"
+    ),
+    "roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001": (
+        REPO_ROOT
+        / "roboassemblybench/assets/Fabrica/fabrica_franka_plumbers_block_optical_board_black_fullbundle_sdf001"
+    ),
+    "internutopia/assets/robots/franka": REPO_ROOT / "internutopia/assets/robots/franka",
+    "roboassemblybench/assets/isaac_sim_5.1/Isaac/Environments/Simple_Warehouse": (
+        REPO_ROOT / "roboassemblybench/assets/isaac_sim_5.1/Isaac/Environments/Simple_Warehouse"
+    ),
     "third_part/Fabrica": REPO_ROOT / "third_part/Fabrica",
     "third_part/factory_dual_franka_peg_transfer": REPO_ROOT / "third_part/factory_dual_franka_peg_transfer",
     "IsaacLab": REPO_ROOT / "IsaacLab",

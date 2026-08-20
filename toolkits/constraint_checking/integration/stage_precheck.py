@@ -7,7 +7,7 @@ from collections import Counter
 
 import numpy as np
 
-from .models import get_robot_collision_model
+from .models import get_robot_collision_model, infer_task_robot_collision_model
 from .runtime_monitor import RuntimeConstraintConfig, RuntimeConstraintMonitor
 
 
@@ -30,18 +30,17 @@ class StageTrajectoryPrechecker:
         threshold: float | None = None,
         include_ground: bool = False,
         ignore_pairs=(),
+        robot_model: str | None = None,
     ):
         self.check_stride = max(int(check_stride), 1)
         self.num_waypoints = max(int(num_waypoints), 2)
-        self.model = get_robot_collision_model('ur5e_robotiq_2f85')
-        self.monitor = RuntimeConstraintMonitor(
-            RuntimeConstraintConfig(
-                threshold=threshold,
-                include_ground=include_ground,
-                ignore_pairs=list(ignore_pairs),
-            )
-        )
-        self.detector = self.monitor.detector
+        self._threshold = threshold
+        self._include_ground = bool(include_ground)
+        self._requested_robot_model = robot_model
+        self._model_selected = robot_model is not None
+        self.model = None
+        self.monitor = None
+        self.detector = None
         self._observations = 0
         self._checks = 0
         self._segments = 0
@@ -51,6 +50,7 @@ class StageTrajectoryPrechecker:
         self._reasons = Counter()
         self._total_seconds = 0.0
         self._ignore_pairs = list(ignore_pairs)
+        self._configure_model(get_robot_collision_model(robot_model))
 
     def observe(self, task, actions: dict) -> dict:
         step = int(getattr(task, 'step_counter', 0))
@@ -60,6 +60,7 @@ class StageTrajectoryPrechecker:
         started = time.perf_counter()
         self._checks += 1
         try:
+            self._select_task_model(task)
             if self.detector is None:
                 return self._result(step, 'detector_unavailable')
             self.monitor.refresh_environment_from_task(task)
@@ -121,6 +122,7 @@ class StageTrajectoryPrechecker:
         return {
             'enabled': True,
             'mode': 'passive',
+            'robot_model': self.model.name,
             'check_stride': self.check_stride,
             'num_waypoints': self.num_waypoints,
             'observed_steps': self._observations,
@@ -135,6 +137,24 @@ class StageTrajectoryPrechecker:
             'monitor_error': list(self._errors),
             'total_check_seconds': self._total_seconds,
         }
+
+    def _select_task_model(self, task) -> None:
+        if self._model_selected:
+            return
+        self._configure_model(infer_task_robot_collision_model(task))
+        self._model_selected = True
+
+    def _configure_model(self, model) -> None:
+        self.model = model
+        self.monitor = RuntimeConstraintMonitor(
+            RuntimeConstraintConfig(
+                robot_model=model.name,
+                threshold=self._threshold,
+                include_ground=self._include_ground,
+                ignore_pairs=list(self._ignore_pairs),
+            )
+        )
+        self.detector = self.monitor.detector
 
     def _joint_path(self, task, robot_name: str, robot_actions):
         if not isinstance(robot_actions, dict):

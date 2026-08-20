@@ -13,9 +13,12 @@ class StaticCube(BaseObject):
 
     def set_up_to_scene(self, scene: IScene):
         try:
-            from omni.isaac.core.objects import FixedCuboid
+            from isaacsim.core.api.objects import FixedCuboid
         except ImportError:
-            from omni.isaac.core.objects.cuboid import FixedCuboid
+            try:
+                from omni.isaac.core.objects import FixedCuboid
+            except ImportError:
+                from omni.isaac.core.objects.cuboid import FixedCuboid
 
         static_cube = FixedCuboid(
             prim_path=self._config.prim_path,
@@ -45,3 +48,14 @@ class StaticCube(BaseObject):
             except Exception:
                 pass
         scene.add(static_cube)
+        if self._config.texture_path:
+            from internutopia_extension.objects.preview_surface import bind_preview_surface_texture
+
+            bind_preview_surface_texture(
+                self._config.prim_path,
+                texture_path=self._config.texture_path,
+                texture_scale=tuple(self._config.texture_scale or (1.0, 1.0)),
+                texture_rotation_degrees=float(self._config.texture_rotation_degrees or 0.0),
+                surface_scale=tuple(float(value) for value in self._config.scale),
+                surface_position=tuple(float(value) for value in self._config.position),
+            )

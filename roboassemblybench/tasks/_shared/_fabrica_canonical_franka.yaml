@@ -1,0 +1,316 @@
+extends: _fabrica_canonical_ur5e.yaml
+
+fabrica_canonical:
+  robot_platform: franka
+  # Tasks may override only a robot base pose after reachability validation;
+  # an empty mapping keeps the symmetric default below for most assemblies.
+  robot_pose_overrides: {}
+  # A task may also select a collision-safe waiting/parking home. Active motion
+  # still uses the same canonical IK and atomic skill graph.
+  robot_home_joint_overrides: {}
+  # One centered workcell layout is shared by all canonical Fabrica tasks.
+  # The fixture remains on the fixed optical board and both mirrored arms can
+  # reach every pickup, transport, and assembly waypoint.
+  pickup_origin: [0.35, -0.10, 0.0125]
+  assembly_origin: [0.70, 0.0, 0.0125]
+  board_origin: [0.47, 0.0, 0.0125]
+  # Fabrica's pickup fixture is cut around the optimizer-selected Panda grasp.
+  # Use that native profile whenever its complete pickup/assembly IK path is
+  # reachable; the generic collision/clearance selector remains the fallback.
+  prefer_planner_grasps: true
+  pickup_tcp_maximum_reach: 0.85
+  # Panda's wider hand needs a predominantly vertical base approach to avoid
+  # rotating against the fixture while the TCP position is already converged.
+  base_grasp_minimum_vertical_clearance: 0.70
+  move_grasp_ik_minimum_manipulability: 0.04
+  # Prefer well-conditioned Panda paths when the candidate pool permits it,
+  # while retaining the lower hard floor needed by compact assemblies.
+  move_grasp_ik_preferred_manipulability: 0.075
+  move_grasp_fixture_footprint_margin: 0.0
+  move_grasp_minimum_fixture_clearance: 0.0
+  move_grasp_enforce_fixture_clearance: false
+  # Panda's wider palm can collide even when a TCP-only path is valid. Prefer
+  # the best fixture-clearance band available for each part, while retaining
+  # automatic IK fallback when that band is unreachable.
+  move_grasp_prioritize_fixture_clearance: true
+  move_grasp_preferred_fixture_clearance_slack: 0.005
+  # Apply the same sampled hand-body/fixture clearance contract to the base
+  # grasp. A TCP-only feasible pose can otherwise leave Panda's wider hand
+  # blocked on the pickup fixture before its pads reach the part.
+  base_grasp_fixture_footprint_margin: 0.0
+  base_grasp_minimum_fixture_clearance: 0.0
+  base_grasp_enforce_fixture_clearance: true
+  base_grasp_prioritize_fixture_clearance: true
+  base_grasp_preferred_fixture_clearance_slack: 0.005
+  base_grasp_ik_enforce: true
+  # Fabrica's Panda grasps include the direction from the contact center toward
+  # the hand body. Approach along that axis so the palm and fingers do not sweep
+  # sideways through the fixture on oblique grasps.
+  pickup_approach_mode: grasp_axis
+  # Fine Cartesian motion stays on the measured Panda redundancy branch. Large
+  # free-space moves and prealignment explicitly use a one-shot, bounded global
+  # target instead, so they can still change branch when reachability requires it.
+  require_warm_start_ik: true
+  warm_start_ik_only: true
+  guard_ik_branch_jump: true
+  close_gate_require_warm_start_ik: true
+  close_gate_warm_start_ik_only: true
+  close_gate_guard_ik_branch_jump: true
+  # Solve each free-space held-object waypoint once and track that bounded
+  # Panda solution. This prevents 7-DOF redundancy from alternating between
+  # equally valid joint-7 branches while preserving Cartesian insertion servo.
+  lock_transport_ik_target: true
+  # Reuse the physical grasp endpoint solved while approaching a part. Without
+  # this handoff, Panda's redundant local IK can drift to another branch during
+  # the short descent even though both endpoint poses are individually valid.
+  # Follow the grasp axis in Cartesian space first; locking a distant endpoint
+  # would turn the 10 cm approach into a joint-space sweep through the fixture.
+  lock_pickup_ik_target: true
+  pickup_terminal_ik_position_window: 0.04
+  pickup_terminal_ik_orientation_window: 0.10
+  locked_transport_max_joint_step: [0.006, 0.006, 0.006, 0.006, 0.008, 0.008, 0.008]
+  locked_transport_max_command_tracking_error: 0.04
+  # A distant one-shot endpoint is usually another Panda redundancy branch.
+  # Keep the lock for nearby endpoints and use local Cartesian continuation
+  # when the only global endpoint would require a multi-radian joint sweep.
+  locked_transport_fallback_joint_delta: 1.0
+  # If an exact free-space endpoint has no local Panda IK solution, continue
+  # with the bounded Cartesian segment instead of failing the whole episode.
+  locked_transport_fallback_on_ik_failure: true
+  # Close gates use a one-shot terminal IK solution near contact so redundant
+  # Panda wrist joints cannot change branch while the fingers are closing.
+  close_gate_lock_terminal_ik_target: true
+  close_gate_terminal_ik_position_window: 0.04
+  close_gate_terminal_ik_orientation_window: 0.50
+  # Split the high-clearance pickup-to-assembly transfer into continuous pose
+  # segments. This keeps Panda's redundant IK on one branch while it reorients
+  # parts whose fixture and assembly frames differ substantially.
+  pickup_departure_interpolation_waypoint_count: 2
+  transport_interpolation_waypoint_count: 4
+  assembly_approach_interpolation_waypoint_count: 4
+  # Insertion commands are sub-millimetre local motions. Exclude Lula's default
+  # c-space seeds for these solves so it cannot replace the local warm-start
+  # solution with an equally valid distant joint-7 branch.
+  insertion_require_warm_start_ik: true
+  insertion_warm_start_ik_only: true
+  insertion_guard_ik_branch_jump: true
+  # Panda joints are bounded. Do not apply the +/-2*pi wrist unwrapping used by
+  # UR5e; retain the previous IK target as the preferred numerical warm start.
+  unwrap_revolute_joints: false
+  ik_branch_jump_reference_mode: previous_target
+  prealign_target_ik: true
+  # Seed the approach pose from the physical grasp endpoint. This makes the
+  # following descend phase stay on a branch that exists at finger contact.
+  prealign_terminal_ik_seed: true
+  # Panda's finite-stiffness drive can lag a one-shot target by hundreds of
+  # simulation steps. Enter Cartesian servo only after the measured joints
+  # reach that target, with one shared timeout for every Fabrica task.
+  prealign_until_converged: true
+  prealign_joint_position_tolerance: 0.05
+  prealign_joint_velocity_tolerance: 0.15
+  prealign_ready_stable_steps: 6
+  prealign_max_joint_step: 0.06
+  prealign_max_command_tracking_error: 0.06
+  prealign_timeout_steps: 2400
+  # Panda's finite-stiffness Cartesian convergence can continue after the
+  # standard 900-step pickup budget, especially for near-limit wrist poses.
+  descend_timeout_steps: 2400
+  descend_orientation_tolerance: 0.18
+  # Panda's finite-stiffness hand can hold strict opposing pad contact while
+  # the measured TCP deflects slightly from the nominal grasp pose.
+  close_position_tolerance: 0.015
+  close_orientation_tolerance: 0.18
+  close_phase_timeout_steps: 1200
+  close_until_contact_timeout_steps: 720
+  # Enter insertion only after the rigidly held part is already inside the
+  # same lateral capture band used by the insertion controller.
+  transport_hover_object_position_tolerance: 0.0035
+  # A wide part can already form a strict opposing two-finger contact at the
+  # Panda hand's maximum opening, leaving less than the normalized 4 mm stroke.
+  allow_initial_strict_contact_for_short_close: true
+  # Some Fabrica parts occupy nearly the Panda hand's full 80 mm span. Accept
+  # an already-blocked grasp only after the strict dual-pad geometry gate passes.
+  allow_initial_strict_contact_without_closure: true
+  # The sampled Panda pad envelope has an 8 mm geometric contact band. Use the
+  # same bound for attachment so a detected dual-pad grasp is not rejected by
+  # a second, narrower threshold.
+  physical_attach_surface_gap: 0.008
+  # The fixed transport joint replaces finger/object contact as the grasp
+  # constraint. Keep workcell collisions active but prevent Panda's hand from
+  # applying opposing impulses to its own attached payload.
+  filter_gripper_collisions_on_attach: true
+  # Disable payload collision only while the rigid transport joint is active.
+  # Collision is restored when insertion switches to the compliant joint.
+  disable_collision_during_fixed_transport: true
+  close_gate_recenter_min_gap_imbalance: 0.0005
+  close_gate_recenter_target_tolerance: 0.0025
+  # Center a one-sided first contact from the measured left/right gap error in
+  # one bounded move; fixed 0.75 mm increments can stall against a locked part.
+  close_gate_recenter_gap_gain: 0.5
+  close_gate_recenter_max_step: 0.008
+  post_release_park_mode: joint_home
+  post_release_park_joint_position_tolerance: 0.05
+  post_release_park_timeout_steps: 3000
+  # There is no waiting state after the final retreat. End the episode there
+  # instead of sweeping the arm back through the completed assembly.
+  skip_terminal_park: true
+  # Keep the arm that is not participating in the current phase at the same
+  # joint-space home pose used for post-release parking.
+  idle_robot_home: true
+  idle_robot_home_joint_position_tolerance: 0.05
+  idle_robot_home_max_joint_step: 0.020
+  # Franka uses a shared pre-contact insertion profile.  This is intentionally
+  # separate from the 0.1 mm compliant-contact controller limit.
+  insertion_cartesian_position_step: 0.0005
+  insertion_position_command_accumulation_step: 0.0005
+  # Permit axial progress anywhere inside the declared geometric lateral
+  # tolerance; the exit gate still re-enters alignment outside that tolerance.
+  insertion_lateral_alignment_enter_tolerance_ratio: 1.0
+  # Keep axial insertion live through Panda's millimetre-scale compliant-hold
+  # deflection. Final waypoint completion still uses the tighter part geometry.
+  insertion_lateral_alignment_minimum_tolerance: 0.0035
+  insertion_lateral_position_tolerance: 0.006
+  # Release must accept the same split axial/lateral capture envelope that
+  # completed the preceding placement phase.
+  release_lock_uses_placement_tolerance: true
+  intermediate_insertion_lateral_position_tolerance: 0.006
+  insertion_compliance_waypoint_axial_tolerance_object_extent_scale: 0.8
+  prealign_joint_positions_by_robot:
+    franka_left: [0.0, -0.7853981634, 0.0, -2.3561944902, 0.0, 1.5707963268, 0.7853981634]
+    franka_right: [0.0, -0.7853981634, 0.0, -2.3561944902, 0.0, 1.5707963268, 0.7853981634]
+
+metadata:
+  tags:
+    - franka
+    - panda-gripper
+  skill_api:
+    module: toolkits.factory_dual_franka_assembly.ur5e_skill_api
+    class: AssemblySkillAPI
+    adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+  local_skills:
+    ur5e_move_above_part:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+    ur5e_descend_to_grasp:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+    ur5e_preshape_gripper:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+    ur5e_close_gripper:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+    ur5e_move_part_to_staging:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+    ur5e_retreat_vertical:
+      adapter: toolkits.factory_dual_franka_assembly.plumbers_block_ur5e_skills:AssemblyAtomicSkillAdapter
+
+robots:
+  - name: franka_left
+    type: FrankaRobot
+    prim_path: /franka_left
+    usd_path: ${ASSET_PATH}/robots/franka/franka.usd
+    # Face the shared workspace from opposite sides. Moving the assembly arm
+    # 13 mm rearward improves pickup-side reach without moving the optical board
+    # or changing any task-specific grasp.
+    position: [0.518, 0.54, 0.998]
+    orientation: [0.7071067812, 0.0, 0.0, -0.7071067812]
+    apply_workspace_offset: false
+    end_effector_prim_name: panda_hand
+    gripper_dof_name: panda_finger_joint1
+    gripper_open_position: 0.04
+    gripper_closed_position: 0.0
+    gripper_close_openness: 0.0
+    hand_link_name: panda_hand
+    left_finger_link_name: panda_leftfinger
+    right_finger_link_name: panda_rightfinger
+    # Strong arm tracking is paired with measured-state command limiting above,
+    # so Cartesian targets converge without letting commands outrun PhysX.
+    arm_joint_stiffness: 80000.0
+    arm_joint_damping: 4000.0
+    arm_joint_max_force: 600.0
+    # The stock finger drives can retain their open target after indexed Panda
+    # commands. Configure both prismatic joints explicitly for physical grasps.
+    gripper_joint_stiffness: 20000.0
+    gripper_joint_damping: 1000.0
+    gripper_joint_max_force: 300.0
+    gripper_joint_friction: 5.0
+    initial_joint_positions:
+      panda_joint1: 0.0
+      panda_joint2: -0.7853981634
+      panda_joint3: 0.0
+      panda_joint4: -2.3561944902
+      panda_joint5: 0.0
+      panda_joint6: 1.5707963268
+      panda_joint7: 0.7853981634
+  - name: franka_right
+    type: FrankaRobot
+    prim_path: /franka_right
+    usd_path: ${ASSET_PATH}/robots/franka/franka.usd
+    # A small role-specific x offset keeps the gamepad hover inside Panda's
+    # runtime IK workspace while preserving every canonical base path.
+    position: [0.474, -0.54, 0.998]
+    orientation: [0.7071067812, 0.0, 0.0, 0.7071067812]
+    apply_workspace_offset: false
+    end_effector_prim_name: panda_hand
+    gripper_dof_name: panda_finger_joint1
+    gripper_open_position: 0.04
+    gripper_closed_position: 0.0
+    gripper_close_openness: 0.0
+    hand_link_name: panda_hand
+    left_finger_link_name: panda_leftfinger
+    right_finger_link_name: panda_rightfinger
+    arm_joint_stiffness: 80000.0
+    arm_joint_damping: 4000.0
+    arm_joint_max_force: 600.0
+    gripper_joint_stiffness: 20000.0
+    gripper_joint_damping: 1000.0
+    gripper_joint_max_force: 300.0
+    gripper_joint_friction: 5.0
+    initial_joint_positions:
+      panda_joint1: 0.0
+      panda_joint2: -0.7853981634
+      panda_joint3: 0.0
+      panda_joint4: -2.3561944902
+      panda_joint5: 0.0
+      panda_joint6: 1.5707963268
+      panda_joint7: 0.7853981634
+
+camera_specs:
+  - name: third_person_front
+    owner: franka_left
+    prim_path: /World/env_0/cameras/third_person_front
+    view_type: front
+    video_key: observation.images.isaac_3d
+    resolution: [960, 540]
+    rgba: true
+    depth: true
+    attach_runtime_sensor: true
+    translation: [5.0, 0.0, 3.2]
+    orientation_euler: [0.0, 1.1868238914, 1.5707963268]
+  - name: left_wrist
+    owner: franka_left
+    robot: franka_left
+    prim_path: panda_hand/left_wrist_camera
+    view_type: wrist
+    video_key: observation.images.left_wrist
+    resolution: [640, 480]
+    rgba: true
+    depth: true
+    attach_runtime_sensor: true
+    translation: [-0.1, 0.0, -0.03]
+    orientation_euler: [3.1415926536, -0.0872664626, 0.0]
+    focal_length: 12.0
+    horizontal_aperture: 20.955
+    clipping_range: [0.01, 10.0]
+  - name: right_wrist
+    owner: franka_right
+    robot: franka_right
+    prim_path: panda_hand/right_wrist_camera
+    view_type: wrist
+    video_key: observation.images.right_wrist
+    resolution: [640, 480]
+    rgba: true
+    depth: true
+    attach_runtime_sensor: true
+    translation: [-0.1, 0.0, -0.03]
+    orientation_euler: [3.1415926536, -0.0872664626, 0.0]
+    focal_length: 12.0
+    horizontal_aperture: 20.955
+    clipping_range: [0.01, 10.0]

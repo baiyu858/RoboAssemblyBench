@@ -13,8 +13,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
 from PIL import Image, ImageDraw, ImageFont
 
 from toolkits.factory_dual_franka_assembly.convert_dataset import load_episode_payloads
@@ -1208,7 +1206,9 @@ def _build_episode_table(
     task_index: int,
     fps: int,
     object_names: list[str],
-) -> tuple[pa.Table, dict, int]:
+) -> tuple[object, dict, int]:
+    import pyarrow as pa
+
     state_rows = []
     env_rows = []
     env_presence_rows = []
@@ -1296,6 +1296,8 @@ def export_lerobot_dataset(
     video_mode: str = DEFAULT_VIDEO_MODE,
     keep_video_frames: bool = False,
 ) -> dict:
+    import pyarrow.parquet as pq
+
     all_episodes = load_episode_payloads(input_dir=input_dir)
     episodes = [
         episode

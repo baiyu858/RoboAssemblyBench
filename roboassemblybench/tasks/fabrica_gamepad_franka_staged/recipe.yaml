@@ -1,0 +1,14 @@
+extends: _fabrica_canonical_franka.yaml
+task_name: fabrica_gamepad_franka_staged
+prompt: Assemble the canonical Fabrica gamepad with staged Franka pick, transport, insertion, release, and retreat skills.
+
+fabrica_canonical:
+  assembly: gamepad
+  base_robot: franka_right
+  assembly_robot: franka_left
+
+qualification:
+  seed_count: 4
+  required_seeds: [4906, 485, 34, 12]
+collection:
+  layout_seeds: [4906, 485, 34, 12]

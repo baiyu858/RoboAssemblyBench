@@ -2,7 +2,10 @@ from typing import Optional, Tuple
 
 import numpy as np
 import omni.replicator.core as rep
-from omni.isaac.core.prims.xform_prim import XFormPrim
+try:
+    from isaacsim.core.prims import SingleXFormPrim as XFormPrim
+except ImportError:
+    from omni.isaac.core.prims.xform_prim import XFormPrim
 
 from internutopia.core.sensor.camera import ICamera
 
@@ -143,12 +146,19 @@ class IsaacsimCamera(ICamera):
         return None
 
     def cleanup(self) -> None:
-        if self.rp is not None:
-            for anno in self.rp_annotators.values():
-                anno.detach(self.rp)
-            del self.rp_annotators
-            self.rp_annotators = {}
-            self.rp = None
+        render_product = self.rp
+        if render_product is None:
+            return
+        for annotator in self.rp_annotators.values():
+            try:
+                annotator.detach(render_product)
+            except Exception:
+                pass
+        self.rp_annotators = {}
+        # Isaac Sim 5.1 may stop the application when a render product is
+        # destroyed while the next stage is being composed. Each episode uses
+        # a distinct camera prim, and the short-lived worker owns final cleanup.
+        self.rp = None
 
     def unwrap(self):
         return self.prim

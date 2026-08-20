@@ -3,9 +3,18 @@ import socket
 from pathlib import Path
 from types import SimpleNamespace
 
+import cv2
 import numpy as np
 import pytest
 
+from internutopia.core.config.object import ObjectCfg
+from internutopia.core.config.robot import RobotCfg
+from internutopia.core.config.sensor import SensorCfg
+from internutopia.core.task.task import BaseTask
+from internutopia.core.task_config_manager.base import (
+    runtime_root_path,
+    setup_offset_for_assets,
+)
 from roboassemblybench.core import task_registry
 from roboassemblybench.core.paths import BENCHMARK_ROOT
 from roboassemblybench.core.process_lock import (
@@ -20,6 +29,7 @@ from roboassemblybench.datasets.cartesian_episode import (
     STATE_NAMES,
 )
 from roboassemblybench.scripts import collect_fabrica_plumbers_block_2k as collector
+from toolkits.factory_dual_franka_assembly import generate_demos
 
 
 def test_batch_command_keeps_simulation_cadence_independent_from_dataset_fps(monkeypatch, tmp_path: Path):
@@ -31,6 +41,7 @@ def test_batch_command_keeps_simulation_cadence_independent_from_dataset_fps(mon
         dataset_fps=30,
         dataset_frame_stride=8,
         rendering_fps=240,
+        randomization_profile='lighting',
     )
 
     command = collector._batch_command(
@@ -43,6 +54,7 @@ def test_batch_command_keeps_simulation_cadence_independent_from_dataset_fps(mon
     assert command[command.index('--dataset-fps') + 1] == '30'
     assert command[command.index('--dataset-frame-stride') + 1] == '8'
     assert command[command.index('--rendering-fps') + 1] == '240'
+    assert command[command.index('--randomization-profile') + 1] == 'lighting'
 
 
 def test_batch_command_propagates_grasp_debug_environment(monkeypatch, tmp_path: Path):
@@ -222,6 +234,15 @@ def _write_quality_fixture(tmp_path: Path, *, rendering_interval: int) -> Path:
         'schema_version': 'roboassemblybench_raw_cartesian_v1',
         'recipe_fingerprint': 'current-recipe',
         'seed': 1,
+        'scene_profile': 'taoyuan_grscenes_tabletop',
+        'scene_asset_path': '/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd',
+        'scene_asset_fallback_path': '/benchmark/scenes/usd/factory_cell.usda',
+        'scene_asset_source': 'primary',
+        'scene_family': 'isaac_simple_warehouse_tabletop',
+        'runtime_scene_integrity': {
+            'start': {'valid': True},
+            'end': {'valid': True},
+        },
         'fps': 30,
         'simulation_fps': 240,
         'frame_stride': 8,
@@ -247,6 +268,467 @@ def _write_quality_fixture(tmp_path: Path, *, rendering_interval: int) -> Path:
     metadata_path = tmp_path / 'metadata.json'
     metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
     return metadata_path
+
+
+def _write_visual_test_video(
+    path: Path,
+    *,
+    left_robot_visible: bool = True,
+    right_robot_visible: bool = True,
+    missing_robot_frames: dict[str, set[int]] | None = None,
+    move_arms_to_center: bool = False,
+    light_streak: bool = False,
+    broad_bright_surface: bool = False,
+    temporal_render_artifact: bool = False,
+) -> None:
+    width, height = 320, 240
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*'mp4v'), 10.0, (width, height))
+    assert writer.isOpened()
+    missing_robot_frames = missing_robot_frames or {}
+
+    def draw_robot(frame, *, base_center: tuple[int, int], reaches_right: bool) -> None:
+        base_x, base_y = base_center
+        cv2.ellipse(frame, (base_x, base_y), (22, 12), 0, 0, 360, (238, 238, 238), -1)
+        cv2.rectangle(frame, (base_x - 17, base_y - 34), (base_x + 17, base_y), (225, 225, 225), -1)
+        cv2.line(frame, (base_x - 17, base_y - 13), (base_x + 17, base_y - 13), (25, 25, 25), 4)
+        shoulder = (base_x, base_y - 51)
+        cv2.circle(frame, shoulder, 16, (240, 240, 240), -1)
+        cv2.circle(frame, shoulder, 16, (35, 35, 35), 3)
+        direction = 1 if reaches_right else -1
+        elbow = (base_x + direction * 30, base_y - 78)
+        wrist = (base_x + direction * 54, base_y - 55)
+        cv2.line(frame, shoulder, elbow, (235, 235, 235), 15)
+        cv2.line(frame, elbow, wrist, (235, 235, 235), 13)
+        cv2.circle(frame, elbow, 10, (35, 35, 35), 3)
+
+    try:
+        for frame_index in range(5):
+            frame = np.full((height, width, 3), (75, 95, 115), dtype=np.uint8)
+            checker = (np.indices((height, width))[0] // 16 + np.indices((height, width))[1] // 16) % 2
+            frame[:, int(0.22 * width) : int(0.78 * width)] = np.where(
+                checker[:, int(0.22 * width) : int(0.78 * width), None] == 0,
+                np.asarray((55, 80, 110), dtype=np.uint8),
+                np.asarray((115, 145, 175), dtype=np.uint8),
+            )
+            left_visible_in_frame = left_robot_visible and frame_index not in missing_robot_frames.get('left', set())
+            right_visible_in_frame = right_robot_visible and frame_index not in missing_robot_frames.get('right', set())
+            if left_visible_in_frame:
+                draw_robot(
+                    frame,
+                    base_center=(42, 202),
+                    reaches_right=move_arms_to_center or frame_index % 2 == 0,
+                )
+            if right_visible_in_frame:
+                draw_robot(
+                    frame,
+                    base_center=(211, 198),
+                    reaches_right=not (move_arms_to_center or frame_index % 2 == 0),
+                )
+            if light_streak:
+                cv2.line(frame, (0, height // 3), (width - 1, height // 3), (255, 255, 255), 6)
+            if broad_bright_surface:
+                cv2.rectangle(frame, (0, 24), (width - 1, 84), (255, 255, 255), -1)
+            if temporal_render_artifact and frame_index == 1:
+                noise = np.random.default_rng(7).integers(-45, 46, size=frame.shape, dtype=np.int16)
+                frame = np.clip(frame.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+            writer.write(frame)
+    finally:
+        writer.release()
+
+
+def test_visual_quality_gate_accepts_visible_robot_and_rejects_missing_robot(tmp_path: Path):
+    visible_metadata_path = _write_quality_fixture(tmp_path / 'visible', rendering_interval=7)
+    visible_metadata = json.loads(visible_metadata_path.read_text(encoding='utf-8'))
+    visible_front_path = Path(visible_metadata['videos'][collector.FRONT_CAMERA_KEY])
+    _write_visual_test_video(visible_front_path)
+
+    visible_quality = collector._quality_check_episode(
+        visible_metadata_path,
+        require_visual_quality=True,
+    )
+
+    assert visible_quality['valid']
+    assert (
+        visible_quality['visual_quality']['left_robot_roi_edge_p90_median']
+        >= collector.ROBOT_ANCHOR_EDGE_P90_THRESHOLD
+    )
+
+    missing_metadata_path = _write_quality_fixture(tmp_path / 'missing', rendering_interval=7)
+    missing_metadata = json.loads(missing_metadata_path.read_text(encoding='utf-8'))
+    missing_front_path = Path(missing_metadata['videos'][collector.FRONT_CAMERA_KEY])
+    _write_visual_test_video(
+        missing_front_path,
+        left_robot_visible=False,
+        right_robot_visible=False,
+    )
+
+    missing_quality = collector._quality_check_episode(
+        missing_metadata_path,
+        require_visual_quality=True,
+    )
+
+    assert not missing_quality['valid']
+    assert 'visual:robot-not-visible' in missing_quality['errors']
+    assert 'visual:left-robot-not-visible' in missing_quality['errors']
+    assert 'visual:right-robot-not-visible' in missing_quality['errors']
+
+
+def test_visual_quality_gate_rejects_one_missing_arm_and_light_streak(tmp_path: Path):
+    missing_right_metadata_path = _write_quality_fixture(tmp_path / 'missing-right', rendering_interval=7)
+    missing_right_metadata = json.loads(missing_right_metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(missing_right_metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        right_robot_visible=False,
+    )
+
+    missing_right_quality = collector._quality_check_episode(
+        missing_right_metadata_path,
+        require_visual_quality=True,
+    )
+
+    assert not missing_right_quality['valid']
+    assert 'visual:right-robot-not-visible' in missing_right_quality['errors']
+
+    streak_metadata_path = _write_quality_fixture(tmp_path / 'light-streak', rendering_interval=7)
+    streak_metadata = json.loads(streak_metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(streak_metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        light_streak=True,
+    )
+
+    streak_quality = collector._quality_check_episode(
+        streak_metadata_path,
+        require_visual_quality=True,
+    )
+
+    assert not streak_quality['valid']
+    assert 'visual:light-streak' in streak_quality['errors']
+
+
+def test_visual_quality_gate_does_not_treat_a_broad_bright_scene_surface_as_a_streak(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'broad-bright-surface', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        broad_bright_surface=True,
+    )
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert 'visual:light-streak' not in quality['errors']
+
+
+def test_visual_quality_gate_allows_shared_workspace_motion_and_only_graces_first_two_frames(tmp_path: Path):
+    moving_metadata_path = _write_quality_fixture(tmp_path / 'moving-arms', rendering_interval=7)
+    moving_metadata = json.loads(moving_metadata_path.read_text(encoding='utf-8'))
+    moving_front_path = Path(moving_metadata['videos'][collector.FRONT_CAMERA_KEY])
+    _write_visual_test_video(moving_front_path, move_arms_to_center=True)
+
+    moving_quality = collector._quality_check_episode(
+        moving_metadata_path,
+        require_visual_quality=True,
+    )
+
+    assert moving_quality['valid']
+    assert moving_quality['visual_quality']['left_robot_visible_fraction'] == 1.0
+    assert moving_quality['visual_quality']['right_robot_visible_fraction'] == 1.0
+
+    warmup_metadata_path = _write_quality_fixture(tmp_path / 'warmup-grace', rendering_interval=7)
+    warmup_metadata = json.loads(warmup_metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(warmup_metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        missing_robot_frames={'left': {0, 1}, 'right': {0, 1}},
+        move_arms_to_center=True,
+    )
+    warmup_quality = collector._quality_check_episode(warmup_metadata_path, require_visual_quality=True)
+    assert warmup_quality['valid']
+
+    missing_metadata_path = _write_quality_fixture(tmp_path / 'missing-after-warmup', rendering_interval=7)
+    missing_metadata = json.loads(missing_metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(missing_metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        missing_robot_frames={'right': {2}},
+        move_arms_to_center=True,
+    )
+    missing_quality = collector._quality_check_episode(missing_metadata_path, require_visual_quality=True)
+    assert not missing_quality['valid']
+    assert 'visual:right-robot-not-visible' in missing_quality['errors']
+
+
+def test_visual_quality_gate_checks_early_frames_for_temporal_render_artifacts(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'temporal-artifact', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        temporal_render_artifact=True,
+    )
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert not quality['valid']
+    assert quality['visual_quality']['sample_frame_indices'][:4] == [0, 1, 2, 3]
+    assert 'visual:temporal-render-artifact' in quality['errors']
+
+
+def test_runtime_camera_warmup_renders_without_advancing_physics_and_refreshes_observations():
+    class FakeEnv:
+        def __init__(self):
+            self.warmup_calls = []
+
+        def warm_up(self, *, steps, render, physics):
+            self.warmup_calls.append((steps, render, physics))
+
+        def get_observations(self):
+            return [{'front': 'converged'}]
+
+    env = FakeEnv()
+
+    observations = generate_demos._warm_up_runtime_cameras(env)
+
+    assert env.warmup_calls == [(generate_demos.RUNTIME_CAMERA_WARMUP_RENDER_STEPS, True, False)]
+    assert observations == [{'front': 'converged'}]
+
+
+def test_kinematic_replay_frame_advances_physics_before_reading_camera(monkeypatch):
+    events = []
+
+    class FakeEnv:
+        def warm_up(self, *, steps, render, physics):
+            events.append(('warm_up', steps, render, physics))
+
+        def get_observations(self):
+            events.append(('get_observations',))
+            return [{'front': 'updated'}]
+
+    monkeypatch.setattr(
+        generate_demos,
+        '_apply_kinematic_replay_frame',
+        lambda task, trajectory, frame_index: events.append(('apply', task, trajectory, frame_index)),
+    )
+
+    observations = generate_demos._render_kinematic_replay_frame(FakeEnv(), 'task', 'trajectory', 7)
+
+    assert events == [
+        ('apply', 'task', 'trajectory', 7),
+        ('warm_up', 1, True, True),
+        ('get_observations',),
+    ]
+    assert observations == [{'front': 'updated'}]
+
+
+def test_visual_quality_gate_rejects_static_rendered_replay(tmp_path: Path):
+    static_metadata_path = _write_quality_fixture(tmp_path / 'static-replay', rendering_interval=7)
+    static_metadata = json.loads(static_metadata_path.read_text(encoding='utf-8'))
+    static_metadata['recording_mode'] = 'rendered_replay'
+    static_metadata_path.write_text(json.dumps(static_metadata), encoding='utf-8')
+    _write_visual_test_video(
+        Path(static_metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        move_arms_to_center=True,
+    )
+
+    static_quality = collector._quality_check_episode(static_metadata_path, require_visual_quality=True)
+
+    assert not static_quality['valid']
+    assert 'visual:static-replay' in static_quality['errors']
+
+    moving_metadata_path = _write_quality_fixture(tmp_path / 'moving-replay', rendering_interval=7)
+    moving_metadata = json.loads(moving_metadata_path.read_text(encoding='utf-8'))
+    moving_metadata['recording_mode'] = 'rendered_replay'
+    moving_metadata_path.write_text(json.dumps(moving_metadata), encoding='utf-8')
+    _write_visual_test_video(Path(moving_metadata['videos'][collector.FRONT_CAMERA_KEY]))
+
+    moving_quality = collector._quality_check_episode(moving_metadata_path, require_visual_quality=True)
+
+    assert 'visual:static-replay' not in moving_quality['errors']
+
+
+def test_two_stage_pipeline_keeps_position_rgbd_and_exports_six_groups():
+    script_path = (
+        Path(__file__).resolve().parents[2]
+        / 'roboassemblybench'
+        / 'scripts'
+        / 'collect_fabrica_7tasks_50k_twostage_multigpu.sh'
+    )
+    script = script_path.read_text(encoding='utf-8')
+
+    assert 'TARGET_PER_TASK="${TARGET_PER_TASK:-1430}"' in script
+    assert 'DATA_PROFILES=(position "${REPLAY_PROFILES[@]}")' in script
+    stage1 = script[script.index('run_stage1_shard()') : script.index('wait_for_stage1_barrier()')]
+    assert '--trajectory-only' not in stage1
+    assert '--require-extended-observations' in stage1
+    assert '--require-visual-quality' in stage1
+    assert 'raw="$OUTPUT_ROOT/stage1/$task"' in script
+
+
+def test_visual_quality_gate_rejects_empty_scene_metadata(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'empty-scene', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    front_path = Path(metadata['videos'][collector.FRONT_CAMERA_KEY])
+    _write_visual_test_video(front_path)
+    metadata['scene_asset_path'] = '/assets/scenes/empty.usd'
+    metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert not quality['valid']
+    assert 'visual:scene-asset' in quality['errors']
+
+
+def test_visual_quality_gate_rejects_factory_fallback_and_invalid_runtime_prims(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'fallback-scene', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(Path(metadata['videos'][collector.FRONT_CAMERA_KEY]))
+    metadata['scene_asset_source'] = 'fallback'
+    metadata['scene_asset_path'] = metadata['scene_asset_fallback_path']
+    metadata['scene_family'] = 'roboassemblybench_factory_cell_tabletop'
+    metadata['runtime_scene_integrity']['end']['valid'] = False
+    metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert not quality['valid']
+    assert 'visual:scene-source' in quality['errors']
+    assert 'visual:runtime-scene-integrity' in quality['errors']
+
+
+def test_visual_quality_gate_accepts_declared_randomized_factory_scene(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'randomized-scene', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(Path(metadata['videos'][collector.FRONT_CAMERA_KEY]))
+    scene_path = '/Isaac/Environments/Grid/default_environment.usd'
+    metadata['scene_asset_path'] = scene_path
+    metadata['scene_family'] = 'isaac_grid_factory_tabletop'
+    metadata['domain_randomization'] = {
+        'enabled': True,
+        'profile': 'scene',
+        'scene': {'asset_path': scene_path, 'variant': 'isaac_grid'},
+    }
+    metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert 'visual:scene-asset' not in quality['errors']
+    assert 'visual:scene-family' not in quality['errors']
+
+
+def test_visual_quality_gate_expands_scene_asset_environment_placeholders(tmp_path: Path, monkeypatch):
+    metadata_path = _write_quality_fixture(tmp_path / 'expanded-randomized-scene', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(Path(metadata['videos'][collector.FRONT_CAMERA_KEY]))
+    assets_root = tmp_path / 'isaac-assets'
+    scene_suffix = Path('Isaac/Environments/Simple_Warehouse/warehouse.usd')
+    metadata['scene_asset_path'] = str(assets_root / scene_suffix)
+    metadata['scene_family'] = 'isaac_simple_warehouse_tabletop'
+    metadata['domain_randomization'] = {
+        'enabled': True,
+        'profile': 'scene',
+        'scene': {'asset_path': f'${{ISAAC_ASSETS_ROOT}}/{scene_suffix.as_posix()}'},
+    }
+    metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+    monkeypatch.setenv('ISAAC_ASSETS_ROOT', str(assets_root))
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert 'visual:scene-asset' not in quality['errors']
+
+
+def test_extended_quality_allows_dome_plus_four_randomized_lights(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'five-lights', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    metadata['domain_randomization'] = {
+        'enabled': True,
+        'profile': 'lighting',
+        'groups': {'start_parts': {}, 'assembly_base': {}},
+        'lighting': [
+            {
+                'name': f'light_{index}',
+                'domain_randomization_intensity_multiplier': 0.8 + index * 0.1,
+            }
+            for index in range(5)
+        ],
+    }
+    metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+
+    quality = collector._quality_check_episode(metadata_path, require_extended_observations=True)
+
+    assert 'lighting_randomization' not in quality['errors']
+
+
+def test_task_cleanup_removes_robot_articulation_prim():
+    remove_calls = []
+    remove_prim_path_calls = []
+    robot_cleanup_calls = []
+    task = object.__new__(BaseTask)
+    task.objects = {}
+    task.robots = {
+        'left': SimpleNamespace(
+            articulation=SimpleNamespace(name='ur5e_left'),
+            config=SimpleNamespace(prim_path='/World/env_0/robots/ur5e_left'),
+            cleanup=lambda: robot_cleanup_calls.append('ur5e_left'),
+        )
+    }
+    task._scene = SimpleNamespace(
+        remove=lambda *args, **kwargs: remove_calls.append((args, kwargs)),
+        remove_prim_path=remove_prim_path_calls.append,
+    )
+
+    task.cleanup()
+
+    assert robot_cleanup_calls == ['ur5e_left']
+    assert remove_calls == [(('ur5e_left',), {'registry_only': True})]
+    assert remove_prim_path_calls == ['/World/env_0/robots/ur5e_left']
+
+
+def test_serial_episodes_use_distinct_runtime_usd_namespaces():
+    def task_config(episode_idx):
+        return SimpleNamespace(
+            episode_idx=episode_idx,
+            robots_root_path='/robots',
+            objects_root_path='/objects',
+            robots=[
+                RobotCfg(
+                    name='left',
+                    type='robot',
+                    prim_path='/ur5e_left',
+                    position=[0.0, 0.0, 0.0],
+                    sensors=[
+                        SensorCfg(
+                            name='front',
+                            type='camera',
+                            prim_path='/World/env_0/cameras/front',
+                        ),
+                        SensorCfg(
+                            name='wrist',
+                            type='camera',
+                            prim_path='wrist/camera',
+                        ),
+                    ],
+                )
+            ],
+            objects=[
+                ObjectCfg(
+                    name='part',
+                    type='object',
+                    prim_path='/part',
+                    position=[0.0, 0.0, 0.0],
+                )
+            ],
+        )
+
+    first = task_config(0)
+    second = task_config(1)
+    setup_offset_for_assets(first, env_id=0, offset=[0.0, 0.0, 0.0])
+    setup_offset_for_assets(second, env_id=0, offset=[0.0, 0.0, 0.0])
+
+    assert runtime_root_path(first, 0) == '/World/env_0/episode_000000'
+    assert runtime_root_path(second, 0) == '/World/env_0/episode_000001'
+    assert first.robots[0].prim_path == '/World/env_0/episode_000000/robots/ur5e_left'
+    assert second.robots[0].prim_path == '/World/env_0/episode_000001/robots/ur5e_left'
+    assert first.objects[0].prim_path == '/World/env_0/episode_000000/objects/part'
+    assert second.objects[0].prim_path == '/World/env_0/episode_000001/objects/part'
+    assert first.robots[0].sensors[0].prim_path == '/World/env_0/episode_000000/cameras/front'
+    assert second.robots[0].sensors[0].prim_path == '/World/env_0/episode_000001/cameras/front'
+    assert first.robots[0].sensors[1].prim_path == 'wrist/camera'
 
 
 def test_quality_check_rejects_stale_camera_timing(tmp_path: Path):
@@ -286,6 +768,17 @@ def test_resource_gate_waits_for_memory_instead_of_exiting(tmp_path: Path, monke
     collector._wait_for_resources(args, tmp_path, remaining_episodes=2000)
 
     assert sleeps == [7.0]
+
+
+def test_cgroup_memory_limit_takes_precedence_over_host_memory(tmp_path: Path):
+    limit = tmp_path / 'memory.max'
+    current = tmp_path / 'memory.current'
+    limit.write_text(str(440 * 1024**3), encoding='utf-8')
+    current.write_text(str(401 * 1024**3), encoding='utf-8')
+
+    available = collector._cgroup_available_memory_bytes(((limit, current),))
+
+    assert available == 39 * 1024**3
 
 
 def test_collection_lock_rejects_a_second_writer(tmp_path: Path):

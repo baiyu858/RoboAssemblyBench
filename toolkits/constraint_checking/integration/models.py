@@ -212,6 +212,8 @@ MODEL_REGISTRY = {
     'UR5eRobot': UR5E_ROBOTIQ_MODEL,
     'franka': FRANKA_MODEL,
     'Franka': FRANKA_MODEL,
+    'FrankaRobot': FRANKA_MODEL,
+    'frankarobot': FRANKA_MODEL,
 }
 
 
@@ -220,7 +222,35 @@ def get_robot_collision_model(name: str | None) -> RobotCollisionModel:
 
     if not name:
         return UR5E_ROBOTIQ_MODEL
-    return MODEL_REGISTRY.get(str(name), UR5E_ROBOTIQ_MODEL)
+    key = str(name)
+    return MODEL_REGISTRY.get(key, MODEL_REGISTRY.get(key.lower(), UR5E_ROBOTIQ_MODEL))
+
+
+def infer_task_robot_collision_model(task) -> RobotCollisionModel:
+    """Resolve the homogeneous robot model used by an active task."""
+
+    for robot in (getattr(task, 'robots', {}) or {}).values():
+        config = getattr(robot, 'config', None)
+        candidates = (
+            getattr(config, 'type', None),
+            type(robot).__name__,
+            getattr(config, 'name', None),
+        )
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            key = str(candidate)
+            model = MODEL_REGISTRY.get(key, MODEL_REGISTRY.get(key.lower()))
+            if model is not None:
+                return model
+
+        articulation = getattr(robot, 'articulation', None)
+        dof_names = set(getattr(articulation, 'dof_names', ()) or ())
+        if 'panda_joint1' in dof_names:
+            return FRANKA_MODEL
+        if 'shoulder_pan_joint' in dof_names:
+            return UR5E_ROBOTIQ_MODEL
+    return UR5E_ROBOTIQ_MODEL
 
 
 def available_models() -> Iterable[str]:

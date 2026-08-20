@@ -61,7 +61,12 @@ class GripperController(BaseController):
         if isinstance(normalized_action, str):
             if normalized_action == 'close':
                 return self._continuous_forward(0.0)
-            return self._gripper.forward(normalized_action)
+            # ParallelGripper.forward("open") uses a relative action_delta
+            # when one is configured. On Isaac Sim 5.1 that full-articulation
+            # action can be dropped by the indexed controller path, leaving a
+            # Panda closed for the entire release phase. Use the same explicit
+            # joint target as continuous commands for both endpoints.
+            return self._continuous_forward(1.0)
         return self._continuous_forward(normalized_action)
 
     def action_to_control(self, action: List | np.ndarray) -> ArticulationAction:

@@ -12,6 +12,7 @@ from typing import Any, List, Optional
 
 import numpy as np
 
+from internutopia.core.robot.articulation_action import ArticulationAction
 from internutopia.core.robot.isaacsim.articulation import IsaacsimArticulation
 from internutopia.core.robot.rigid_body import IRigidBody
 from internutopia.core.robot.robot import BaseRobot
@@ -140,6 +141,8 @@ class FrankaRobot(BaseRobot):
             orientation=self._start_orientation,
             usd_path=os.path.abspath(usd_path),
             end_effector_prim_name=config.end_effector_prim_name,
+            gripper_open_position=np.full(2, float(config.gripper_open_position), dtype=float),
+            gripper_closed_position=np.full(2, float(config.gripper_closed_position), dtype=float),
             scale=self._robot_scale,
         )
 
@@ -154,51 +157,208 @@ class FrankaRobot(BaseRobot):
     def post_reset(self):
         super().post_reset()
         self._robot_ik_base = self._rigid_body_map[self.config.prim_path + '/panda_link0']
+        self._apply_configured_arm_drive()
+        self._apply_configured_gripper_drive()
+        self._apply_configured_initial_joint_state()
         try:
             self.articulation.set_solver_position_iteration_count(32)
             self.articulation.set_solver_velocity_iteration_count(16)
         except Exception:
             pass
 
-        finger_joint_names = ['panda_finger_joint1', 'panda_finger_joint2']
+        self._apply_gripper_contact_material()
+
+    def _apply_configured_initial_joint_state(self):
+        """Atomically initialize measured joints and their PhysX drive targets."""
+
+        configured = self.config.initial_joint_positions or {}
+        if not configured:
+            return
+        joint_names = list(configured)
         try:
-            finger_indices = np.asarray(
-                [self.articulation.get_dof_index(name) for name in finger_joint_names],
+            joint_indices = np.asarray(
+                [self.articulation.get_dof_index(name) for name in joint_names],
                 dtype=np.int64,
             )
-        except Exception:
-            finger_indices = None
-        if finger_indices is not None and finger_indices.size == 2:
-            try:
-                self.articulation.set_gains(
-                    kps=np.asarray([2.0e4, 2.0e4], dtype=float),
-                    kds=np.asarray([1.0e3, 1.0e3], dtype=float),
-                    joint_indices=finger_indices,
-                )
-            except Exception:
-                pass
-            try:
-                physics_view = self.articulation._articulation_view._physics_view
-                max_forces = np.asarray(physics_view.get_dof_max_forces(), dtype=float)
-                if max_forces.ndim == 1:
-                    max_forces = np.expand_dims(max_forces, axis=0)
-                max_forces[0, finger_indices] = np.maximum(max_forces[0, finger_indices], 300.0)
-                physics_view.set_dof_max_forces(data=max_forces, indices=[0])
+            joint_positions = np.asarray([configured[name] for name in joint_names], dtype=float)
+            if not np.all(np.isfinite(joint_positions)):
+                raise ValueError(f'non-finite joint positions: {joint_positions.tolist()}')
+            joint_velocities = np.zeros_like(joint_positions)
 
-                friction_coefficients = np.asarray(
-                    physics_view.get_dof_friction_coefficients(),
-                    dtype=float,
+            self.articulation.set_joint_positions(
+                positions=joint_positions,
+                joint_indices=joint_indices,
+            )
+            self.articulation.set_joint_velocities(
+                velocities=joint_velocities,
+                joint_indices=joint_indices,
+            )
+            self.articulation.apply_action(
+                ArticulationAction(
+                    joint_positions=joint_positions.copy(),
+                    joint_velocities=joint_velocities,
+                    joint_indices=joint_indices.copy(),
                 )
-                if friction_coefficients.ndim == 1:
-                    friction_coefficients = np.expand_dims(friction_coefficients, axis=0)
-                friction_coefficients[0, finger_indices] = np.maximum(
-                    friction_coefficients[0, finger_indices],
-                    5.0,
+            )
+
+            measured_positions = np.asarray(
+                self.articulation.get_joint_positions(joint_indices=joint_indices),
+                dtype=float,
+            ).reshape(-1)
+            measured_velocities = np.asarray(
+                self.articulation.get_joint_velocities(joint_indices=joint_indices),
+                dtype=float,
+            ).reshape(-1)
+            if measured_positions.shape != joint_positions.shape or not np.allclose(
+                measured_positions,
+                joint_positions,
+                rtol=1.0e-5,
+                atol=1.0e-5,
+            ):
+                raise RuntimeError(
+                    f'position readback {measured_positions.tolist()} does not match '
+                    f'target {joint_positions.tolist()}'
                 )
-                physics_view.set_dof_friction_coefficients(data=friction_coefficients, indices=[0])
-            except Exception:
-                pass
-        self._apply_gripper_contact_material()
+            if measured_velocities.shape != joint_velocities.shape or not np.allclose(
+                measured_velocities,
+                joint_velocities,
+                rtol=0.0,
+                atol=1.0e-5,
+            ):
+                raise RuntimeError(
+                    f'velocity readback {measured_velocities.tolist()} is not zero'
+                )
+        except Exception as exc:
+            message = f'franka {self.config.name}: failed to initialize configured joint state: {exc}'
+            log.warning(message)
+            raise RuntimeError(message) from exc
+
+        log.info(
+            f'franka {self.config.name}: initialized joint state '
+            f'{dict(zip(joint_names, measured_positions.tolist()))}'
+        )
+
+    def _apply_configured_arm_drive(self):
+        """Replace the asset's rigid tracking drive when a task profile requests it."""
+
+        stiffness = self.config.arm_joint_stiffness
+        damping = self.config.arm_joint_damping
+        max_force = self.config.arm_joint_max_force
+        if stiffness is None and damping is None and max_force is None:
+            return
+        joint_names = [f'panda_joint{index}' for index in range(1, 8)]
+        try:
+            joint_indices = np.asarray(
+                [self.articulation.get_dof_index(name) for name in joint_names],
+                dtype=np.int64,
+            )
+        except Exception as exc:
+            raise RuntimeError(f'franka {self.config.name}: failed to resolve arm DOFs') from exc
+
+        requested = {
+            'stiffness': stiffness,
+            'damping': damping,
+            'max_force': max_force,
+        }
+        physics_properties = {
+            'stiffness': ('get_dof_stiffnesses', 'set_dof_stiffnesses'),
+            'damping': ('get_dof_dampings', 'set_dof_dampings'),
+            'max_force': ('get_dof_max_forces', 'set_dof_max_forces'),
+        }
+        try:
+            physics_view = self.articulation._articulation_view._physics_view
+            for property_name, configured_value in requested.items():
+                if configured_value is None:
+                    continue
+                getter_name, setter_name = physics_properties[property_name]
+                values = np.asarray(getattr(physics_view, getter_name)()).copy()
+                if values.ndim == 1:
+                    values = np.expand_dims(values, axis=0)
+                values[0, joint_indices] = configured_value
+                getattr(physics_view, setter_name)(data=values, indices=[0])
+
+            readback = {}
+            for property_name, configured_value in requested.items():
+                if configured_value is None:
+                    continue
+                getter_name, _ = physics_properties[property_name]
+                values = np.asarray(getattr(physics_view, getter_name)())
+                if values.ndim == 1:
+                    values = np.expand_dims(values, axis=0)
+                arm_values = np.asarray(values[0, joint_indices], dtype=float)
+                if not np.allclose(arm_values, float(configured_value), rtol=1.0e-5, atol=1.0e-4):
+                    raise RuntimeError(
+                        f'{property_name} readback {arm_values.tolist()} '
+                        f'does not match requested value {configured_value}'
+                    )
+                readback[property_name] = arm_values.tolist()
+        except Exception as exc:
+            message = f'franka {self.config.name}: failed to configure PhysX arm drive: {exc}'
+            log.warning(message)
+            raise RuntimeError(message) from exc
+
+        log.info(f'franka {self.config.name}: configured PhysX arm drive {readback}')
+
+    def _apply_configured_gripper_drive(self):
+        """Configure both Panda finger drives with their prismatic-drive values."""
+
+        requested = {
+            'stiffness': self.config.gripper_joint_stiffness,
+            'damping': self.config.gripper_joint_damping,
+            'max_force': self.config.gripper_joint_max_force,
+            'friction': self.config.gripper_joint_friction,
+        }
+        if all(value is None for value in requested.values()):
+            return
+
+        joint_names = ['panda_finger_joint1', 'panda_finger_joint2']
+        try:
+            joint_indices = np.asarray(
+                [self.articulation.get_dof_index(name) for name in joint_names],
+                dtype=np.int64,
+            )
+        except Exception as exc:
+            raise RuntimeError(f'franka {self.config.name}: failed to resolve gripper DOFs') from exc
+
+        physics_properties = {
+            'stiffness': ('get_dof_stiffnesses', 'set_dof_stiffnesses'),
+            'damping': ('get_dof_dampings', 'set_dof_dampings'),
+            'max_force': ('get_dof_max_forces', 'set_dof_max_forces'),
+            'friction': ('get_dof_friction_coefficients', 'set_dof_friction_coefficients'),
+        }
+        try:
+            physics_view = self.articulation._articulation_view._physics_view
+            for property_name, configured_value in requested.items():
+                if configured_value is None:
+                    continue
+                getter_name, setter_name = physics_properties[property_name]
+                values = np.asarray(getattr(physics_view, getter_name)()).copy()
+                if values.ndim == 1:
+                    values = np.expand_dims(values, axis=0)
+                values[0, joint_indices] = configured_value
+                getattr(physics_view, setter_name)(data=values, indices=[0])
+
+            readback = {}
+            for property_name, configured_value in requested.items():
+                if configured_value is None:
+                    continue
+                getter_name, _ = physics_properties[property_name]
+                values = np.asarray(getattr(physics_view, getter_name)())
+                if values.ndim == 1:
+                    values = np.expand_dims(values, axis=0)
+                gripper_values = np.asarray(values[0, joint_indices], dtype=float)
+                if not np.allclose(gripper_values, float(configured_value), rtol=1.0e-5, atol=1.0e-4):
+                    raise RuntimeError(
+                        f'{property_name} readback {gripper_values.tolist()} '
+                        f'does not match requested value {configured_value}'
+                    )
+                readback[property_name] = gripper_values.tolist()
+        except Exception as exc:
+            message = f'franka {self.config.name}: failed to configure PhysX gripper drive: {exc}'
+            log.warning(message)
+            raise RuntimeError(message) from exc
+
+        log.info(f'franka {self.config.name}: configured PhysX gripper drive {readback}')
 
     def _apply_gripper_contact_material(self):
         """Give the Franka fingers enough surface friction for real PhysX grasps."""
@@ -285,13 +445,15 @@ class FrankaRobot(BaseRobot):
         eef_pose = self.articulation.end_effector.get_pose()
         obs['eef_body_position'] = eef_pose[0]
         obs['eef_body_orientation'] = eef_pose[1]
+        # Dataset state must describe the simulated Panda hand.  Lula FK is
+        # retained separately as an IK-frame diagnostic rather than silently
+        # replacing the physical pose used by grasp/contact code.
+        obs['eef_position'] = eef_pose[0]
+        obs['eef_orientation'] = eef_pose[1]
         if 'arm_ik_controller' in self.controllers:
             ik_obs = self.controllers['arm_ik_controller'].get_obs()
-            obs['eef_position'] = ik_obs.get('eef_position', eef_pose[0])
-            obs['eef_orientation'] = ik_obs.get('eef_orientation', eef_pose[1])
-        else:
-            obs['eef_position'] = eef_pose[0]
-            obs['eef_orientation'] = eef_pose[1]
+            obs['eef_kinematics_position'] = ik_obs.get('eef_position')
+            obs['eef_kinematics_orientation'] = ik_obs.get('eef_orientation')
 
         # common
         for c_obs_name, controller_obs in self.controllers.items():

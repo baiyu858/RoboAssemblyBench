@@ -193,6 +193,100 @@ def test_close_until_contact_releases_transient_hold_before_latching(monkeypatch
     assert state['hold_gripper_openness'] == pytest.approx(remembered_openness[-1])
 
 
+def test_close_until_contact_accepts_strict_wide_part_contact_without_joint_motion(monkeypatch):
+    adapter = UR5ePlumbersBlockAtomicSkillAdapter({})
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **kwargs: 0.04)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **kwargs: (0.04, 0.0))
+    monkeypatch.setattr(
+        adapter,
+        '_grasp_contact_ready',
+        lambda **kwargs: (
+            True,
+            {
+                'contact_checked': True,
+                'strict_contact_ready': True,
+            },
+        ),
+    )
+
+    state = {}
+    spec = {
+        'close_until_contact_min_steps': 0,
+        'close_contact_stable_steps': 2,
+        'closed_openness': 0.5,
+        'require_strict_physical_contact': True,
+        'allow_initial_strict_contact_without_closure': True,
+    }
+    ready, detail = adapter._close_until_contact_ready(
+        state=state,
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec=spec,
+        tracked_objects={},
+        close_elapsed_steps=1,
+        gripper_openness=0.5,
+    )
+    assert ready is False
+    assert detail['moved_from_open'] is False
+    assert detail['initial_strict_contact_without_closure'] is True
+
+    ready, detail = adapter._close_until_contact_ready(
+        state=state,
+        task=SimpleNamespace(),
+        robot_name='franka_right',
+        spec=spec,
+        tracked_objects={},
+        close_elapsed_steps=2,
+        gripper_openness=0.5,
+    )
+    assert ready is True
+    assert detail['completion_reason'] == 'contact'
+
+
+def test_close_recenter_uses_half_of_single_finger_gap_imbalance():
+    state = {}
+    close_detail = {
+        'contact_detail': {
+            'contact_metrics': {
+                'contact_box_orientation': [1.0, 0.0, 0.0, 0.0],
+                'left_finger': {
+                    'local_contact': {
+                        'best_surface_gap': 0.002,
+                        'best_axis': 'x',
+                        'local_point': [-0.05, 0.0, 0.0],
+                    }
+                },
+                'right_finger': {
+                    'local_contact': {
+                        'best_surface_gap': 0.012,
+                        'best_axis': 'x',
+                        'local_point': [0.05, 0.0, 0.0],
+                    }
+                },
+            }
+        }
+    }
+    result = UR5ePlumbersBlockAtomicSkillAdapter._update_close_recenter_offset(
+        state=state,
+        close_detail=close_detail,
+        spec={
+            'close_gate_recenter_single_finger_contact': True,
+            'close_gate_recenter_contact_distance': 0.008,
+            'close_gate_recenter_min_gap_imbalance': 0.004,
+            'close_gate_recenter_stable_steps': 1,
+            'close_gate_recenter_step': 0.00075,
+            'close_gate_recenter_gap_gain': 0.5,
+            'close_gate_recenter_max_step': 0.008,
+            'close_gate_recenter_max_offset': 0.025,
+        },
+        close_ready=False,
+    )
+
+    assert result['updated'] is True
+    assert result['step'] == pytest.approx(0.005)
+    assert result['offset_world'] == pytest.approx([0.005, 0.0, 0.0])
+
+
 def test_task_specs_are_discoverable():
     recipes = list_task_recipes()
     assert 'screw_fastening' in recipes
@@ -219,6 +313,23 @@ def test_scene_builder_builds_screw_fastening_episode():
     }
     assert len(task_cfg.robots[0].sensors) == 2
     assert len(task_cfg.robots[1].sensors) == 1
+
+
+def test_runtime_cameras_scale_to_dataset_width_without_changing_aspect_ratio(monkeypatch):
+    monkeypatch.setenv('RAB_DATASET_OUTPUT_WIDTH', '352')
+
+    task_cfg = build_dual_franka_assembly_episode(
+        recipe='screw_fastening', seed=3, episode_idx=0, attach_runtime_cameras=True
+    )
+
+    resolutions = {
+        sensor.name: tuple(sensor.resolution)
+        for robot in task_cfg.robots
+        for sensor in robot.sensors
+    }
+    assert resolutions['third_person_front'] == (352, 198)
+    assert resolutions['left_wrist'] == (352, 264)
+    assert resolutions['right_wrist'] == (352, 264)
 
 
 def test_scene_builder_builds_peg_insertion_episode():

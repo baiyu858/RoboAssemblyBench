@@ -1,4 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from toolkits.factory_dual_franka_assembly import generate_demos
 
@@ -44,6 +47,16 @@ def test_collect_worker_requires_one_seed_per_recipe_when_not_shared(monkeypatch
         assert 'one shared seed or one seed per recipe' in str(exc)
     else:
         raise AssertionError('Expected mismatched recipe and seed counts to fail.')
+
+
+def test_worker_episode_step_cap_is_smoke_only_and_never_increases_limits():
+    configs = [SimpleNamespace(max_steps=22000), SimpleNamespace(max_steps=400)]
+
+    generate_demos._limit_worker_episode_steps(configs, 720)
+
+    assert [config.max_steps for config in configs] == [720, 400]
+    with pytest.raises(ValueError, match='must be positive'):
+        generate_demos._limit_worker_episode_steps(configs, 0)
 
 
 def test_worker_command_propagates_constraint_monitor_options(monkeypatch, tmp_path):

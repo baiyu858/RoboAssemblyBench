@@ -14,7 +14,12 @@ _CONTACT_PHASE_TOKENS = (
     'settle',
 )
 
-_END_EFFECTOR_TOKEN = 'Gripper/Robotiq_2F_85/'
+_END_EFFECTOR_TOKENS = (
+    'Gripper/Robotiq_2F_85/',
+    'panda_hand',
+    'panda_leftfinger',
+    'panda_rightfinger',
+)
 
 
 @dataclass(frozen=True)
@@ -109,7 +114,7 @@ class AssemblyContactPolicy:
         object_entity = next((item for item in entities if item == context.object_name), None)
         if robot_entity is None or object_entity is None:
             return False
-        return _END_EFFECTOR_TOKEN in robot_entity
+        return any(token in robot_entity for token in _END_EFFECTOR_TOKENS)
 
     @staticmethod
     def _decision(

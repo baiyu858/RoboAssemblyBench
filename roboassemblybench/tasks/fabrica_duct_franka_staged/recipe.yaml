@@ -1,0 +1,17 @@
+extends: _fabrica_canonical_franka.yaml
+task_name: fabrica_duct_franka_staged
+prompt: Assemble the canonical Fabrica duct with staged Franka pick, transport, insertion, release, and retreat skills.
+
+fabrica_canonical:
+  assembly: duct
+  base_robot: franka_right
+  assembly_robot: franka_left
+  # The final part closes the upward hand-exit corridor. End after its physical
+  # release and static lock; all earlier retreat and idle-home phases remain.
+  skip_terminal_retreat: true
+
+qualification:
+  seed_count: 4
+  required_seeds: [4906, 485, 34, 12]
+collection:
+  layout_seeds: [4906, 485, 34, 12]

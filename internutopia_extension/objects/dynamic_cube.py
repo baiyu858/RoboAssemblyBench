@@ -12,8 +12,12 @@ class DynamicCube(BaseObject):
         self._config = config
 
     def set_up_to_scene(self, scene: IScene):
-        from omni.isaac.core.objects import DynamicCuboid
-        from omni.isaac.core.utils.prims import get_prim_at_path
+        try:
+            from isaacsim.core.api.objects import DynamicCuboid
+            from isaacsim.core.utils.prims import get_prim_at_path
+        except ImportError:
+            from omni.isaac.core.objects import DynamicCuboid
+            from omni.isaac.core.utils.prims import get_prim_at_path
         from pxr import PhysxSchema, Sdf
 
         dynamic_cube = DynamicCuboid(

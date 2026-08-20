@@ -1,5 +1,7 @@
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 from internutopia.core.config import Config, DistributedConfig, TaskCfg
@@ -67,7 +69,10 @@ class SimulatorRunner:
         Raises:
             ValueError: If both `render` and `physics` are set to False, or if `steps` is less than or equal to 0.
         """
-        from omni.isaac.core.simulation_context import SimulationContext
+        try:
+            from isaacsim.core.api import SimulationContext
+        except ImportError:
+            from omni.isaac.core.simulation_context import SimulationContext
 
         if not render and not physics:
             raise ValueError('both `render` and `physics` are set to False')
@@ -263,7 +268,10 @@ class SimulatorRunner:
             - Observations are collected only for environments that are reset or initialized.
             - Tasks corresponding to the reset environments are transitioned to new episodes.
         """
-        from omni.isaac.core.simulation_context import SimulationContext
+        try:
+            from isaacsim.core.api import SimulationContext
+        except ImportError:
+            from omni.isaac.core.simulation_context import SimulationContext
 
         new_task_configs = []
 
@@ -320,7 +328,10 @@ class SimulatorRunner:
             task_name (str): Task name to clear.
 
         """
-        from omni.isaac.core.loggers import DataLogger
+        try:
+            from isaacsim.core.api.loggers import DataLogger
+        except ImportError:
+            from omni.isaac.core.loggers import DataLogger
 
         if task_name not in self.current_tasks:
             log.warning(f'Clear task {task_name} fail. The task {task_name} is not in current_tasks.')
@@ -380,6 +391,10 @@ class SimulatorRunner:
                 task.clear_rigid_bodies()
 
             SimulationManager._on_stop('reset')
+            # Headless Isaac does not flush DeletePrimsCommand automatically.
+            # Loading the next episode in the same update can make Hydra discard
+            # the newly added references together with the stale task prims.
+            self._scene.flush_updates()
         else:
             # init
             SimulationManager._on_stop('reset')
@@ -468,7 +483,10 @@ class SimulatorRunner:
         rendering_dt = eval(rendering_dt) if isinstance(rendering_dt, str) else rendering_dt
         use_fabric = self.config.simulator.use_fabric
         log.info(f'simulator params: physics dt={physics_dt}, rendering dt={rendering_dt}, use_fabric={use_fabric}')
-        from omni.isaac.core import World
+        try:
+            from isaacsim.core.api import World
+        except ImportError:
+            from omni.isaac.core import World
 
         self._world: World = World(
             physics_dt=physics_dt,
@@ -479,7 +497,10 @@ class SimulatorRunner:
 
     def setup_isaacsim(self):
         # Init Isaac Sim
-        from isaacsim import SimulationApp  # noqa
+        try:
+            from isaacsim import SimulationApp  # noqa
+        except ImportError:
+            from omni.isaac.kit import SimulationApp  # noqa
 
         headless = self.config.simulator.headless
         native = self.config.simulator.native
@@ -496,9 +517,18 @@ class SimulatorRunner:
                 f'Isaac GPU assignment: renderer={launch_config.get("active_gpu")}, '
                 f'physics={launch_config.get("physics_gpu")}'
             )
+        portable_root = os.environ.get('ISAACSIM_PORTABLE_ROOT')
+        if portable_root:
+            portable_root = str(Path(portable_root).expanduser().resolve())
+            Path(portable_root).mkdir(parents=True, exist_ok=True)
+            sys.argv.extend(['--portable-root', portable_root])
         if headless:
             launch_config['extra_args'] = ['--/app/extensions/fsWatcherEnabled=0']
-        self._simulation_app = SimulationApp(launch_config)
+        try:
+            self._simulation_app = SimulationApp(launch_config)
+        finally:
+            if portable_root:
+                del sys.argv[-2:]
         self._simulation_app._carb_settings.set('/physics/cooking/ujitsoCollisionCooking', False)
         log.debug('SimulationApp init done')
 
@@ -517,7 +547,10 @@ class SimulatorRunner:
 
     def setup_streaming_420(self, native: bool, webrtc: bool):
         if webrtc:
-            from omni.isaac.core.utils.extensions import enable_extension  # noqa
+            try:
+                from isaacsim.core.utils.extensions import enable_extension  # noqa
+            except ImportError:
+                from omni.isaac.core.utils.extensions import enable_extension  # noqa
 
             self._simulation_app.set_setting('/app/window/drawMouse', True)
             self._simulation_app.set_setting('/app/livestream/proto', 'ws')
@@ -526,7 +559,10 @@ class SimulatorRunner:
             enable_extension('omni.services.streamclient.webrtc')
 
         elif native:
-            from omni.isaac.core.utils.extensions import enable_extension  # noqa
+            try:
+                from isaacsim.core.utils.extensions import enable_extension  # noqa
+            except ImportError:
+                from omni.isaac.core.utils.extensions import enable_extension  # noqa
 
             self._simulation_app.set_setting('/app/window/drawMouse', True)
             self._simulation_app.set_setting('/app/livestream/proto', 'ws')
@@ -538,7 +574,10 @@ class SimulatorRunner:
 
     def setup_streaming_450(self, webrtc: bool):
         if webrtc:
-            from omni.isaac.core.utils.extensions import enable_extension
+            try:
+                from isaacsim.core.utils.extensions import enable_extension
+            except ImportError:
+                from omni.isaac.core.utils.extensions import enable_extension
 
             self._simulation_app.set_setting('/app/window/drawMouse', True)
             enable_extension('omni.kit.livestream.webrtc')

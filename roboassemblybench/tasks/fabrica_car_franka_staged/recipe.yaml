@@ -1,0 +1,35 @@
+extends: _fabrica_canonical_franka.yaml
+task_name: fabrica_car_franka_staged
+prompt: Assemble the canonical Fabrica car with staged Franka pick, transport, insertion, release, and retreat skills.
+
+fabrica_canonical:
+  assembly: car
+  # Match Fabrica's official arm roles: the negative-X Panda holds/prepares
+  # the base while the positive-X Panda moves the remaining assembly parts.
+  base_robot: franka_left
+  assembly_robot: franka_right
+  # Fabrica's official Panda workcell places the hold and move arms 0.90 m
+  # apart along X. Both bases are parallel and face world -Y.
+  robot_pose_overrides:
+    franka_left:
+      position: [0.05, 0.25, 0.998051]
+      orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+    franka_right:
+      position: [0.95, 0.25, 0.998051]
+      orientation: [0.707106781, 0.0, 0.0, -0.707106781]
+  # Preserve Fabrica's relative workcell geometry after translating its local
+  # frame into this scene: fixture at the board frame and assembly 0.15 m in
+  # front of it.
+  pickup_origin: [0.50, 0.05, 0.0125]
+  board_origin: [0.50, 0.05, 0.0125]
+  assembly_origin: [0.50, -0.10, 0.0125]
+  # The final body panel closes the planned hand-exit corridor. Finish only
+  # after the shared release gate has locked every part and verified stability;
+  # all non-terminal retreats and idle-arm home phases remain enabled.
+  skip_terminal_retreat: true
+
+qualification:
+  seed_count: 4
+  required_seeds: [4906, 485, 34, 12]
+collection:
+  layout_seeds: [4906, 485, 34, 12]

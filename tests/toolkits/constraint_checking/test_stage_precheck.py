@@ -149,3 +149,62 @@ def test_invalid_joint_target_is_fail_open():
 
     assert result['reason'] == 'no_joint_targets'
     assert checker.finalize()['skip_reasons']['invalid_joint_target'] == 1
+
+
+def test_franka_task_uses_panda_capsules_and_seven_dof_fk():
+    panda_frames = [
+        'panda_link0',
+        'panda_link1',
+        'panda_link2',
+        'panda_link3',
+        'panda_link4',
+        'panda_link5',
+        'panda_link6',
+        'panda_link7',
+        'panda_hand',
+        'panda_leftfinger',
+        'panda_rightfinger',
+    ]
+
+    class PandaSubset:
+        def get_joint_positions(self):
+            return np.zeros(7)
+
+    class PandaJointController:
+        config = SimpleNamespace(name='arm_joint_controller')
+
+        def get_joint_subset(self):
+            return PandaSubset()
+
+    class PandaSolver(Solver):
+        frames = panda_frames
+
+    class PandaIKController(IKController):
+        config = SimpleNamespace(name='arm_ik_controller')
+        _kinematics_solver = PandaSolver()
+
+    robot = SimpleNamespace(
+        config=SimpleNamespace(type='FrankaRobot'),
+        controllers={
+            'arm_joint_controller': PandaJointController(),
+            'arm_ik_controller': PandaIKController(),
+        },
+    )
+    task = SimpleNamespace(
+        step_counter=0,
+        robots={'franka_left': robot},
+        get_tracked_object_states=lambda: {},
+    )
+    checker = StageTrajectoryPrechecker(check_stride=1, num_waypoints=3)
+
+    result = checker.observe(
+        task,
+        {'franka_left': {'arm_joint_controller': [[0.1] + [0.0] * 6]}},
+    )
+    report = checker.finalize()
+
+    assert result['reason'] == 'ok'
+    assert report['robot_model'] == 'franka_panda'
+    assert report['segments_checked'] == 1
+    assert report['waypoints_checked'] == 3
+    assert report['monitor_error'] == []

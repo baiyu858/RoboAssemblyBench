@@ -17,11 +17,32 @@ class UsdObject(BaseObject):
 
     @staticmethod
     def _resolve_usd_path(usd_path: str) -> str:
+        def require_local_file(resolved_path: str) -> str:
+            resolved_scheme = urlparse(resolved_path).scheme
+            if resolved_scheme in {'http', 'https', 'omniverse'}:
+                return resolved_path
+            if not os.path.isfile(resolved_path):
+                raise FileNotFoundError(
+                    f'Object USD asset does not exist: {resolved_path} (configured as {usd_path})'
+                )
+            return resolved_path
+
         path = os.path.expanduser(str(usd_path))
         parsed = urlparse(path)
         if parsed.scheme in {'http', 'https', 'omniverse'}:
             return path
         if path.startswith('${ISAAC_ASSETS_ROOT}') or path.startswith('/Isaac/'):
+            assets_root_override = os.environ.get('ISAAC_ASSETS_ROOT', '').strip()
+            if assets_root_override:
+                suffix = path.removeprefix('${ISAAC_ASSETS_ROOT}')
+                if path.startswith('/Isaac/'):
+                    suffix = path
+                resolved_path = (
+                    os.path.abspath(os.path.expanduser(assets_root_override)).rstrip('/')
+                    + '/'
+                    + suffix.lstrip('/')
+                )
+                return require_local_file(resolved_path)
             try:
                 from isaacsim.storage.native import get_assets_root_path
 
@@ -32,17 +53,60 @@ class UsdObject(BaseObject):
                 suffix = path.removeprefix('${ISAAC_ASSETS_ROOT}')
                 if path.startswith('/Isaac/'):
                     suffix = path
-                return assets_root.rstrip('/') + '/' + suffix.lstrip('/')
+                return require_local_file(assets_root.rstrip('/') + '/' + suffix.lstrip('/'))
             raise FileNotFoundError('Cannot resolve Isaac Sim assets root for object USD path: ' + path)
-        return os.path.abspath(path)
+        return require_local_file(os.path.abspath(path))
 
     def set_up_to_scene(self, scene: IScene):  # noqa: C901
-        from omni.isaac.core.prims import RigidPrim
-        from omni.isaac.core.prims.xform_prim import XFormPrim
-        from omni.isaac.core.utils.prims import is_prim_path_valid
-        from omni.isaac.core.utils.stage import add_reference_to_stage
+        try:
+            from isaacsim.core.prims import SingleRigidPrim as RigidPrim
+            from isaacsim.core.prims import SingleXFormPrim as XFormPrim
+            from isaacsim.core.utils.prims import is_prim_path_valid
+            from isaacsim.core.utils.stage import add_reference_to_stage
+        except ImportError:
+            from omni.isaac.core.prims import RigidPrim
+            from omni.isaac.core.prims.xform_prim import XFormPrim
+            from omni.isaac.core.utils.prims import is_prim_path_valid
+            from omni.isaac.core.utils.stage import add_reference_to_stage
         from omni.physx.scripts import utils
-        from pxr import PhysxSchema, UsdGeom, UsdPhysics
+        from pxr import PhysxSchema, UsdGeom, UsdPhysics, UsdShade
+
+        force_renderable = bool(getattr(self._config, 'force_renderable', False))
+
+        def prepare_nested_visuals(prim) -> None:
+            if prim is None or not prim.IsValid():
+                return
+            imageable = UsdGeom.Imageable(prim)
+            if imageable:
+                imageable.CreateVisibilityAttr().Set(UsdGeom.Tokens.inherited)
+                imageable.CreatePurposeAttr().Set('default')
+            if prim.IsA(UsdGeom.Gprim):
+                gprim = UsdGeom.Gprim(prim)
+                gprim.CreateDisplayOpacityAttr([1.0])
+                gprim.CreateDoubleSidedAttr(True)
+                binding = prim.GetRelationship('material:binding')
+                if binding and binding.IsValid() and binding.HasAuthoredTargets():
+                    UsdShade.MaterialBindingAPI.Apply(prim)
+            for child in prim.GetChildren():
+                prepare_nested_visuals(child)
+
+        def require_renderable_geometry(prim, *, prim_path: str, usd_path: str) -> None:
+            geometry_count = 0
+
+            def count_geometry(current_prim) -> None:
+                nonlocal geometry_count
+                if current_prim is None or not current_prim.IsValid():
+                    return
+                if current_prim.IsA(UsdGeom.Gprim):
+                    geometry_count += 1
+                for child in current_prim.GetChildren():
+                    count_geometry(child)
+
+            count_geometry(prim)
+            if geometry_count == 0:
+                raise RuntimeError(
+                    f'Referenced USD contains no renderable geometry at {prim_path}: {usd_path}'
+                )
 
         def set_nested_collision_enabled(prim, enabled: bool) -> None:
             if prim is None or not prim.IsValid():
@@ -140,6 +204,9 @@ class UsdObject(BaseObject):
                     if mass is None:
                         mass = 1
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
+                if force_renderable:
+                    prepare_nested_visuals(prim)
+                    require_renderable_geometry(prim, prim_path=prim_path, usd_path=usd_path)
                 set_nested_rigid_body_enabled(prim, False)
                 rigid_body_api = UsdPhysics.RigidBodyAPI.Apply(prim)
                 rigid_body_api.GetRigidBodyEnabledAttr().Set(True)
@@ -157,7 +224,7 @@ class UsdObject(BaseObject):
                     translation=translation,
                     orientation=orientation,
                     scale=scale,
-                    visible=visible,
+                    visible=True if force_renderable else visible,
                     mass=mass,
                     density=density,
                     linear_velocity=linear_velocity,
@@ -227,6 +294,9 @@ class UsdObject(BaseObject):
                 restitution: Optional[float] = None,
             ) -> None:
                 prim = add_reference_to_stage(UsdObject._resolve_usd_path(usd_path), prim_path)
+                if force_renderable:
+                    prepare_nested_visuals(prim)
+                    require_renderable_geometry(prim, prim_path=prim_path, usd_path=usd_path)
                 set_nested_rigid_body_enabled(prim, False)
                 if collider and auto_collider:
                     set_nested_colliders(prim, dynamic_body=False)
@@ -245,7 +315,7 @@ class UsdObject(BaseObject):
                     translation=translation,
                     orientation=orientation,
                     scale=scale,
-                    visible=visible,
+                    visible=True if force_renderable else visible,
                 )
                 if collider and (
                     static_friction is not None or dynamic_friction is not None or restitution is not None

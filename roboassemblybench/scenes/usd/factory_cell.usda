@@ -79,8 +79,8 @@ def Xform "World"
         {
             double size = 1
             color3f[] primvars:displayColor = [(0.87, 0.26, 0.18)]
-            double3 xformOp:translate = (0.66, 0, 1.16)
-            double3 xformOp:scale = (1.45, 0.07, 0.055)
+            double3 xformOp:translate = (0.04, 0, 1.16)
+            double3 xformOp:scale = (0.055, 1.75, 0.055)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
         }
 
@@ -237,13 +237,5 @@ def Xform "World"
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
         }
 
-        def Cube "overhead_light_strip"
-        {
-            double size = 1
-            color3f[] primvars:displayColor = [(0.86, 0.92, 0.84)]
-            double3 xformOp:translate = (0.78, 0, 1.32)
-            double3 xformOp:scale = (1.35, 0.045, 0.018)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-        }
     }
 }

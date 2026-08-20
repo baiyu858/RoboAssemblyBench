@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import re
 import shutil
@@ -17,8 +18,9 @@ import numpy as np
 from internutopia.core.config import Config, SimConfig
 from internutopia.core.util import has_display
 from internutopia.core.vec_env import Env
-from internutopia_extension import import_extensions
+from internutopia_extension import import_fabrica_assembly_extensions
 from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
+from roboassemblybench.core.domain_randomization import RANDOMIZATION_PROFILE_CHOICES
 from roboassemblybench.robobrain.runtime_monitor import RuntimeRoboChecker
 from toolkits.constraint_checking.integration.pipeline import (
     RuntimeConstraintEpisodeHook,
@@ -41,6 +43,8 @@ from toolkits.factory_dual_franka_assembly.task_specs import (
     list_task_recipes,
     load_task_recipe,
 )
+
+RUNTIME_CAMERA_WARMUP_RENDER_STEPS = 8
 
 
 def _to_jsonable(value: Any):
@@ -364,12 +368,13 @@ def _build_env(
     rendering_fps: int | None = None,
     rendering_interval: int | None = None,
 ):
-    rendering_dt = 1 / 240 if rendering_fps is None else 1 / max(int(rendering_fps), 1)
+    simulation_fps = 240 if rendering_fps is None else max(int(rendering_fps), 1)
+    rendering_dt = 1 / simulation_fps
     if rendering_interval is not None and int(rendering_interval) < 0:
         raise ValueError('rendering_interval must be non-negative.')
     config = Config(
         simulator=SimConfig(
-            physics_dt=1 / 240,
+            physics_dt=1 / simulation_fps,
             rendering_dt=rendering_dt,
             rendering_interval=None if rendering_interval is None else int(rendering_interval),
             use_fabric=False,
@@ -381,8 +386,21 @@ def _build_env(
         metrics_save_path='none',
         task_configs=task_configs,
     )
-    import_extensions()
+    robot_platforms = {
+        'ur5e' if str(getattr(robot, 'type', '')).lower().startswith('ur5e') else 'franka'
+        for task_config in task_configs
+        for robot in task_config.robots
+    }
+    if len(robot_platforms) != 1:
+        raise ValueError(f'One simulator process cannot mix Fabrica robot platforms: {sorted(robot_platforms)}')
+    import_fabrica_assembly_extensions(robot_platforms.pop())
     return Env(config)
+
+
+def _warm_up_runtime_cameras(env, *, steps: int = RUNTIME_CAMERA_WARMUP_RENDER_STEPS):
+    """Converge newly composed RTX camera history without advancing physics."""
+    env.warm_up(steps=max(int(steps), 1), render=True, physics=False)
+    return env.get_observations()
 
 
 def _run_task_sequence(
@@ -413,18 +431,29 @@ def _run_task_sequence(
     stage_precheck_waypoints: int = 8,
     record_episode_steps: bool = True,
     record_lerobot_raw: bool = False,
+    record_trajectory_only: bool = False,
     dataset_fps: int = 30,
     dataset_frame_stride: int = 8,
+    video_codec: str = 'h264',
+    video_crf: int = 23,
+    video_preset: str = 'veryfast',
+    depth_compression_level: int = 5,
     rendering_fps: int | None = None,
     rendering_interval_override: int | None = None,
 ):
     simulation_fps = 240 if rendering_fps is None else max(int(rendering_fps), 1)
+    if record_trajectory_only and not record_lerobot_raw:
+        raise ValueError('Trajectory-only recording requires record_lerobot_raw=True.')
     dataset_rendering_interval = max(int(dataset_frame_stride), 1) - 1 if record_lerobot_raw else None
     requires_runtime_rendering = bool(
-        record_live_video or record_lerobot_raw or (runtime_robochecker and runtime_capture_rgb)
+        record_live_video
+        or (record_lerobot_raw and not record_trajectory_only)
+        or (runtime_robochecker and runtime_capture_rgb)
     )
     rollout_rendering_interval = (
-        dataset_rendering_interval if record_lerobot_raw else (None if requires_runtime_rendering else 239)
+        dataset_rendering_interval
+        if record_lerobot_raw and not record_trajectory_only
+        else (None if requires_runtime_rendering else simulation_fps - 1)
     )
     if rendering_interval_override is not None:
         if requires_runtime_rendering:
@@ -438,6 +467,8 @@ def _run_task_sequence(
     )
     policy = DualFrankaAssemblyDemoPolicy()
     obs_list, task_cfgs = env.reset()
+    if requires_runtime_rendering and task_cfgs and task_cfgs[0] is not None:
+        obs_list = _warm_up_runtime_cameras(env)
     results = []
     if results_output_path is not None:
         _write_json(results_output_path, results)
@@ -488,8 +519,25 @@ def _run_task_sequence(
             task = env.runner.current_tasks[task_name]
             last_task = task
             if not rollout_loop_entered:
+                phase_spec = task.get_current_phase_spec()
+                phase_timeout = (
+                    task._phase_timeout_steps(phase_spec)
+                    if hasattr(task, '_phase_timeout_steps')
+                    else phase_spec.get('timeout_steps')
+                )
+                robot_metadata = list(getattr(task.cfg, 'robot_metadata', []) or [])
                 print(
                     '[rollout-progress] event=loop_enter ' f'task={task_name} step={int(task.step_counter)}',
+                    flush=True,
+                )
+                print(
+                    '[rollout-runtime] '
+                    f'task_class_file={inspect.getfile(type(task))} '
+                    f'phase={getattr(task, "phase", None)} '
+                    f'phase_timeout={phase_timeout} '
+                    f'robot_types={[entry.get("type") for entry in robot_metadata]} '
+                    f'robot_usd_paths={[entry.get("usd_path") for entry in robot_metadata]} '
+                    f'end_effectors={[entry.get("end_effector_prim_name") for entry in robot_metadata]}',
                     flush=True,
                 )
                 rollout_loop_entered = True
@@ -516,6 +564,11 @@ def _run_task_sequence(
                     frame_stride=dataset_frame_stride,
                     simulation_fps=simulation_fps,
                     rendering_interval=dataset_rendering_interval,
+                    record_media=not record_trajectory_only,
+                    video_codec=video_codec,
+                    video_crf=video_crf,
+                    video_preset=video_preset,
+                    depth_compression_level=depth_compression_level,
                 )
 
             step_started_at = time.monotonic()
@@ -525,15 +578,36 @@ def _run_task_sequence(
                 dataset_recorder.record(task=task, obs=obs_list[0], actions=env_actions)
             obs_list, _, terminated, _, _ = env.step([env_actions])
             constraint_hook.observe(task)
+            # Runner cleanup can remove a successful task before VecEnv exposes
+            # its terminal flag.  Promote the runner's finished metrics to a
+            # normal termination so recorders are finalized as successful.
+            finished_metrics = list(getattr(env.runner, 'last_finished_task_metrics', []) or [])
+            runner_completed = bool(
+                finished_metrics
+                and (
+                    task_name not in getattr(env.runner, 'current_tasks', {})
+                    or env.finished()
+                )
+            )
+            if runner_completed and not terminated[0]:
+                terminated = list(terminated)
+                terminated[0] = True
             completed_step = int(task.step_counter)
             if completed_step <= 5 or completed_step % 60 == 0:
                 elapsed = max(time.monotonic() - rollout_started_at, 1e-9)
+                current_phase_spec = task.get_current_phase_spec()
+                current_phase_timeout = (
+                    task._phase_timeout_steps(current_phase_spec)
+                    if hasattr(task, '_phase_timeout_steps')
+                    else current_phase_spec.get('timeout_steps')
+                )
                 print(
                     '[rollout-progress] event=step_complete '
                     f'task={task_name} step={completed_step} '
                     f'phase={getattr(task, "phase", None)} '
                     f'phase_index={int(getattr(task, "phase_index", -1))} '
                     f'phase_step={int(getattr(task, "phase_step_counter", -1))} '
+                    f'phase_timeout={current_phase_timeout} '
                     f'step_wall_seconds={time.monotonic() - step_started_at:.3f} '
                     f'average_steps_per_second={completed_step / elapsed:.3f}',
                     flush=True,
@@ -570,7 +644,10 @@ def _run_task_sequence(
                     terminated[0] = True
 
             if terminated[0]:
-                metrics = _attach_policy_diagnostics(task.calculate_metrics(), policy)
+                metrics = _attach_policy_diagnostics(
+                    finished_metrics[-1] if runner_completed else task.calculate_metrics(),
+                    policy,
+                )
                 if runtime_checker is not None:
                     metrics['runtime_robochecker'] = runtime_checker.finalize()
                 constraint_hook.attach_metrics(metrics)
@@ -615,6 +692,8 @@ def _run_task_sequence(
                 constraint_hook.reset_episode()
                 precheck_hook.reset_episode()
                 obs_list, task_cfgs = env.reset([0])
+                if requires_runtime_rendering and task_cfgs and task_cfgs[0] is not None:
+                    obs_list = _warm_up_runtime_cameras(env)
                 if not task_cfgs or task_cfgs[0] is None:
                     break
         if not results:
@@ -656,7 +735,8 @@ def _run_task_sequence(
                 interrupted_metrics.setdefault('terminal_reason', 'rollout-interrupted-before-normal-termination')
                 raw_dataset_output = dataset_recorder.finalize(task=last_task, metrics=interrupted_metrics)
             except Exception:
-                pass
+                print('[demo-debug] raw dataset finalization failed:', flush=True)
+                traceback.print_exc()
         if recorder is not None and last_task is not None:
             try:
                 metrics = _attach_policy_diagnostics(last_task.calculate_metrics(), policy)
@@ -751,6 +831,8 @@ def _build_collect_worker_task_configs(
     scene_profile: str | None,
     attach_runtime_cameras: bool,
     domain_randomization_enabled: bool | None,
+    randomization_profile: str | None = None,
+    control_fps: int = 240,
 ):
     """Build a serial episode queue, including heterogeneous recipes."""
     recipes = [str(recipe) for recipe in recipes]
@@ -792,11 +874,162 @@ def _build_collect_worker_task_configs(
             scene_profile=scene_profile,
             attach_runtime_cameras=attach_runtime_cameras,
             domain_randomization_enabled=domain_randomization_enabled,
+            randomization_profile=randomization_profile,
+            control_fps=control_fps,
         )
         for episode_idx, (recipe, seed, layout_seed) in enumerate(
             zip(episode_recipes, seeds, resolved_layout_seeds)
         )
     ]
+
+
+def _limit_worker_episode_steps(task_configs, max_steps: int | None) -> None:
+    if max_steps is None:
+        return
+    if int(max_steps) <= 0:
+        raise ValueError('--worker-max-steps must be positive.')
+    for task_config in task_configs:
+        task_config.max_steps = min(int(task_config.max_steps), int(max_steps))
+
+
+def _apply_kinematic_replay_frame(task, trajectory, frame_index: int) -> None:
+    robot_names = [str(value) for value in np.asarray(trajectory['replay_robot_names']).tolist()]
+    joint_widths = [int(value) for value in np.asarray(trajectory['replay_joint_widths']).tolist()]
+    joint_values = np.asarray(trajectory['replay_joint_state'][frame_index], dtype=np.float32)
+    if len(robot_names) != len(joint_widths) or sum(joint_widths) != len(joint_values):
+        raise ValueError('Invalid robot replay joint schema.')
+    for robot_name, values in zip(robot_names, np.split(joint_values, np.cumsum(joint_widths)[:-1])):
+        robot = getattr(task, 'robots', {}).get(robot_name)
+        articulation = getattr(robot, 'articulation', None)
+        if articulation is None:
+            raise KeyError(f'Replay task is missing robot {robot_name!r}.')
+        articulation.set_joint_positions(np.asarray(values, dtype=np.float32))
+        try:
+            articulation.set_joint_velocities(np.zeros(len(values), dtype=np.float32))
+        except Exception:
+            pass
+
+    object_names = [str(value) for value in np.asarray(trajectory['tracked_object_names']).tolist()]
+    positions = np.asarray(trajectory['tracked_object_position'][frame_index], dtype=np.float32)
+    orientations = np.asarray(trajectory['tracked_object_orientation'][frame_index], dtype=np.float32)
+    if positions.shape != (len(object_names), 3) or orientations.shape != (len(object_names), 4):
+        raise ValueError('Invalid tracked-object replay pose schema.')
+    for object_name, position, orientation in zip(object_names, positions, orientations):
+        resolved_object = task._resolve_object(object_name)
+        offset = getattr(resolved_object, 'offset', None)
+        world_position = np.asarray(position, dtype=np.float32)
+        if offset is not None:
+            world_position = world_position + np.asarray(offset, dtype=np.float32)
+        resolved_object.set_world_pose(world_position, orientation)
+
+
+def _render_kinematic_replay_frame(env, task, trajectory, frame_index: int):
+    """Publish one authoritative replay pose to RTX cameras."""
+
+    _apply_kinematic_replay_frame(task, trajectory, frame_index)
+    # SingleArticulation.set_joint_positions updates the PhysX tensor state.
+    # A physics tick is required to propagate that state to Fabric/Replicator;
+    # render-only ticks otherwise keep returning the first camera frame.
+    env.warm_up(steps=1, render=True, physics=True)
+    return env.get_observations()
+
+
+def _run_replay_sequence(
+    task_configs,
+    source_metadata_paths: list[Path],
+    *,
+    headless: bool,
+    output_dir: Path,
+    results_output_path: Path,
+    video_codec: str,
+    video_crf: int,
+    video_preset: str,
+    depth_compression_level: int,
+) -> list[dict[str, Any]]:
+    if len(task_configs) != len(source_metadata_paths):
+        raise ValueError('Replay requires exactly one task config per source trajectory.')
+    if not task_configs:
+        raise ValueError('Replay source list is empty.')
+
+    first_metadata = json.loads(Path(source_metadata_paths[0]).read_text(encoding='utf-8'))
+    simulation_fps = int(first_metadata['simulation_fps'])
+    env = _build_env(
+        task_configs=task_configs,
+        headless=headless,
+        rendering_fps=simulation_fps,
+        rendering_interval=0,
+    )
+    obs_list, active_configs = env.reset()
+    results: list[dict[str, Any]] = []
+    _write_json(results_output_path, results)
+    for episode_idx, source_metadata_path in enumerate(source_metadata_paths):
+        if not active_configs or active_configs[0] is None:
+            raise RuntimeError(f'Replay environment ended before source {source_metadata_path}.')
+        task_name = next(iter(env.runner.current_tasks))
+        task = env.runner.current_tasks[task_name]
+        source_metadata = json.loads(Path(source_metadata_path).read_text(encoding='utf-8'))
+        if int(task.config.seed) != int(source_metadata['seed']):
+            raise RuntimeError('Replay task seed does not match its authoritative trajectory.')
+        source_trajectory_path = Path(source_metadata['trajectory_path'])
+        recorder = CompactCartesianEpisodeRecorder(
+                output_dir=output_dir,
+                episode_idx=episode_idx,
+                task=task,
+                fps=int(source_metadata['fps']),
+                frame_stride=int(source_metadata['frame_stride']),
+                simulation_fps=int(source_metadata['simulation_fps']),
+                rendering_interval=int(source_metadata['frame_stride']) - 1,
+                record_media=True,
+                video_codec=video_codec,
+                video_crf=video_crf,
+                video_preset=video_preset,
+                depth_compression_level=depth_compression_level,
+        )
+        frame_count = recorder.prepare_replay_source(Path(source_metadata_path))
+        with np.load(source_trajectory_path) as trajectory:
+            # Replicator cameras need several render-only ticks after reset. Set
+            # the authoritative first pose before warming up so frame 0 is not
+            # rendered from the recipe's nominal initial state.
+            _apply_kinematic_replay_frame(task, trajectory, 0)
+            obs_list = _warm_up_runtime_cameras(env)
+            for frame_index in range(frame_count):
+                if frame_index > 0:
+                    obs_list = _render_kinematic_replay_frame(
+                        env,
+                        task,
+                        trajectory,
+                        frame_index,
+                    )
+                if not obs_list or not recorder.record_replay_frame(
+                    obs=obs_list[0],
+                    frame_index=frame_index,
+                ):
+                    raise RuntimeError(
+                        f'Replay camera observations are unavailable at frame {frame_index}.'
+                    )
+                if frame_index == 0 or (frame_index + 1) % 100 == 0 or frame_index + 1 == frame_count:
+                    print(
+                        '[replay-progress] '
+                        f'episode={episode_idx} frame={frame_index + 1}/{frame_count}',
+                        flush=True,
+                    )
+        source_metrics = dict(source_metadata.get('metrics') or {})
+        source_metrics['replay'] = {
+            'mode': 'kinematic_visual_replay',
+            'source_metadata_path': str(Path(source_metadata_path).resolve()),
+            'frame_count': frame_count,
+        }
+        recorded_dataset = recorder.finalize(task=task, metrics=source_metrics)
+        result = dict(source_metrics)
+        result['seed'] = int(source_metadata['seed'])
+        result['layout_seed'] = int(source_metadata['layout_seed'])
+        result['recorded_dataset'] = recorded_dataset
+        results.append(_to_jsonable(result))
+        _write_json(results_output_path, results)
+        obs_list, active_configs = env.reset([0])
+        if active_configs and active_configs[0] is not None:
+            obs_list = _warm_up_runtime_cameras(env)
+    return results
 
 
 def _worker_mode(args, *, headless: bool):
@@ -808,19 +1041,58 @@ def _worker_mode(args, *, headless: bool):
         worker_recipes = [args.worker_recipe]
     if not worker_recipes:
         raise ValueError('Worker mode requires --worker-recipe or --worker-recipes.')
+    if args.worker_mode == 'replay':
+        source_metadata_paths = [Path(value).resolve() for value in (args.worker_replay_sources or [])]
+        if not source_metadata_paths:
+            raise ValueError('Replay worker mode requires --worker-replay-sources.')
+        source_metadata = [json.loads(path.read_text(encoding='utf-8')) for path in source_metadata_paths]
+        if len(worker_recipes) == 1:
+            replay_recipes = worker_recipes * len(source_metadata)
+        elif len(worker_recipes) == len(source_metadata):
+            replay_recipes = worker_recipes
+        else:
+            raise ValueError('Replay requires one shared recipe or one recipe per source trajectory.')
+        task_configs = _build_collect_worker_task_configs(
+            recipes=replay_recipes,
+            seeds=[int(item['seed']) for item in source_metadata],
+            layout_seeds=[int(item['layout_seed']) for item in source_metadata],
+            scene_profile=scene_profile,
+            attach_runtime_cameras=True,
+            domain_randomization_enabled=True,
+            randomization_profile=args.randomization_profile,
+            control_fps=max(int(args.rendering_fps), 1) if int(args.rendering_fps) > 0 else 80,
+        )
+        _run_replay_sequence(
+            task_configs,
+            source_metadata_paths,
+            headless=headless,
+            output_dir=Path(args.output_dir).resolve(),
+            results_output_path=Path(args.worker_results_path).resolve(),
+            video_codec=args.video_codec,
+            video_crf=args.video_crf,
+            video_preset=args.video_preset,
+            depth_compression_level=args.depth_compression_level,
+        )
+        return
     if args.worker_mode == 'search':
         if len(worker_recipes) != 1:
             raise ValueError('Search worker mode supports exactly one recipe.')
-        _run_task_sequence(
-            task_configs=build_dual_franka_assembly_batch(
-                recipe=worker_recipes[0],
-                seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
-                scene_profile=scene_profile,
-                attach_runtime_cameras=bool(
-                    args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb
-                ),
-                domain_randomization_enabled=True if args.domain_randomization else None,
+        task_configs = build_dual_franka_assembly_batch(
+            recipe=worker_recipes[0],
+            seeds=list(range(args.start_seed, args.start_seed + args.max_trials)),
+            scene_profile=scene_profile,
+            attach_runtime_cameras=bool(
+                args.record_live_video
+                or (args.record_lerobot_raw and not args.record_trajectory_only)
+                or args.runtime_capture_rgb
             ),
+            domain_randomization_enabled=True if args.domain_randomization else None,
+            randomization_profile=args.randomization_profile,
+            control_fps=max(int(args.rendering_fps), 1) if int(args.rendering_fps) > 0 else 240,
+        )
+        _limit_worker_episode_steps(task_configs, args.worker_max_steps)
+        _run_task_sequence(
+            task_configs=task_configs,
             headless=headless,
             results_output_path=Path(args.worker_results_path).resolve(),
             output_dir=Path(args.output_dir).resolve(),
@@ -850,8 +1122,13 @@ def _worker_mode(args, *, headless: bool):
             stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
             record_episode_steps=not bool(args.skip_episode_steps or args.record_lerobot_raw),
             record_lerobot_raw=bool(args.record_lerobot_raw),
+            record_trajectory_only=bool(args.record_trajectory_only),
             dataset_fps=max(int(args.dataset_fps), 1),
             dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
+            video_codec=args.video_codec,
+            video_crf=args.video_crf,
+            video_preset=args.video_preset,
+            depth_compression_level=args.depth_compression_level,
             rendering_fps=(
                 max(int(args.rendering_fps), 1)
                 if int(args.rendering_fps) > 0
@@ -864,17 +1141,25 @@ def _worker_mode(args, *, headless: bool):
     if args.worker_mode != 'collect':
         raise ValueError(f'Unsupported worker mode: {args.worker_mode!r}')
 
-    _run_task_sequence(
-        task_configs=_build_collect_worker_task_configs(
-            recipes=worker_recipes,
-            seeds=[int(seed) for seed in (args.worker_seeds or [])],
-            layout_seeds=None
-            if not args.worker_layout_seeds
-            else [int(seed) for seed in args.worker_layout_seeds],
-            scene_profile=scene_profile,
-            attach_runtime_cameras=bool(args.record_live_video or args.record_lerobot_raw or args.runtime_capture_rgb),
-            domain_randomization_enabled=True if args.domain_randomization else None,
+    task_configs = _build_collect_worker_task_configs(
+        recipes=worker_recipes,
+        seeds=[int(seed) for seed in (args.worker_seeds or [])],
+        layout_seeds=None
+        if not args.worker_layout_seeds
+        else [int(seed) for seed in args.worker_layout_seeds],
+        scene_profile=scene_profile,
+        attach_runtime_cameras=bool(
+            args.record_live_video
+            or (args.record_lerobot_raw and not args.record_trajectory_only)
+            or args.runtime_capture_rgb
         ),
+        domain_randomization_enabled=True if args.domain_randomization else None,
+        randomization_profile=args.randomization_profile,
+        control_fps=max(int(args.rendering_fps), 1) if int(args.rendering_fps) > 0 else 240,
+    )
+    _limit_worker_episode_steps(task_configs, args.worker_max_steps)
+    _run_task_sequence(
+        task_configs=task_configs,
         headless=headless,
         output_dir=Path(args.output_dir).resolve(),
         results_output_path=Path(args.worker_results_path).resolve(),
@@ -904,8 +1189,13 @@ def _worker_mode(args, *, headless: bool):
         stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
         record_episode_steps=not bool(args.skip_episode_steps or args.record_lerobot_raw),
         record_lerobot_raw=bool(args.record_lerobot_raw),
+        record_trajectory_only=bool(args.record_trajectory_only),
         dataset_fps=max(int(args.dataset_fps), 1),
         dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
+        video_codec=args.video_codec,
+        video_crf=args.video_crf,
+        video_preset=args.video_preset,
+        depth_compression_level=args.depth_compression_level,
         rendering_fps=(
             max(int(args.rendering_fps), 1)
             if int(args.rendering_fps) > 0
@@ -952,6 +1242,7 @@ def _invoke_worker(
     dataset_frame_stride: int = 8,
     rendering_fps: int = 0,
     domain_randomization: bool = False,
+    randomization_profile: str = 'mixed',
 ):
     command = [
         sys.executable,
@@ -987,6 +1278,7 @@ def _invoke_worker(
         command.extend(['--rendering-fps', str(int(rendering_fps))])
     if domain_randomization:
         command.append('--domain-randomization')
+        command.extend(['--randomization-profile', str(randomization_profile)])
     if runtime_robochecker:
         command.append('--runtime-robochecker')
         command.extend(['--runtime-checker-stride', str(int(runtime_checker_stride))])
@@ -1058,6 +1350,7 @@ def _results_from_worker(
     dataset_frame_stride: int = 8,
     rendering_fps: int = 0,
     domain_randomization: bool = False,
+    randomization_profile: str = 'mixed',
 ) -> list[dict]:
     worker_dir.mkdir(parents=True, exist_ok=True)
     results_path = worker_dir / (
@@ -1102,6 +1395,7 @@ def _results_from_worker(
         dataset_frame_stride=dataset_frame_stride,
         rendering_fps=rendering_fps,
         domain_randomization=domain_randomization,
+        randomization_profile=randomization_profile,
     )
     if not results_path.exists():
         raise RuntimeError(
@@ -1148,28 +1442,50 @@ def main():
     parser.add_argument('--start-seed', type=int, default=0)
     parser.add_argument('--max-trials', type=int, default=20)
     parser.add_argument('--resume', action='store_true')
-    parser.add_argument('--worker-mode', choices=['search', 'collect'], default=None)
+    parser.add_argument('--worker-mode', choices=['search', 'collect', 'replay'], default=None)
     parser.add_argument('--worker-recipe', type=str, default=None)
     parser.add_argument('--worker-recipes', nargs='+', default=None)
     parser.add_argument('--worker-scene-profile', type=str, default=None)
     parser.add_argument('--worker-results-path', type=str, default=None)
     parser.add_argument('--worker-seeds', nargs='*', default=None)
     parser.add_argument('--worker-layout-seeds', nargs='*', default=None)
+    parser.add_argument('--worker-replay-sources', nargs='*', default=None)
     parser.add_argument(
         '--worker-rendering-interval',
         type=int,
         default=None,
         help='Override sparse rendering for worker-only, non-image debug rollouts.',
     )
+    parser.add_argument(
+        '--worker-max-steps',
+        type=int,
+        default=None,
+        help='Cap each worker episode for lifecycle smoke tests; omitted for full collection.',
+    )
     parser.add_argument('--record-live-video', action='store_true')
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)
     parser.add_argument('--keep-video-frames', action='store_true')
     parser.add_argument('--record-lerobot-raw', action='store_true')
+    parser.add_argument(
+        '--record-trajectory-only',
+        action='store_true',
+        help='Record synchronized replay state without runtime cameras or RGB-D media.',
+    )
     parser.add_argument('--dataset-fps', type=int, default=30)
     parser.add_argument('--dataset-frame-stride', type=int, default=8)
+    parser.add_argument('--video-codec', choices=['h264', 'h265'], default='h264')
+    parser.add_argument('--video-crf', type=int, default=23)
+    parser.add_argument('--video-preset', default='veryfast')
+    parser.add_argument('--depth-compression-level', type=int, default=5)
     parser.add_argument('--rendering-fps', type=int, default=0)
     parser.add_argument('--domain-randomization', action='store_true')
+    parser.add_argument(
+        '--randomization-profile',
+        choices=RANDOMIZATION_PROFILE_CHOICES,
+        default='mixed',
+        help='Select one recorded domain-randomization subset; mixed preserves the legacy behavior.',
+    )
     parser.add_argument(
         '--skip-episode-steps',
         action='store_true',
@@ -1285,6 +1601,7 @@ def main():
                 stage_precheck_waypoints=max(int(args.stage_precheck_waypoints), 2),
                 skip_episode_steps=bool(args.skip_episode_steps),
                 domain_randomization=bool(args.domain_randomization),
+                randomization_profile=args.randomization_profile,
             )
             successful_seeds = [result['seed'] for result in search_results if result.get('success')][: args.num_demos]
             if not successful_seeds:
@@ -1334,6 +1651,7 @@ def main():
                 dataset_frame_stride=max(int(args.dataset_frame_stride), 1),
                 rendering_fps=max(int(args.rendering_fps), 0),
                 domain_randomization=bool(args.domain_randomization),
+                randomization_profile=args.randomization_profile,
             )
             runtime_failed_results = _runtime_failed_results(results) if args.runtime_robochecker else []
             if runtime_failed_results:
@@ -1382,6 +1700,7 @@ def main():
                 'dataset_fps': max(int(args.dataset_fps), 1),
                 'dataset_frame_stride': max(int(args.dataset_frame_stride), 1),
                 'domain_randomization': bool(args.domain_randomization),
+                'randomization_profile': args.randomization_profile,
                 'successful_seeds': successful_seeds,
                 'asset_references': _to_jsonable(recipe_spec.get('asset_references', [])),
                 'metadata': _to_jsonable(recipe_spec.get('metadata', {})),

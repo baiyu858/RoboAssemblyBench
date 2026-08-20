@@ -27,6 +27,8 @@ _UR5E_ARM_JOINT_NAMES = (
     'wrist_2_joint',
     'wrist_3_joint',
 )
+_FRANKA_ARM_JOINT_NAMES = tuple(f'panda_joint{index}' for index in range(1, 8))
+_SUPPORTED_ARM_JOINT_NAMES = (_FRANKA_ARM_JOINT_NAMES, _UR5E_ARM_JOINT_NAMES)
 _CARTESIAN_SERVO_SKILLS = frozenset(
     {
         'ur5e_move_above_part',
@@ -52,12 +54,17 @@ class UR5eAssemblyAtomicSkillAdapter:
         del spec
         self.spec: dict[str, Any] = {}
         self._last_targets: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._prealign_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._phase_locks: dict[tuple[Any, ...], dict[str, np.ndarray]] = {}
         self._close_gate_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._preshape_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._grasp_slip_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._completion_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._ik_failure_state: dict[tuple[Any, ...], int] = {}
+        self._ik_stall_recovery_state: dict[tuple[Any, ...], dict[str, int]] = {}
+        self._locked_transport_ik_targets: dict[tuple[Any, ...], np.ndarray] = {}
+        self._pickup_terminal_ik_seeds: dict[tuple[int, str, str], np.ndarray] = {}
+        self._continuous_transport_ik_fallbacks: set[tuple[Any, ...]] = set()
         self._last_arm_command_q: dict[str, np.ndarray] = {}
         self._cartesian_command_positions: dict[tuple[Any, ...], np.ndarray] = {}
         self._cartesian_command_orientations: dict[tuple[Any, ...], np.ndarray] = {}
@@ -69,6 +76,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         self._insertion_lateral_clearance_anchors: dict[tuple[Any, ...], float] = {}
         self._target_object_settle_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._physically_relaxed_insertion_objects: set[tuple[int, str]] = set()
+        self._completed_insertion_compliance_transitions: set[tuple[int, str]] = set()
         self._insertion_compliance_transition_state: dict[tuple[int, str], dict[str, Any]] = {}
         self._compliant_motion_recovery_state: dict[tuple[int, str], dict[str, Any]] = {}
 
@@ -251,6 +259,15 @@ class UR5eAssemblyAtomicSkillAdapter:
                 )
             return action
 
+        if skill_name in {'move_arm_to_joint_positions', 'ur5e_move_arm_to_joint_positions'}:
+            return self._move_arm_to_joint_positions_action(
+                phase_key=phase_key,
+                task=task,
+                robot_name=robot_name,
+                skill_name=skill_name,
+                spec=spec,
+            )
+
         target_pose = self._target_pose(
             phase_key=phase_key,
             task=task,
@@ -264,6 +281,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         target_pose = self._locked_target_pose(phase_key=phase_key, target_pose=target_pose, spec=spec)
 
         prealign_action = self._prealign_action(
+            phase_key=phase_key,
             task=task,
             robot_name=robot_name,
             target_pose=target_pose,
@@ -304,6 +322,25 @@ class UR5eAssemblyAtomicSkillAdapter:
             spec=spec,
             tracked_objects=tracked_objects,
         )
+        object_name = self._object_name_from_spec(spec)
+        compliance_transition_key = None if object_name is None else (id(task), object_name)
+        if compliance_transition_key in self._completed_insertion_compliance_transitions:
+            self._completed_insertion_compliance_transitions.discard(compliance_transition_key)
+            self._mark_complete(
+                task=task,
+                robot_name=robot_name,
+                skill_name=skill_name,
+                detail={
+                    'completion_reason': 'stable_physical_insertion_capture',
+                    'object': object_name,
+                    'phase': getattr(task, 'phase', None),
+                },
+            )
+            return self._held_transport_action(
+                task=task,
+                robot_name=robot_name,
+                spec=spec,
+            )
         if compliance_transition_hold:
             return self._held_transport_action(
                 task=task,
@@ -370,8 +407,36 @@ class UR5eAssemblyAtomicSkillAdapter:
                 spec=spec,
             )
         cartesian_servo = bool(spec.get('cartesian_servo', skill_name in _CARTESIAN_SERVO_SKILLS))
+        lock_transport_ik_target = self._use_locked_transport_ik_target(spec)
+        lock_pickup_ik_target = self._use_locked_pickup_ik_target(
+            skill_name=skill_name,
+            spec=spec,
+            current_pose=current_pose,
+            target_pose=target_pose,
+            already_locked=phase_key in self._locked_transport_ik_targets,
+        )
+        lock_cartesian_ik_target = lock_transport_ik_target or lock_pickup_ik_target
+        if lock_pickup_ik_target and phase_key not in self._locked_transport_ik_targets:
+            object_name = self._object_name_from_spec(spec)
+            if object_name is not None:
+                terminal_seed = self._pickup_terminal_ik_seeds.get(
+                    (id(task), robot_name, object_name)
+                )
+                terminal_seed = self._coerce_arm_q(
+                    terminal_seed,
+                    bound_revolute=False,
+                )
+                if terminal_seed is not None:
+                    self._locked_transport_ik_targets[phase_key] = terminal_seed.copy()
+                    print(
+                        '[assembly-ik-target-lock] '
+                        f"step={getattr(task, 'step_counter', None)} "
+                        f"phase={getattr(task, 'phase', None)} robot={robot_name} "
+                        'source=pickup_terminal_seed',
+                        flush=True,
+                    )
         command_target_pose = target_pose
-        if cartesian_servo and current_pose is not None:
+        if cartesian_servo and current_pose is not None and not lock_cartesian_ik_target:
             orientation_first_pose = self._orientation_first_servo_pose(
                 skill_name=skill_name,
                 spec=spec,
@@ -455,13 +520,138 @@ class UR5eAssemblyAtomicSkillAdapter:
 
         current_q = self._current_arm_q(task, robot_name)
         reference_q = self._command_reference_q(task=task, robot_name=robot_name, current_q=current_q, spec=spec)
-        ik_result = self._solve_ik(
-            task=task,
-            robot_name=robot_name,
-            target_pose=ik_target_pose,
-            warm_start=reference_q,
-            spec=spec,
-        )
+        # Once an exact free-space endpoint has been rejected, the Cartesian
+        # continuation may need Lula's global seed set for a nearby waypoint.
+        # Keep the normal warm-start contract for all other phases, but do not
+        # repeatedly ask a known-failed local-only solve to cross that boundary.
+        ik_solve_spec = spec
+        if lock_cartesian_ik_target:
+            ik_result = self._locked_transport_ik_target(
+                phase_key=phase_key,
+                task=task,
+                robot_name=robot_name,
+                target_pose=ik_target_pose,
+                reference_q=reference_q,
+                spec=spec,
+            )
+            if phase_key in self._continuous_transport_ik_fallbacks:
+                lock_transport_ik_target = False
+                lock_pickup_ik_target = False
+                lock_cartesian_ik_target = False
+                ik_solve_spec = {
+                    **spec,
+                    'require_warm_start_ik': False,
+                    'warm_start_ik_only': False,
+                }
+                if cartesian_servo and current_pose is not None:
+                    command_target_pose = self._target_object_servo_pose(
+                        phase_key=phase_key,
+                        task=task,
+                        robot_name=robot_name,
+                        spec=spec,
+                        tracked_robots=tracked_robots,
+                        tracked_objects=tracked_objects,
+                        current_pose=current_pose,
+                        target_pose=target_pose,
+                    )
+                ik_target_pose = self._ik_target_pose(target_pose=command_target_pose, spec=spec)
+                ik_result = self._solve_ik(
+                    task=task,
+                    robot_name=robot_name,
+                    target_pose=ik_target_pose,
+                    warm_start=reference_q,
+                    spec=ik_solve_spec,
+                )
+                warm_start_stalled = self._ik_solution_stalled(
+                    ik_result=ik_result,
+                    measured_q=current_q,
+                    warm_start_q=reference_q,
+                    current_pose=current_pose,
+                    command_target_pose=command_target_pose,
+                    spec=spec,
+                )
+            else:
+                warm_start_stalled = False
+        else:
+            ik_result = self._solve_ik(
+                task=task,
+                robot_name=robot_name,
+                target_pose=ik_target_pose,
+                warm_start=reference_q,
+                spec=ik_solve_spec,
+            )
+            warm_start_stalled = self._ik_solution_stalled(
+                ik_result=ik_result,
+                measured_q=current_q,
+                warm_start_q=reference_q,
+                current_pose=current_pose,
+                command_target_pose=command_target_pose,
+                spec=ik_solve_spec,
+            )
+        if warm_start_stalled:
+            # Lula may declare a locally warm-started solve successful while it
+            # returns the seed unchanged. Treat that as no solution for a
+            # non-trivial Cartesian command and retry its global search.
+            stall_state = self._ik_stall_recovery_state.setdefault(phase_key, {})
+            stalled_steps = int(stall_state.get('stalled_steps', 0)) + 1
+            stall_state['stalled_steps'] = stalled_steps
+            reseed_after_steps = max(int(spec.get('ik_stall_reseed_after_steps', 3)), 1)
+            retry_interval_steps = max(int(spec.get('ik_stall_reseed_retry_interval_steps', 60)), 1)
+            current_step = int(getattr(task, 'step_counter', 0))
+            last_reseed_step = int(stall_state.get('last_reseed_step', -retry_interval_steps))
+            should_reseed = (
+                stalled_steps >= reseed_after_steps
+                and current_step - last_reseed_step >= retry_interval_steps
+            )
+            if should_reseed:
+                stall_state['last_reseed_step'] = current_step
+                global_result = self._solve_ik(
+                    task=task,
+                    robot_name=robot_name,
+                    target_pose=ik_target_pose,
+                    warm_start=None,
+                    spec={
+                        **ik_solve_spec,
+                        'use_command_warm_start': False,
+                        'require_warm_start_ik': False,
+                        'warm_start_ik_only': False,
+                    },
+                )
+                if not self._ik_solution_stalled(
+                    ik_result=global_result,
+                    measured_q=current_q,
+                    warm_start_q=None,
+                    current_pose=current_pose,
+                    command_target_pose=command_target_pose,
+                    spec=ik_solve_spec,
+                ):
+                    ik_result = global_result
+                    stall_state['stalled_steps'] = 0
+                    print(
+                        '[assembly-ik-recovery] '
+                        f"event=global_reseed step={current_step} "
+                        f"phase={getattr(task, 'phase', None)} robot={robot_name} ",
+                        flush=True,
+                    )
+                else:
+                    # Do not keep issuing a zero-motion command for an
+                    # unreachable target.  The established backtracking and
+                    # bounded failure path below can now recover or fail fast.
+                    ik_result = None
+                    print(
+                        '[assembly-ik-recovery] '
+                        f"event=stalled_no_global_solution step={current_step} "
+                        f"phase={getattr(task, 'phase', None)} robot={robot_name} "
+                        f"stalled_steps={stalled_steps}",
+                        flush=True,
+                    )
+            elif stalled_steps >= reseed_after_steps:
+                # A prior global solve already rejected this target.  Route
+                # this step through backtracking/failure rather than timing
+                # out hundreds of identical Cartesian servo commands.
+                ik_result = None
+        else:
+            self._ik_stall_recovery_state.pop(phase_key, None)
         retried_with_measured_state = False
         measured_q = self._coerce_arm_q(current_q)
         if (
@@ -480,8 +670,17 @@ class UR5eAssemblyAtomicSkillAdapter:
                 robot_name=robot_name,
                 target_pose=ik_target_pose,
                 warm_start=measured_q,
-                spec=spec,
+                spec=ik_solve_spec,
             )
+            if self._ik_solution_stalled(
+                ik_result=ik_result,
+                measured_q=measured_q,
+                warm_start_q=measured_q,
+                current_pose=current_pose,
+                command_target_pose=command_target_pose,
+                spec=spec,
+            ):
+                ik_result = None
         ik_backtrack_ratio = None
         if ik_result is None and cartesian_servo and current_pose is not None:
             for raw_ratio in spec.get('ik_backtrack_ratios', (0.5, 0.25, 0.125)):
@@ -505,8 +704,9 @@ class UR5eAssemblyAtomicSkillAdapter:
                     robot_name=robot_name,
                     target_pose=candidate_ik_pose,
                     warm_start=reference_q,
-                    spec=spec,
+                    spec=ik_solve_spec,
                 )
+                candidate_warm_start = reference_q
                 if (
                     candidate_result is None
                     and bool(spec.get('ik_retry_with_measured_state', True))
@@ -523,9 +723,19 @@ class UR5eAssemblyAtomicSkillAdapter:
                         robot_name=robot_name,
                         target_pose=candidate_ik_pose,
                         warm_start=measured_q,
-                        spec=spec,
+                        spec=ik_solve_spec,
                     )
+                    candidate_warm_start = measured_q
                 if candidate_result is None:
+                    continue
+                if self._ik_solution_stalled(
+                    ik_result=candidate_result,
+                    measured_q=measured_q,
+                    warm_start_q=candidate_warm_start,
+                    current_pose=current_pose,
+                    command_target_pose=candidate_command_pose,
+                    spec=ik_solve_spec,
+                ):
                     continue
                 ik_result = candidate_result
                 command_target_pose = candidate_command_pose
@@ -576,9 +786,21 @@ class UR5eAssemblyAtomicSkillAdapter:
                     'last_backtrack_ratio': ik_backtrack_ratio,
                 },
             )
-        target_q = self._unwrap_to_reference(
-            target_q=ik_result,
+        branch_reference_q = self._ik_branch_reference_q(
+            phase_key=phase_key,
             reference_q=reference_q,
+            spec=spec,
+        )
+        # Lula may return the same revolute-joint pose on opposite sides of the
+        # +/-pi representation boundary.  Normalize against the last accepted
+        # IK endpoint for this phase before deciding whether the branch jumped.
+        target_normalization_q = (
+            branch_reference_q if branch_reference_q is not None else reference_q
+        )
+        target_q = self._joint_target_near_reference(
+            target_q=ik_result,
+            reference_q=target_normalization_q,
+            spec=spec,
             preferred_abs_limit=spec.get('preferred_joint_abs_limit', 3.05),
             hard_preferred_abs_limit=bool(spec.get('hard_preferred_joint_abs_limit', True)),
         )
@@ -593,11 +815,17 @@ class UR5eAssemblyAtomicSkillAdapter:
                     'target_orientation': target_pose['orientation'].tolist(),
                 },
             )
-        guard_branch_jump = bool(spec.get('guard_ik_branch_jump', cartesian_servo))
+        # Locked free-space endpoints may intentionally use another redundancy
+        # branch; fine Cartesian servo must stay on the local branch.
+        guard_branch_jump = bool(
+            spec.get('guard_ik_branch_jump', cartesian_servo)
+            and not lock_cartesian_ik_target
+        )
         branch_jump = bool(
             guard_branch_jump
+            and branch_reference_q is not None
             and self._ik_branch_jump_detected(
-                reference_q=reference_q,
+                reference_q=branch_reference_q,
                 target_q=target_q,
                 spec=spec,
             )
@@ -612,6 +840,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 current_pose=current_pose,
                 command_target_pose=command_target_pose,
                 reference_q=reference_q,
+                branch_reference_q=branch_reference_q,
                 measured_q=measured_q,
             )
             if recovery is not None:
@@ -664,6 +893,8 @@ class UR5eAssemblyAtomicSkillAdapter:
             spec=spec,
             joint_count=reference_q.shape[0],
         )
+        if lock_cartesian_ik_target and spec.get('locked_transport_max_joint_step') is not None:
+            joint_step_limits = spec['locked_transport_max_joint_step']
         if joint_step_limits is None:
             joint_step_limits = float(spec.get('max_joint_step', 0.035))
         command_q = self._limited_joint_target(
@@ -677,10 +908,19 @@ class UR5eAssemblyAtomicSkillAdapter:
             command_q=command_q,
             spec=spec,
         )
+        measured_limit_spec = spec
+        if lock_cartesian_ik_target:
+            locked_tracking_error = spec.get('locked_transport_max_command_tracking_error')
+            if locked_tracking_error is not None:
+                measured_limit_spec = {
+                    **spec,
+                    'max_command_tracking_error': locked_tracking_error,
+                    'max_wrist_command_tracking_error': locked_tracking_error,
+                }
         command_q = self._limit_command_to_measured_state(
             current_q=current_q,
             command_q=command_q,
-            spec=spec,
+            spec=measured_limit_spec,
         )
         self._debug_joint_step(
             task=task,
@@ -855,6 +1095,12 @@ class UR5eAssemblyAtomicSkillAdapter:
             object_position_error = None
             object_orientation_error = None
             object_axial_position_error = None
+            object_axial_position_tolerance = spec.get('target_object_axial_position_tolerance')
+            object_axial_position_tolerance = (
+                None
+                if object_axial_position_tolerance is None
+                else float(object_axial_position_tolerance)
+            )
             object_lateral_position_error = None
             object_lateral_position_tolerance = spec.get('target_object_lateral_position_tolerance')
             object_convergence_axis = spec.get('target_object_convergence_axis')
@@ -894,8 +1140,18 @@ class UR5eAssemblyAtomicSkillAdapter:
                         lateral_complete = bool(
                             object_lateral_position_error <= float(object_lateral_position_tolerance)
                         )
-                object_pose_complete = bool(
+                axial_complete = bool(
+                    object_axial_position_tolerance is None
+                    or object_axial_position_error is None
+                    or object_axial_position_error <= object_axial_position_tolerance
+                )
+                position_complete = (
                     object_position_error <= object_position_tolerance
+                    if object_axial_position_tolerance is None
+                    else axial_complete
+                )
+                object_pose_complete = bool(
+                    position_complete
                     and lateral_complete
                     and (
                         object_orientation_tolerance is None
@@ -921,6 +1177,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                     'object_orientation_error': object_orientation_error,
                     'target_object_convergence_axis': object_convergence_axis,
                     'object_axial_position_error': object_axial_position_error,
+                    'target_object_axial_position_tolerance': object_axial_position_tolerance,
                     'object_lateral_position_error': object_lateral_position_error,
                     'target_object_lateral_alignment_complete': (lateral_alignment_complete),
                     'target_object_lateral_position_tolerance': (
@@ -933,7 +1190,14 @@ class UR5eAssemblyAtomicSkillAdapter:
                     'target_object_pose_complete': object_pose_complete,
                 }
             )
-            complete = bool(complete and object_pose_complete)
+            if bool(spec.get('target_object_capture_requires_tcp', True)):
+                complete = bool(complete and object_pose_complete)
+            else:
+                # For a strict hover, the held object's measured pose is the
+                # physical goal. A fixed/compliant grasp can leave the nominal
+                # TCP offset from the generated target while the object is
+                # already correctly aligned for the following insertion.
+                complete = bool(object_pose_complete)
 
         if bool(spec.get('require_target_object_static', False)):
             object_name = self._object_name_from_spec(spec)
@@ -1139,6 +1403,33 @@ class UR5eAssemblyAtomicSkillAdapter:
             flush=True,
         )
 
+    def _debug_close_gate_step(
+        self,
+        *,
+        task,
+        robot_name: str,
+        detail: dict[str, Any],
+    ) -> None:
+        if not self._debug_close_enabled():
+            return
+        phase_step = int(getattr(task, 'phase_step_counter', 0))
+        every = max(int(os.environ.get('UR5E_DEBUG_CLOSE_GATE_EVERY', '30')), 1)
+        if phase_step > 5 and phase_step % every != 0 and not bool(detail.get('gate_ready')):
+            return
+        print(
+            '[ur5e-close-gate-debug] '
+            f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
+            f'phase_step={phase_step} robot={robot_name} reason={detail.get("reason")} '
+            f'gate_ready={detail.get("gate_ready")} ready_steps={detail.get("ready_steps")}/'
+            f'{detail.get("required_ready_steps")} '
+            f'position_error={detail.get("position_error")}/{detail.get("position_tolerance")} '
+            f'orientation_error={detail.get("orientation_error")}/{detail.get("orientation_tolerance")} '
+            f'joint_error={detail.get("joint_error")}/{detail.get("joint_position_tolerance")} '
+            f'target={detail.get("target_position")} current={detail.get("current_position")} '
+            f'reference_q={detail.get("reference_q")} target_q={detail.get("target_q")}',
+            flush=True,
+        )
+
     def _debug_transport_step(
         self,
         *,
@@ -1321,6 +1612,19 @@ class UR5eAssemblyAtomicSkillAdapter:
                 command_target_pose['orientation'],
             )
         ik_position_tolerance, ik_orientation_tolerance = self._ik_solver_tolerances(spec)
+        arm_dynamics = self._current_arm_dynamics(task=task, robot_name=robot_name)
+        pose_frame_diagnostic = None
+        get_pose_frame_diagnostic = getattr(task, '_get_robot_pose_frame_diagnostic', None)
+        if callable(get_pose_frame_diagnostic):
+            try:
+                pose_frame_diagnostic = get_pose_frame_diagnostic(robot_name)
+            except Exception as exc:
+                pose_frame_diagnostic = {'error': repr(exc)}
+        if isinstance(pose_frame_diagnostic, dict):
+            pose_frame_diagnostic = {
+                key: value.tolist() if isinstance(value, np.ndarray) else value
+                for key, value in pose_frame_diagnostic.items()
+            }
         print(
             '[ur5e-joint-debug] '
             f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
@@ -1341,7 +1645,14 @@ class UR5eAssemblyAtomicSkillAdapter:
             f'ref_to_target_max={_max_abs_delta(reference_q, target_q)} '
             f'ref_to_cmd_max={_max_abs_delta(reference_q, command_q)} '
             f'current_to_cmd_max={_max_abs_delta(current_q, command_q)} '
-            f'current_to_ref_max={_max_abs_delta(current_q, reference_q)}',
+            f'current_to_ref_max={_max_abs_delta(current_q, reference_q)} '
+            f'pose_frame_diagnostic={pose_frame_diagnostic} '
+            f"joint_velocity={arm_dynamics.get('joint_velocity')} "
+            f"measured_effort={arm_dynamics.get('measured_effort')} "
+            f"applied_effort={arm_dynamics.get('applied_effort')} "
+            f"stiffness={arm_dynamics.get('stiffness')} "
+            f"damping={arm_dynamics.get('damping')} "
+            f"max_force={arm_dynamics.get('max_force')}",
             flush=True,
         )
 
@@ -1371,6 +1682,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         current_pose: dict,
         command_target_pose: dict,
         reference_q: np.ndarray,
+        branch_reference_q: np.ndarray,
         measured_q: np.ndarray | None,
     ) -> dict | None:
         candidates: list[tuple[str, dict]] = []
@@ -1446,14 +1758,15 @@ class UR5eAssemblyAtomicSkillAdapter:
                 )
                 if candidate_result is None:
                     continue
-                candidate_q = self._unwrap_to_reference(
+                candidate_q = self._joint_target_near_reference(
                     target_q=candidate_result,
-                    reference_q=reference_q,
+                    reference_q=branch_reference_q,
+                    spec=spec,
                     preferred_abs_limit=spec.get('preferred_joint_abs_limit', 3.05),
                     hard_preferred_abs_limit=bool(spec.get('hard_preferred_joint_abs_limit', True)),
                 )
                 if self._ik_branch_jump_detected(
-                    reference_q=reference_q,
+                    reference_q=branch_reference_q,
                     target_q=candidate_q,
                     spec=spec,
                 ):
@@ -2203,6 +2516,8 @@ class UR5eAssemblyAtomicSkillAdapter:
             if remaining_steps == 0:
                 state['hold_active'] = False
                 state['retry_servo_steps'] = retry_servo_steps
+                self._cartesian_command_positions.pop(phase_key, None)
+                self._cartesian_command_orientations.pop(phase_key, None)
                 event = 'hold_complete'
         elif int(state.get('retry_servo_steps', 0)) > 0:
             state['retry_servo_steps'] = int(state['retry_servo_steps']) - 1
@@ -2213,6 +2528,14 @@ class UR5eAssemblyAtomicSkillAdapter:
             state['hold_active'] = bool(state['remaining_steps'] > 0)
             if not state['hold_active']:
                 state['retry_servo_steps'] = retry_servo_steps
+            self._cartesian_command_positions.pop(phase_key, None)
+            self._cartesian_command_orientations.pop(phase_key, None)
+            self._insertion_lateral_alignment_active[phase_key] = False
+            self._insertion_lateral_alignment_stable_steps.pop(phase_key, None)
+            self._insertion_axial_anchors.pop(phase_key, None)
+            self._insertion_lateral_orientation_anchors.pop(phase_key, None)
+            self._insertion_lateral_clearance_required.pop(phase_key, None)
+            self._insertion_lateral_clearance_anchors.pop(phase_key, None)
             state['capture_count'] = int(state.get('capture_count', 0)) + 1
             event = 'capture'
 
@@ -2458,6 +2781,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             return True
 
         self._physically_relaxed_insertion_objects.add(relaxation_key)
+        self._completed_insertion_compliance_transitions.add(relaxation_key)
         self._insertion_compliance_transition_state.pop(relaxation_key, None)
         print(
             '[ur5e-insertion-compliance] '
@@ -2477,7 +2801,11 @@ class UR5eAssemblyAtomicSkillAdapter:
             f'locked_linear_world_direction={locked_linear_world_direction}',
             flush=True,
         )
-        return True
+        # The fixed grasp has already met the pose and motion gates for the
+        # required consecutive steps. Let this same stable sample complete the
+        # waypoint; waiting one compliant-joint frame can introduce contact
+        # oscillation and turn a valid insertion into a timeout.
+        return False
 
     def _compliant_motion_requires_hold(
         self,
@@ -2758,9 +3086,15 @@ class UR5eAssemblyAtomicSkillAdapter:
         compliant_object_gated = bool(
             attachment_mode == 'compliant_joint' and spec.get('require_target_object_pose_convergence', False)
         )
-        tcp_position_ready = bool(compliant_object_gated or tcp_position_error <= tcp_tolerance)
+        requires_tcp_for_capture = bool(spec.get('target_object_capture_requires_tcp', True))
+        tcp_position_ready = bool(
+            not requires_tcp_for_capture
+            or compliant_object_gated
+            or tcp_position_error <= tcp_tolerance
+        )
         tcp_orientation_ready = bool(
-            compliant_object_gated
+            not requires_tcp_for_capture
+            or compliant_object_gated
             or orientation_tolerance is None
             or tcp_orientation_error is None
             or tcp_orientation_error <= float(orientation_tolerance)
@@ -2817,6 +3151,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 'object_name': object_name,
                 'attachment_mode': attachment_mode,
                 'tcp_pose_required_for_capture': not compliant_object_gated,
+                'target_object_capture_requires_tcp': requires_tcp_for_capture,
                 'relaxed_active': relaxed_active,
                 'tcp_position_error': tcp_position_error,
                 'tcp_position_tolerance': tcp_tolerance,
@@ -3646,7 +3981,9 @@ class UR5eAssemblyAtomicSkillAdapter:
                 float(gate_spec.get('preclose_openness', gate_spec.get('open_openness', 1.0)))
             ]
             state['ready_steps'] = 0
-            return False, action, {'reason': 'close_gate_target_pose_unavailable'}
+            detail = {'reason': 'close_gate_target_pose_unavailable'}
+            self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
+            return False, action, detail
         current_pose = self._current_tcp_pose(
             current_pose=self._current_robot_pose(
                 task=task,
@@ -3693,6 +4030,38 @@ class UR5eAssemblyAtomicSkillAdapter:
             target_pose=target_pose,
             spec=lock_spec,
         )
+        # Keep a terminal Panda IK solution once the measured TCP is close to
+        # the contact pose.  Re-solving the same 7-DoF endpoint every frame
+        # lets the redundant wrist joints drift between equivalent branches;
+        # that drift is especially harmful while the fingers are closing.
+        terminal_ik_target_pose = self._ik_target_pose(target_pose=target_pose, spec=gate_spec)
+        terminal_target_q = self._coerce_arm_q(
+            state.get('terminal_target_q'),
+            bound_revolute=False,
+        )
+        terminal_lock_active = False
+        cached_terminal_pose = state.get('terminal_ik_target_pose')
+        if terminal_target_q is not None and isinstance(cached_terminal_pose, dict):
+            try:
+                cached_position = np.asarray(cached_terminal_pose['position'], dtype=float)
+                cached_orientation = normalize_quat(cached_terminal_pose['orientation'])
+                same_position = bool(
+                    cached_position.shape == (3,)
+                    and np.linalg.norm(cached_position - terminal_ik_target_pose['position']) <= 1e-6
+                )
+                _, cached_orientation_error = pose_error(
+                    current_position=np.zeros(3, dtype=float),
+                    current_orientation=cached_orientation,
+                    target_position=np.zeros(3, dtype=float),
+                    target_orientation=terminal_ik_target_pose['orientation'],
+                )
+                terminal_lock_active = bool(same_position and (cached_orientation_error or 0.0) <= 1e-6)
+            except (KeyError, TypeError, ValueError):
+                terminal_lock_active = False
+            if not terminal_lock_active:
+                state.pop('terminal_target_q', None)
+                state.pop('terminal_ik_target_pose', None)
+                terminal_target_q = None
         command_target_pose = target_pose
         if bool(gate_spec.get('close_gate_cartesian_servo', True)) and current_pose is not None:
             command_target_pose = self._cartesian_servo_target_pose(
@@ -3714,8 +4083,64 @@ class UR5eAssemblyAtomicSkillAdapter:
 
         current_q = self._current_arm_q(task, robot_name)
         reference_q = self._command_reference_q(task=task, robot_name=robot_name, current_q=current_q, spec=gate_spec)
+        object_name = self._object_name_from_spec(gate_spec)
+        pickup_terminal_seed_q = None
+        if object_name is not None:
+            pickup_terminal_seed_q = self._coerce_arm_q(
+                self._pickup_terminal_ik_seeds.get((id(task), robot_name, object_name)),
+                bound_revolute=False,
+                joint_count=None if reference_q is None else reference_q.shape[0],
+            )
         ik_target_pose = self._ik_target_pose(target_pose=command_target_pose, spec=gate_spec)
-        ik_result = self._solve_ik(
+        terminal_position_window = float(
+            gate_spec.get('close_gate_terminal_ik_position_window', 0.04)
+        )
+        terminal_orientation_window = float(
+            gate_spec.get('close_gate_terminal_ik_orientation_window', 0.50)
+        )
+        if (
+            not terminal_lock_active
+            and bool(gate_spec.get('close_gate_lock_terminal_ik_target', True))
+            and current_pose is not None
+            and np.isfinite(terminal_position_window)
+            and terminal_position_window > 0.0
+            and np.isfinite(terminal_orientation_window)
+            and terminal_orientation_window > 0.0
+        ):
+            terminal_position_error, terminal_orientation_error = pose_error(
+                current_position=current_pose['position'],
+                current_orientation=current_pose['orientation'],
+                target_position=target_pose['position'],
+                target_orientation=target_pose['orientation'],
+            )
+            if (
+                terminal_position_error <= terminal_position_window
+                and (
+                    terminal_orientation_error is None
+                    or terminal_orientation_error <= terminal_orientation_window
+                )
+            ):
+                terminal_candidate = self._solve_ik(
+                    task=task,
+                    robot_name=robot_name,
+                    target_pose=terminal_ik_target_pose,
+                    warm_start=(
+                        pickup_terminal_seed_q
+                        if pickup_terminal_seed_q is not None
+                        else reference_q
+                    ),
+                    spec=gate_spec,
+                )
+                terminal_candidate = self._coerce_arm_q(
+                    terminal_candidate,
+                    bound_revolute=False,
+                )
+                if terminal_candidate is not None:
+                    terminal_target_q = terminal_candidate
+                    terminal_lock_active = True
+                    ik_target_pose = terminal_ik_target_pose
+
+        ik_result = terminal_target_q if terminal_lock_active else self._solve_ik(
             task=task,
             robot_name=robot_name,
             target_pose=ik_target_pose,
@@ -3728,19 +4153,20 @@ class UR5eAssemblyAtomicSkillAdapter:
                 float(gate_spec.get('preclose_openness', gate_spec.get('open_openness', 1.0)))
             ]
             state['ready_steps'] = 0
-            return (
-                False,
-                action,
-                {
-                    'reason': 'close_gate_ik_failed',
-                    'target_position': target_pose['position'].tolist(),
-                    'target_orientation': target_pose['orientation'].tolist(),
-                },
-            )
+            detail = {
+                'reason': 'close_gate_ik_failed',
+                'target_position': target_pose['position'].tolist(),
+                'target_orientation': target_pose['orientation'].tolist(),
+                'current_position': None if current_pose is None else current_pose['position'].tolist(),
+                'reference_q': None if reference_q is None else reference_q.tolist(),
+            }
+            self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
+            return False, action, detail
 
-        target_q = self._unwrap_to_reference(
+        target_q = self._joint_target_near_reference(
             target_q=ik_result,
             reference_q=reference_q,
+            spec=gate_spec,
             preferred_abs_limit=gate_spec.get('preferred_joint_abs_limit', 3.05),
             hard_preferred_abs_limit=bool(gate_spec.get('hard_preferred_joint_abs_limit', True)),
         )
@@ -3750,36 +4176,66 @@ class UR5eAssemblyAtomicSkillAdapter:
                 float(gate_spec.get('preclose_openness', gate_spec.get('open_openness', 1.0)))
             ]
             state['ready_steps'] = 0
-            return (
-                False,
-                action,
-                {
-                    'reason': 'close_gate_current_joint_state_unavailable',
-                    'target_position': target_pose['position'].tolist(),
-                    'target_orientation': target_pose['orientation'].tolist(),
-                },
-            )
-        if bool(gate_spec.get('close_gate_guard_ik_branch_jump', True)) and self._ik_branch_jump_detected(
+            detail = {
+                'reason': 'close_gate_current_joint_state_unavailable',
+                'target_position': target_pose['position'].tolist(),
+                'target_orientation': target_pose['orientation'].tolist(),
+                'current_position': None if current_pose is None else current_pose['position'].tolist(),
+            }
+            self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
+            return False, action, detail
+        branch_reference_q = self._ik_branch_reference_q(
+            phase_key=phase_key,
             reference_q=reference_q,
+            spec=gate_spec,
+        )
+        pickup_terminal_seed_match = False
+        if terminal_lock_active and pickup_terminal_seed_q is not None:
+            try:
+                seed_tolerance = float(
+                    gate_spec.get('close_gate_pickup_terminal_seed_tolerance', 0.15)
+                )
+            except (TypeError, ValueError):
+                seed_tolerance = 0.0
+            pickup_terminal_seed_match = bool(
+                np.isfinite(seed_tolerance)
+                and seed_tolerance > 0.0
+                and pickup_terminal_seed_q.shape == target_q.shape
+                and float(np.max(np.abs(target_q - pickup_terminal_seed_q)))
+                <= seed_tolerance
+            )
+        branch_jump_detected = self._ik_branch_jump_detected(
+            reference_q=branch_reference_q,
             target_q=target_q,
             spec=gate_spec,
+        )
+        if (
+            bool(gate_spec.get('close_gate_guard_ik_branch_jump', True))
+            and branch_jump_detected
+            and not pickup_terminal_seed_match
         ):
             action = self._hold_joint_action(task=task, robot_name=robot_name)
             action[_GRIPPER_CONTROLLER] = [
                 float(gate_spec.get('preclose_openness', gate_spec.get('open_openness', 1.0)))
             ]
             state['ready_steps'] = 0
-            return (
-                False,
-                action,
-                {
-                    'reason': 'close_gate_ik_branch_jump_guard',
-                    'target_position': target_pose['position'].tolist(),
-                    'target_orientation': target_pose['orientation'].tolist(),
-                    'reference_q': reference_q.tolist(),
-                    'target_q': target_q.tolist(),
-                },
-            )
+            detail = {
+                'reason': 'close_gate_ik_branch_jump_guard',
+                'target_position': target_pose['position'].tolist(),
+                'target_orientation': target_pose['orientation'].tolist(),
+                'current_position': None if current_pose is None else current_pose['position'].tolist(),
+                'reference_q': branch_reference_q.tolist(),
+                'target_q': target_q.tolist(),
+                'pickup_terminal_seed_match': pickup_terminal_seed_match,
+            }
+            self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
+            return False, action, detail
+        if terminal_lock_active:
+            state['terminal_target_q'] = np.asarray(target_q, dtype=float).copy()
+            state['terminal_ik_target_pose'] = {
+                'position': np.asarray(terminal_ik_target_pose['position'], dtype=float).copy(),
+                'orientation': normalize_quat(terminal_ik_target_pose['orientation']).copy(),
+            }
         command_q = self._limited_joint_target(
             current_q=reference_q,
             target_q=target_q,
@@ -3816,6 +4272,14 @@ class UR5eAssemblyAtomicSkillAdapter:
             'ik_target_position': ik_target_pose['position'].tolist(),
             'ik_target_orientation': ik_target_pose['orientation'].tolist(),
             'recenter_offset_world': recenter_offset.tolist(),
+            'current_position': None if current_pose is None else current_pose['position'].tolist(),
+            'reference_q': reference_q.tolist(),
+            'target_q': target_q.tolist(),
+            'terminal_ik_locked': terminal_lock_active,
+            'pickup_terminal_seed_match': pickup_terminal_seed_match,
+            'branch_jump_bypassed_for_pickup_terminal_seed': bool(
+                branch_jump_detected and pickup_terminal_seed_match
+            ),
         }
         ready = False
         if current_pose is not None:
@@ -3873,6 +4337,12 @@ class UR5eAssemblyAtomicSkillAdapter:
         detail['ready_steps'] = int(state.get('ready_steps', 0))
         detail['required_ready_steps'] = required_ready_steps
         detail['gate_ready'] = gate_ready
+        self._last_targets[phase_key] = {
+            'position': target_pose['position'].copy(),
+            'orientation': target_pose['orientation'].copy(),
+            'target_q': target_q.copy(),
+        }
+        self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
         if gate_ready:
             if 'close_started_step' not in state:
                 state['close_started_step'] = int(getattr(task, 'phase_step_counter', 0))
@@ -3887,37 +4357,224 @@ class UR5eAssemblyAtomicSkillAdapter:
                 state['hold_q'] = np.asarray(command_q, dtype=float).copy()
         return gate_ready, action, detail
 
-    def _prealign_action(self, *, task, robot_name: str, target_pose: dict, spec: dict):
+    def _prealign_action(self, *, phase_key, task, robot_name: str, target_pose: dict, spec: dict):
         prealign_steps = int(spec.get('prealign_steps', 0) or 0)
         if prealign_steps <= 0:
             return None
-        if int(getattr(task, 'phase_step_counter', 0)) >= prealign_steps:
+        phase_step_counter = int(getattr(task, 'phase_step_counter', 0))
+        until_converged = bool(spec.get('prealign_until_converged', False))
+        if not until_converged and phase_step_counter >= prealign_steps:
+            return None
+        prealign_state = self._prealign_state.setdefault(phase_key, {})
+        if until_converged and bool(prealign_state.get('converged', False)):
             return None
 
         current_q = self._current_arm_q(task, robot_name)
         reference_q = self._command_reference_q(task=task, robot_name=robot_name, current_q=current_q, spec=spec)
         if reference_q is None or reference_q.shape[0] < 1:
+            if until_converged:
+                return self._failure_or_hold(
+                    task,
+                    robot_name,
+                    spec,
+                    'prealign_joint_state_unavailable',
+                    diagnostics={'phase_step_counter': phase_step_counter},
+                )
             return None
 
-        desired_q = reference_q.copy()
-        if spec.get('prealign_joint_positions') is not None:
-            joint_values = np.asarray(spec['prealign_joint_positions'], dtype=float)
-            desired_q[: min(desired_q.shape[0], joint_values.shape[0])] = joint_values[: desired_q.shape[0]]
-        else:
-            shoulder_pan = spec.get('prealign_shoulder_pan')
-            if shoulder_pan is None and bool(spec.get('prealign_shoulder_pan_from_target', False)):
-                shoulder_pan = self._target_facing_shoulder_pan(
+        desired_q = None
+        if bool(spec.get('prealign_target_ik', False)):
+            desired_q = self._coerce_arm_q(
+                prealign_state.get('target_q'),
+                bound_revolute=False,
+            )
+            if desired_q is None:
+                ik_target_pose = self._ik_target_pose(target_pose=target_pose, spec=spec)
+                terminal_seed_q = None
+                if bool(spec.get('prealign_terminal_ik_seed', False)):
+                    terminal_target_pose = self._prealign_terminal_target_pose(
+                        target_pose=target_pose,
+                        spec=spec,
+                    )
+                    if terminal_target_pose is not None:
+                        terminal_seed_q = self._solve_ik(
+                            task=task,
+                            robot_name=robot_name,
+                            target_pose=self._ik_target_pose(
+                                target_pose=terminal_target_pose,
+                                spec=spec,
+                            ),
+                            warm_start=reference_q,
+                            spec={
+                                **spec,
+                                'require_warm_start_ik': False,
+                                'warm_start_ik_only': False,
+                            },
+                        )
+                        if terminal_seed_q is not None:
+                            terminal_seed_q = self._joint_target_near_reference(
+                                target_q=terminal_seed_q,
+                                reference_q=reference_q,
+                                spec=spec,
+                                preferred_abs_limit=spec.get('preferred_joint_abs_limit', 3.05),
+                                hard_preferred_abs_limit=bool(
+                                    spec.get('hard_preferred_joint_abs_limit', True)
+                                ),
+                            )
+                ik_result = self._solve_ik(
                     task=task,
                     robot_name=robot_name,
-                    target_position=target_pose['position'],
-                    yaw_offset=float(spec.get('prealign_shoulder_pan_yaw_offset', -0.47)),
+                    target_pose=ik_target_pose,
+                    warm_start=terminal_seed_q if terminal_seed_q is not None else reference_q,
+                    spec={
+                        **spec,
+                        'require_warm_start_ik': terminal_seed_q is not None,
+                        'warm_start_ik_only': terminal_seed_q is not None,
+                    },
                 )
-            if shoulder_pan is None:
-                return None
-            desired_q[0] = float(shoulder_pan)
+                if ik_result is not None:
+                    desired_q = self._joint_target_near_reference(
+                        target_q=ik_result,
+                        reference_q=reference_q,
+                        spec=spec,
+                        preferred_abs_limit=spec.get('preferred_joint_abs_limit', 3.05),
+                        hard_preferred_abs_limit=bool(spec.get('hard_preferred_joint_abs_limit', True)),
+                    )
+                    prealign_state['target_q'] = desired_q.copy()
+                    if terminal_seed_q is not None:
+                        prealign_state['terminal_seed_q'] = terminal_seed_q.copy()
+                        object_name = self._object_name_from_spec(spec)
+                        if object_name is not None:
+                            self._pickup_terminal_ik_seeds[
+                                (id(task), robot_name, object_name)
+                            ] = terminal_seed_q.copy()
+                    print(
+                        '[assembly-ik-prealign] '
+                        f"step={getattr(task, 'step_counter', None)} "
+                        f"phase={getattr(task, 'phase', None)} robot={robot_name} "
+                        f"maximum_joint_delta={float(np.max(np.abs(desired_q - reference_q))):.6f} "
+                        f"terminal_seed={terminal_seed_q is not None}",
+                        flush=True,
+                    )
 
+        if desired_q is None:
+            desired_q = reference_q.copy()
+            if spec.get('prealign_joint_positions') is not None:
+                joint_values = np.asarray(spec['prealign_joint_positions'], dtype=float)
+                desired_q[: min(desired_q.shape[0], joint_values.shape[0])] = joint_values[: desired_q.shape[0]]
+            else:
+                shoulder_pan = spec.get('prealign_shoulder_pan')
+                if shoulder_pan is None and bool(spec.get('prealign_shoulder_pan_from_target', False)):
+                    shoulder_pan = self._target_facing_shoulder_pan(
+                        task=task,
+                        robot_name=robot_name,
+                        target_position=target_pose['position'],
+                        yaw_offset=float(spec.get('prealign_shoulder_pan_yaw_offset', -0.47)),
+                    )
+                if shoulder_pan is None:
+                    return None
+                desired_q[0] = float(shoulder_pan)
+
+        if until_converged:
+            try:
+                tolerance = float(spec.get('prealign_joint_position_tolerance', 0.05))
+            except (TypeError, ValueError):
+                tolerance = float('nan')
+            try:
+                timeout_steps = int(spec.get('prealign_timeout_steps', max(prealign_steps, 1)))
+            except (TypeError, ValueError):
+                timeout_steps = 0
+            if not np.isfinite(tolerance) or tolerance <= 0.0 or timeout_steps <= 0:
+                return self._failure_or_hold(
+                    task,
+                    robot_name,
+                    spec,
+                    'invalid_prealign_convergence_policy',
+                    diagnostics={
+                        'prealign_joint_position_tolerance': spec.get('prealign_joint_position_tolerance'),
+                        'prealign_timeout_steps': spec.get('prealign_timeout_steps'),
+                    },
+                )
+
+            measured_q = self._coerce_arm_q(
+                current_q,
+                bound_revolute=False,
+                joint_count=desired_q.shape[0],
+            )
+            if measured_q is None:
+                return self._failure_or_hold(
+                    task,
+                    robot_name,
+                    spec,
+                    'prealign_joint_state_unavailable',
+                    diagnostics={'phase_step_counter': phase_step_counter},
+                )
+            measured_q = self._joint_target_near_reference(
+                target_q=measured_q,
+                reference_q=desired_q,
+                spec=spec,
+                preferred_abs_limit=None,
+                hard_preferred_abs_limit=False,
+            )
+            joint_error = float(np.max(np.abs(desired_q - measured_q)))
+            arm_dynamics = self._current_arm_dynamics(task=task, robot_name=robot_name)
+            joint_velocity = self._coerce_arm_q(
+                arm_dynamics.get('joint_velocity'),
+                bound_revolute=False,
+                joint_count=desired_q.shape[0],
+            )
+            max_joint_velocity = None
+            if joint_velocity is not None:
+                max_joint_velocity = float(np.max(np.abs(joint_velocity)))
+            velocity_tolerance = spec.get('prealign_joint_velocity_tolerance')
+            velocity_ready = True
+            if velocity_tolerance is not None and max_joint_velocity is not None:
+                velocity_ready = max_joint_velocity <= float(velocity_tolerance)
+            position_ready = joint_error <= tolerance
+            if position_ready and velocity_ready:
+                prealign_state['ready_steps'] = int(prealign_state.get('ready_steps', 0)) + 1
+            else:
+                prealign_state['ready_steps'] = 0
+            required_ready_steps = max(int(spec.get('prealign_ready_stable_steps', 1)), 1)
+            prealign_state['joint_error'] = joint_error
+            prealign_state['max_joint_velocity'] = max_joint_velocity
+            if int(prealign_state['ready_steps']) >= required_ready_steps:
+                prealign_state['converged'] = True
+                if not bool(prealign_state.get('convergence_logged', False)):
+                    print(
+                        '[assembly-prealign-converged] '
+                        f"step={getattr(task, 'step_counter', None)} "
+                        f"phase={getattr(task, 'phase', None)} robot={robot_name} "
+                        f'phase_step={phase_step_counter} joint_error={joint_error:.6f} '
+                        f'tolerance={tolerance:.6f} max_joint_velocity={max_joint_velocity} '
+                        f'ready_steps={prealign_state["ready_steps"]}',
+                        flush=True,
+                    )
+                    prealign_state['convergence_logged'] = True
+                return None
+            if phase_step_counter >= timeout_steps:
+                return self._failure_or_hold(
+                    task,
+                    robot_name,
+                    spec,
+                    'prealign_timeout',
+                    diagnostics={
+                        'phase_step_counter': phase_step_counter,
+                        'prealign_timeout_steps': timeout_steps,
+                        'joint_error': joint_error,
+                        'joint_position_tolerance': tolerance,
+                        'max_joint_velocity': max_joint_velocity,
+                        'joint_velocity_tolerance': velocity_tolerance,
+                        'ready_steps': int(prealign_state.get('ready_steps', 0)),
+                        'required_ready_steps': required_ready_steps,
+                        'current_q': measured_q.tolist(),
+                        'target_q': desired_q.tolist(),
+                    },
+                )
+
+        command_reference_q = current_q if current_q is not None else reference_q
         command_q = self._limited_joint_target(
-            current_q=reference_q,
+            current_q=command_reference_q,
             target_q=desired_q,
             max_joint_step=float(spec.get('prealign_max_joint_step', spec.get('max_joint_step', 0.035))),
         )
@@ -3933,6 +4590,41 @@ class UR5eAssemblyAtomicSkillAdapter:
                 ),
             },
         )
+        prealign_tracking_error = spec.get(
+            'prealign_max_command_tracking_error',
+            spec.get('max_command_tracking_error', 0.18),
+        )
+        command_q = self._limit_command_to_measured_state(
+            current_q=current_q,
+            command_q=command_q,
+            spec={
+                **spec,
+                'max_command_tracking_error': prealign_tracking_error,
+                'max_wrist_command_tracking_error': spec.get(
+                    'prealign_max_wrist_command_tracking_error',
+                    prealign_tracking_error,
+                ),
+            },
+        )
+        if self._debug_grasp_enabled():
+            debug_every = max(int(os.environ.get('UR5E_DEBUG_JOINT_TARGET_EVERY', '120')), 1)
+            if phase_step_counter <= 5 or phase_step_counter % debug_every == 0:
+                dynamics = self._current_arm_dynamics(task=task, robot_name=robot_name)
+                print(
+                    '[assembly-prealign-debug] '
+                    f"step={getattr(task, 'step_counter', None)} "
+                    f"phase={getattr(task, 'phase', None)} phase_step={phase_step_counter} "
+                    f'robot={robot_name} '
+                    f'current_q={np.asarray(current_q, dtype=float).tolist()} '
+                    f'reference_q={np.asarray(reference_q, dtype=float).tolist()} '
+                    f'target_q={np.asarray(desired_q, dtype=float).tolist()} '
+                    f'command_q={np.asarray(command_q, dtype=float).tolist()} '
+                    f"joint_velocity={dynamics.get('joint_velocity')} "
+                    f"measured_effort={dynamics.get('measured_effort')} "
+                    f"applied_effort={dynamics.get('applied_effort')} "
+                    f"max_force={dynamics.get('max_force')}",
+                    flush=True,
+                )
         action = OrderedDict()
         action[_ARM_JOINT_CONTROLLER] = [command_q.tolist()]
         self._remember_arm_command(task, robot_name, command_q)
@@ -3956,6 +4648,38 @@ class UR5eAssemblyAtomicSkillAdapter:
         if float(np.linalg.norm(delta)) < 1e-6:
             return None
         return float(np.arctan2(delta[1], delta[0]) + yaw_offset)
+
+    @staticmethod
+    def _prealign_terminal_target_pose(*, target_pose: dict, spec: dict) -> dict | None:
+        """Recover the grasp endpoint whose IK branch must remain valid during descent."""
+
+        offset = spec.get('offset')
+        if offset is None:
+            return None
+        offset = np.asarray(offset, dtype=float)
+        if offset.shape != (3,) or not np.all(np.isfinite(offset)):
+            return None
+        position = np.asarray(target_pose.get('position'), dtype=float)
+        orientation = normalize_quat(target_pose.get('orientation'))
+        if position.shape != (3,) or not np.all(np.isfinite(position)):
+            return None
+
+        offset_frame = str(spec.get('offset_frame', 'world')).lower()
+        if offset_frame in {'object', 'local', 'part'}:
+            relative_pose = UR5eAssemblyAtomicSkillAdapter._configured_grasp_relative_pose(spec)
+            if relative_pose is None:
+                return None
+            _, relative_orientation = relative_pose
+            object_orientation = normalize_quat(quat_multiply(orientation, relative_orientation))
+            world_offset = quat_rotate(object_orientation, offset)
+        elif offset_frame in {'target', 'eef', 'tcp', 'gripper'}:
+            world_offset = quat_rotate(orientation, offset)
+        else:
+            world_offset = offset
+        return {
+            'position': position - np.asarray(world_offset, dtype=float),
+            'orientation': orientation,
+        }
 
     @staticmethod
     def _current_tcp_pose(*, current_pose: dict | None, spec: dict) -> dict | None:
@@ -4089,13 +4813,18 @@ class UR5eAssemblyAtomicSkillAdapter:
         if robot is None:
             return None
         controller = robot.controllers.get(_ARM_JOINT_CONTROLLER)
+        arm_joint_names = self._arm_joint_names(robot=robot, controller=controller)
+        arm_joint_count = len(arm_joint_names)
         if controller is not None and hasattr(controller, 'get_joint_subset'):
             subset = controller.get_joint_subset()
         else:
             subset = getattr(controller, 'joint_subset', None) if controller is not None else None
         if subset is not None:
             try:
-                joint_positions = self._coerce_arm_q(subset.get_joint_positions())
+                joint_positions = self._coerce_arm_q(
+                    subset.get_joint_positions(),
+                    joint_count=arm_joint_count,
+                )
                 if joint_positions is not None:
                     return joint_positions
             except Exception:
@@ -4103,10 +4832,11 @@ class UR5eAssemblyAtomicSkillAdapter:
         articulation = getattr(robot, 'articulation', None)
         if articulation is not None:
             try:
-                indices = np.asarray(
-                    [articulation.get_dof_index(name) for name in _UR5E_ARM_JOINT_NAMES], dtype=np.int64
+                indices = np.asarray([articulation.get_dof_index(name) for name in arm_joint_names], dtype=np.int64)
+                joint_positions = self._coerce_arm_q(
+                    articulation.get_joint_positions(joint_indices=indices),
+                    joint_count=arm_joint_count,
                 )
-                joint_positions = self._coerce_arm_q(articulation.get_joint_positions(joint_indices=indices))
                 if joint_positions is not None:
                     return joint_positions
             except Exception:
@@ -4115,12 +4845,18 @@ class UR5eAssemblyAtomicSkillAdapter:
                 all_joint_positions = np.asarray(articulation.get_joint_positions(), dtype=float)
                 dof_names = list(getattr(articulation, 'dof_names', []) or [])
                 if dof_names:
-                    indices = [dof_names.index(name) for name in _UR5E_ARM_JOINT_NAMES if name in dof_names]
-                    if len(indices) == len(_UR5E_ARM_JOINT_NAMES):
-                        joint_positions = self._coerce_arm_q(all_joint_positions[np.asarray(indices, dtype=np.int64)])
+                    indices = [dof_names.index(name) for name in arm_joint_names if name in dof_names]
+                    if len(indices) == arm_joint_count:
+                        joint_positions = self._coerce_arm_q(
+                            all_joint_positions[np.asarray(indices, dtype=np.int64)],
+                            joint_count=arm_joint_count,
+                        )
                         if joint_positions is not None:
                             return joint_positions
-                joint_positions = self._coerce_arm_q(all_joint_positions[: len(_UR5E_ARM_JOINT_NAMES)])
+                joint_positions = self._coerce_arm_q(
+                    all_joint_positions[:arm_joint_count],
+                    joint_count=arm_joint_count,
+                )
                 if joint_positions is not None:
                     return joint_positions
             except Exception:
@@ -4138,17 +4874,128 @@ class UR5eAssemblyAtomicSkillAdapter:
             pass
         return None
 
+    def _current_arm_dynamics(self, *, task, robot_name: str) -> dict[str, list[float]]:
+        """Read optional PhysX drive diagnostics without affecting control."""
+
+        robots = getattr(task, 'robots', None)
+        if not isinstance(robots, dict):
+            return {}
+        robot = robots.get(robot_name)
+        if robot is None:
+            return {}
+        articulation = getattr(robot, 'articulation', None)
+        if articulation is None:
+            return {}
+        controllers = getattr(robot, 'controllers', {})
+        controller = controllers.get(_ARM_JOINT_CONTROLLER)
+        joint_names = self._arm_joint_names(robot=robot, controller=controller)
+        try:
+            indices = np.asarray([articulation.get_dof_index(name) for name in joint_names], dtype=np.int64)
+        except Exception:
+            return {}
+
+        result: dict[str, list[float]] = {}
+
+        def _store(name: str, values) -> bool:
+            try:
+                array = np.asarray(values, dtype=float)
+                if array.ndim > 1:
+                    array = array[0]
+                array = array.reshape(-1)
+                if array.size != indices.size:
+                    array = array[indices]
+                if array.size != indices.size or not np.all(np.isfinite(array)):
+                    return False
+                result[name] = array.tolist()
+                return True
+            except Exception:
+                return False
+
+        try:
+            _store('joint_velocity', articulation.get_joint_velocities(joint_indices=indices))
+        except Exception:
+            pass
+
+        try:
+            unwrapped = articulation.unwrap()
+        except Exception:
+            unwrapped = None
+        for result_name, method_names in (
+            ('measured_effort', ('get_measured_joint_efforts', 'get_joint_efforts')),
+            ('applied_effort', ('get_applied_joint_efforts',)),
+        ):
+            for candidate in (unwrapped, articulation):
+                if candidate is None:
+                    continue
+                for method_name in method_names:
+                    method = getattr(candidate, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        values = method(joint_indices=indices)
+                    except TypeError:
+                        try:
+                            values = method()
+                        except Exception:
+                            continue
+                    except Exception:
+                        continue
+                    if _store(result_name, values):
+                        break
+                if result_name in result:
+                    break
+
+        try:
+            physics_view = articulation._articulation_view._physics_view
+        except Exception:
+            physics_view = None
+        if physics_view is not None:
+            for result_name, method_name in (
+                ('stiffness', 'get_dof_stiffnesses'),
+                ('damping', 'get_dof_dampings'),
+                ('max_force', 'get_dof_max_forces'),
+            ):
+                method = getattr(physics_view, method_name, None)
+                if callable(method):
+                    try:
+                        _store(result_name, method())
+                    except Exception:
+                        pass
+        return result
+
     @staticmethod
-    def _coerce_arm_q(joint_positions, *, bound_revolute: bool = True) -> np.ndarray | None:
+    def _arm_joint_names(*, robot, controller=None) -> tuple[str, ...]:
+        configured_names = tuple(getattr(controller, 'joint_names', None) or ())
+        if len(configured_names) in {6, 7}:
+            return configured_names
+        articulation = getattr(robot, 'articulation', None)
+        dof_names = set(getattr(articulation, 'dof_names', []) or [])
+        for names in _SUPPORTED_ARM_JOINT_NAMES:
+            if all(name in dof_names for name in names):
+                return names
+        robot_type = str(getattr(getattr(robot, 'config', None), 'type', '')).lower()
+        if 'franka' in robot_type or 'panda' in robot_type:
+            return _FRANKA_ARM_JOINT_NAMES
+        return _UR5E_ARM_JOINT_NAMES
+
+    @staticmethod
+    def _coerce_arm_q(
+        joint_positions,
+        *,
+        bound_revolute: bool = True,
+        joint_count: int | None = None,
+    ) -> np.ndarray | None:
         if joint_positions is None:
             return None
         try:
             values = np.asarray(joint_positions, dtype=float).reshape(-1)
         except Exception:
             return None
-        if values.shape[0] < len(_UR5E_ARM_JOINT_NAMES):
+        if joint_count is None:
+            joint_count = 7 if values.shape[0] >= 7 else 6
+        if joint_count not in {6, 7} or values.shape[0] < joint_count:
             return None
-        values = values[: len(_UR5E_ARM_JOINT_NAMES)]
+        values = values[:joint_count]
         if not np.all(np.isfinite(values)):
             return None
         if not bound_revolute:
@@ -4191,9 +5038,10 @@ class UR5eAssemblyAtomicSkillAdapter:
         last_q = self._last_command_q(task=task, robot_name=robot_name)
         if reference_mode in {'current', 'current_q', 'actual', 'measured'}:
             if current_q is not None and last_q is not None:
-                return self._unwrap_to_reference(
+                return self._joint_target_near_reference(
                     target_q=current_q,
                     reference_q=last_q,
+                    spec=spec,
                     preferred_abs_limit=None,
                     hard_preferred_abs_limit=False,
                 )
@@ -4203,9 +5051,10 @@ class UR5eAssemblyAtomicSkillAdapter:
                 return current_q
             if current_q is None:
                 return last_q
-            measured_reference = self._unwrap_to_reference(
+            measured_reference = self._joint_target_near_reference(
                 target_q=current_q,
                 reference_q=last_q,
+                spec=spec,
                 preferred_abs_limit=None,
                 hard_preferred_abs_limit=False,
             )
@@ -4257,9 +5106,10 @@ class UR5eAssemblyAtomicSkillAdapter:
         last_q = self._last_command_q(task=task, robot_name=robot_name)
         if last_q is None:
             return command_q
-        command_q = self._unwrap_to_reference(
+        command_q = self._joint_target_near_reference(
             target_q=command_q,
             reference_q=last_q,
+            spec=spec,
             preferred_abs_limit=None,
             hard_preferred_abs_limit=False,
         )
@@ -4295,7 +5145,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 limits = np.full(int(joint_count), scalar_limit, dtype=float)
                 wrist_cap = float(spec.get('default_max_command_wrist_joint_step', 0.025))
                 if wrist_cap > 0.0 and limits.shape[0] >= 6:
-                    limits[3:6] = np.minimum(limits[3:6], wrist_cap)
+                    limits[3:] = np.minimum(limits[3:], wrist_cap)
                 return limits
             return scalar_limit
         limits = np.full(int(joint_count), float(limit_values[-1]), dtype=float)
@@ -4316,9 +5166,10 @@ class UR5eAssemblyAtomicSkillAdapter:
         current_q = UR5eAssemblyAtomicSkillAdapter._coerce_arm_q(current_q, bound_revolute=False)
         if current_q is None or current_q.shape != command_q.shape:
             return command_q
-        command_q = UR5eAssemblyAtomicSkillAdapter._unwrap_to_reference(
+        command_q = UR5eAssemblyAtomicSkillAdapter._joint_target_near_reference(
             target_q=command_q,
             reference_q=current_q,
+            spec=spec,
             preferred_abs_limit=None,
             hard_preferred_abs_limit=False,
         )
@@ -4341,7 +5192,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             try:
                 wrist_limit = float(wrist_limit)
                 if np.isfinite(wrist_limit) and wrist_limit > 0.0:
-                    limits[3:6] = np.minimum(limits[3:6], wrist_limit)
+                    limits[3:] = np.minimum(limits[3:], wrist_limit)
             except Exception:
                 pass
         if np.any(limits <= 0.0):
@@ -4363,11 +5214,12 @@ class UR5eAssemblyAtomicSkillAdapter:
         jump_limit = float(spec.get('ik_branch_jump_limit', default_limit))
         if jump_limit <= 0.0:
             return False
-        branch_joint_indices = spec.get('ik_branch_guard_joint_indices', [0, 3, 5])
+        default_branch_joint_indices = [0, 3, reference_q.shape[0] - 1]
+        branch_joint_indices = spec.get('ik_branch_guard_joint_indices', default_branch_joint_indices)
         try:
             indices = [int(index) for index in branch_joint_indices]
         except Exception:
-            indices = [0, 3, 5]
+            indices = default_branch_joint_indices
         deltas = []
         for index in indices:
             if 0 <= index < reference_q.shape[0]:
@@ -4375,6 +5227,180 @@ class UR5eAssemblyAtomicSkillAdapter:
         if not deltas:
             return False
         return max(deltas) > jump_limit
+
+    def _ik_branch_reference_q(
+        self,
+        *,
+        phase_key,
+        reference_q: np.ndarray,
+        spec: dict,
+    ) -> np.ndarray | None:
+        """Use the measured/command reference until a phase has an accepted IK target."""
+
+        if str(spec.get('ik_branch_jump_reference_mode', 'reference')).strip().lower() != 'previous_target':
+            return reference_q
+        previous_target_q = self._coerce_arm_q(
+            self._last_targets.get(phase_key, {}).get('target_q'),
+            bound_revolute=False,
+            joint_count=reference_q.shape[0],
+        )
+        if previous_target_q is None and bool(spec.get('allow_initial_ik_branch_jump', False)):
+            # The first free-space endpoint can be far from home while every
+            # emitted command remains bounded by the per-joint step limiter.
+            # Guard continuity once an accepted IK branch exists for the phase.
+            return None
+        return reference_q if previous_target_q is None else previous_target_q
+
+    @staticmethod
+    def _use_locked_transport_ik_target(spec: dict) -> bool:
+        """Use one stable redundant IK solution for free-space held-object motion."""
+
+        return bool(
+            spec.get('lock_transport_ik_target', False)
+            and spec.get('requires_held_object', False)
+            and spec.get('target_object_target') is not None
+            and spec.get('target_object_convergence_axis') is None
+            and spec.get('target_object_final_target') is None
+        )
+
+    @staticmethod
+    def _use_locked_pickup_ik_target(
+        *,
+        skill_name: str,
+        spec: dict,
+        current_pose: dict | None = None,
+        target_pose: dict | None = None,
+        already_locked: bool = False,
+    ) -> bool:
+        """Lock the terminal IK branch only inside the final pickup window."""
+
+        configured = bool(
+            spec.get('lock_pickup_ik_target', False)
+            and skill_name in {'ur5e_descend_to_grasp', 'descend_to_grasp'}
+            and spec.get('object') is not None
+        )
+        if not configured or current_pose is None or target_pose is None:
+            return configured
+        # Latch the terminal branch for the rest of the phase. Contact or PD
+        # tracking can move the measured TCP just outside the entry window for
+        # one frame; dropping back to Cartesian IK there compares a local
+        # solution with the cached endpoint and falsely reports a branch jump.
+        if already_locked:
+            return True
+
+        position_window = spec.get('pickup_terminal_ik_position_window')
+        orientation_window = spec.get('pickup_terminal_ik_orientation_window')
+        if position_window is None and orientation_window is None:
+            return configured
+        try:
+            position_error, orientation_error = pose_error(
+                current_position=current_pose['position'],
+                current_orientation=current_pose['orientation'],
+                target_position=target_pose['position'],
+                target_orientation=target_pose['orientation'],
+            )
+            if position_window is not None and position_error > float(position_window):
+                return False
+            if (
+                orientation_window is not None
+                and orientation_error is not None
+                and orientation_error > float(orientation_window)
+            ):
+                return False
+        except (KeyError, TypeError, ValueError):
+            return False
+        return True
+
+    def _locked_transport_ik_target(
+        self,
+        *,
+        phase_key,
+        task,
+        robot_name: str,
+        target_pose: dict,
+        reference_q: np.ndarray | None,
+        spec: dict,
+    ) -> np.ndarray | None:
+        if phase_key in self._continuous_transport_ik_fallbacks:
+            return None
+        cached = self._coerce_arm_q(
+            self._locked_transport_ik_targets.get(phase_key),
+            bound_revolute=False,
+        )
+        if cached is not None:
+            return cached
+
+        result = self._solve_ik(
+            task=task,
+            robot_name=robot_name,
+            target_pose=target_pose,
+            warm_start=reference_q,
+            spec=spec,
+        )
+        if result is None and reference_q is not None:
+            result = self._solve_ik(
+                task=task,
+                robot_name=robot_name,
+                target_pose=target_pose,
+                warm_start=None,
+                spec={
+                    **spec,
+                    'use_command_warm_start': False,
+                    'require_warm_start_ik': False,
+                    'warm_start_ik_only': False,
+                },
+            )
+        if result is None:
+            # An exact free-space endpoint can be outside the local Panda
+            # branch even when the segment leading to it is reachable.  Let
+            # the caller switch to its bounded Cartesian continuation instead
+            # of turning one failed endpoint solve into an episode failure.
+            if bool(spec.get('locked_transport_fallback_on_ik_failure', True)):
+                self._locked_transport_ik_targets.pop(phase_key, None)
+                self._continuous_transport_ik_fallbacks.add(phase_key)
+                print(
+                    '[assembly-ik-target-lock] '
+                    f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
+                    f'robot={robot_name} fallback=continuous_cartesian reason=endpoint_ik_failed',
+                    flush=True,
+                )
+            return None
+
+        result = self._joint_target_near_reference(
+            target_q=result,
+            reference_q=reference_q,
+            spec=spec,
+            preferred_abs_limit=spec.get('preferred_joint_abs_limit', 3.05),
+            hard_preferred_abs_limit=bool(spec.get('hard_preferred_joint_abs_limit', True)),
+        )
+        self._locked_transport_ik_targets[phase_key] = result.copy()
+        maximum_joint_delta = None
+        if reference_q is not None and reference_q.shape == result.shape:
+            maximum_joint_delta = float(np.max(np.abs(result - reference_q)))
+        fallback_limit = spec.get('locked_transport_fallback_joint_delta')
+        if (
+            maximum_joint_delta is not None
+            and fallback_limit is not None
+            and float(fallback_limit) > 0.0
+            and maximum_joint_delta > float(fallback_limit)
+        ):
+            self._locked_transport_ik_targets.pop(phase_key, None)
+            self._continuous_transport_ik_fallbacks.add(phase_key)
+            print(
+                '[assembly-ik-target-lock] '
+                f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
+                f'robot={robot_name} maximum_joint_delta={maximum_joint_delta} '
+                f'fallback=continuous_cartesian limit={float(fallback_limit)}',
+                flush=True,
+            )
+            return None
+        print(
+            '[assembly-ik-target-lock] '
+            f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
+            f'robot={robot_name} maximum_joint_delta={maximum_joint_delta}',
+            flush=True,
+        )
+        return result
 
     def _solve_ik(
         self,
@@ -4416,14 +5442,28 @@ class UR5eAssemblyAtomicSkillAdapter:
                 get_ee_frame = getattr(solver_wrapper, 'get_end_effector_frame', None)
                 ee_frame = get_ee_frame() if callable(get_ee_frame) else getattr(solver_wrapper, '_ee_frame', None)
                 if raw_solver is not None and ee_frame is not None:
-                    ik_result, success = raw_solver.compute_inverse_kinematics(
-                        ee_frame,
-                        target_position,
-                        target_orientation,
-                        warm_start=warm_start,
-                        position_tolerance=position_tolerance,
-                        orientation_tolerance=orientation_tolerance,
-                    )
+                    restore_default_seeds = None
+                    set_default_seeds = getattr(raw_solver, 'set_default_cspace_seeds', None)
+                    if bool(spec.get('warm_start_ik_only', False)) and callable(set_default_seeds):
+                        get_default_seeds = getattr(raw_solver, 'get_default_cspace_seeds', None)
+                        if callable(get_default_seeds):
+                            restore_default_seeds = list(get_default_seeds())
+                            set_default_seeds([])
+                    try:
+                        ik_result, success = raw_solver.compute_inverse_kinematics(
+                            ee_frame,
+                            target_position,
+                            target_orientation,
+                            warm_start=warm_start,
+                            position_tolerance=position_tolerance,
+                            orientation_tolerance=orientation_tolerance,
+                        )
+                    finally:
+                        if restore_default_seeds is not None:
+                            try:
+                                set_default_seeds(restore_default_seeds)
+                            except Exception:
+                                pass
                     if success and ik_result is not None:
                         ik_result = np.asarray(ik_result, dtype=float)
                         if np.all(np.isfinite(ik_result)):
@@ -4442,6 +5482,61 @@ class UR5eAssemblyAtomicSkillAdapter:
         if not np.all(np.isfinite(joint_positions)):
             return None
         return joint_positions
+
+    @staticmethod
+    def _ik_solution_stalled(
+        *,
+        ik_result: np.ndarray | None,
+        measured_q: np.ndarray | None,
+        warm_start_q: np.ndarray | None,
+        current_pose: dict | None,
+        command_target_pose: dict,
+        spec: dict,
+    ) -> bool:
+        """Detect a false-positive IK result that leaves a Cartesian servo static."""
+
+        if ik_result is None or measured_q is None or current_pose is None:
+            return ik_result is None
+        candidate_q = np.asarray(ik_result, dtype=float)
+        measured_q = np.asarray(measured_q, dtype=float)
+        if candidate_q.shape != measured_q.shape or not np.all(np.isfinite(candidate_q)):
+            return True
+        joint_delta = float(np.max(np.abs(candidate_q - measured_q))) if candidate_q.size else 0.0
+        warm_start_delta = math.inf
+        if warm_start_q is not None:
+            warm_start_q = np.asarray(warm_start_q, dtype=float)
+            if warm_start_q.shape == candidate_q.shape and np.all(np.isfinite(warm_start_q)):
+                warm_start_delta = (
+                    float(np.max(np.abs(candidate_q - warm_start_q))) if candidate_q.size else 0.0
+                )
+        stationary_joint_tolerance = max(float(spec.get('ik_stationary_joint_tolerance', 1e-6)), 0.0)
+        if min(joint_delta, warm_start_delta) > stationary_joint_tolerance:
+            return False
+        position_error, orientation_error = pose_error(
+            current_pose['position'],
+            current_pose['orientation'],
+            command_target_pose['position'],
+            command_target_pose['orientation'],
+        )
+        position_tolerance, orientation_tolerance = UR5eAssemblyAtomicSkillAdapter._ik_solver_tolerances(spec)
+        position_threshold = max(
+            float(spec.get('ik_stationary_position_error', 0.0)),
+            2.0 * float(position_tolerance or 0.0),
+            0.25 * float(spec.get('cartesian_position_step', 0.0)),
+            1e-5,
+        )
+        orientation_threshold = max(
+            float(spec.get('ik_stationary_orientation_error', 0.0)),
+            2.0 * float(orientation_tolerance or 0.0),
+            0.25 * float(spec.get('cartesian_orientation_step', 0.0)),
+            1e-4,
+        )
+        return bool(
+            position_error is not None
+            and float(position_error) > position_threshold
+            or orientation_error is not None
+            and float(orientation_error) > orientation_threshold
+        )
 
     @staticmethod
     def _ik_solver_tolerances(spec: dict) -> tuple[float | None, float | None]:
@@ -4538,12 +5633,144 @@ class UR5eAssemblyAtomicSkillAdapter:
             target_q[joint_index] = candidates[int(np.argmin(cost))]
         return target_q
 
+    @staticmethod
+    def _joint_target_near_reference(
+        *,
+        target_q: np.ndarray,
+        reference_q: np.ndarray | None,
+        spec: dict,
+        preferred_abs_limit=None,
+        hard_preferred_abs_limit: bool = True,
+    ) -> np.ndarray:
+        """Normalize IK output according to the platform's joint topology."""
+
+        target_q = np.asarray(target_q, dtype=float).copy()
+        if not bool(spec.get('unwrap_revolute_joints', True)):
+            return target_q
+        return UR5eAssemblyAtomicSkillAdapter._unwrap_to_reference(
+            target_q=target_q,
+            reference_q=reference_q,
+            preferred_abs_limit=preferred_abs_limit,
+            hard_preferred_abs_limit=hard_preferred_abs_limit,
+        )
+
     def _hold_joint_action(self, *, task, robot_name: str) -> OrderedDict:
         action = OrderedDict()
         current_q = self._current_arm_q(task, robot_name)
         hold_q = self._command_reference_q(task=task, robot_name=robot_name, current_q=current_q, spec={})
         if hold_q is not None:
             action[_ARM_JOINT_CONTROLLER] = [hold_q.tolist()]
+        return action
+
+    def _move_arm_to_joint_positions_action(
+        self,
+        *,
+        phase_key,
+        task,
+        robot_name: str,
+        skill_name: str,
+        spec: dict,
+    ) -> OrderedDict:
+        current_q = self._current_arm_q(task, robot_name)
+        if current_q is None:
+            return self._failure_or_hold(task, robot_name, spec, 'current_joint_state_unavailable')
+
+        target_q = self._coerce_arm_q(
+            spec.get('joint_positions'),
+            bound_revolute=False,
+            joint_count=current_q.shape[0],
+        )
+        if target_q is None or target_q.shape != current_q.shape:
+            return self._failure_or_hold(
+                task,
+                robot_name,
+                spec,
+                'invalid_joint_target',
+                diagnostics={'joint_positions': spec.get('joint_positions')},
+            )
+
+        reference_q = self._command_reference_q(
+            task=task,
+            robot_name=robot_name,
+            current_q=current_q,
+            spec=spec,
+        )
+        if reference_q is None or reference_q.shape != target_q.shape:
+            reference_q = current_q
+        target_q = self._joint_target_near_reference(
+            target_q=target_q,
+            reference_q=reference_q,
+            spec=spec,
+            preferred_abs_limit=spec.get('preferred_joint_abs_limit'),
+            hard_preferred_abs_limit=False,
+        )
+        step_limits = self._command_joint_step_limits(
+            spec=spec,
+            joint_count=current_q.shape[0],
+        )
+        if step_limits is None:
+            step_limits = float(spec.get('max_joint_step', 0.020))
+        command_q = self._limited_joint_target(
+            current_q=reference_q,
+            target_q=target_q,
+            max_joint_step=step_limits,
+        )
+        command_q = self._continuous_command_q(
+            task=task,
+            robot_name=robot_name,
+            command_q=command_q,
+            spec=spec,
+        )
+        command_q = self._limit_command_to_measured_state(
+            current_q=current_q,
+            command_q=command_q,
+            spec=spec,
+        )
+
+        action = OrderedDict()
+        action[_ARM_JOINT_CONTROLLER] = [command_q.tolist()]
+        action[_GRIPPER_CONTROLLER] = [
+            self._gripper_command_value(
+                task=task,
+                robot_name=robot_name,
+                command=spec.get('gripper_command', 'open'),
+            )
+        ]
+        self._remember_arm_command(task, robot_name, command_q)
+
+        joint_error = float(np.max(np.abs(target_q - current_q)))
+        tolerance = float(spec.get('joint_position_tolerance', 0.025))
+        phase_step = int(getattr(task, 'phase_step_counter', 0))
+        debug_every = max(int(os.environ.get('UR5E_DEBUG_JOINT_TARGET_EVERY', '120')), 1)
+        if self._debug_grasp_enabled() and (phase_step <= 5 or phase_step % debug_every == 0):
+            print(
+                '[assembly-joint-target-debug] '
+                f"step={getattr(task, 'step_counter', None)} phase={getattr(task, 'phase', None)} "
+                f'phase_step={phase_step} robot={robot_name} joint_error={joint_error} '
+                f'tolerance={tolerance} current_q={current_q.tolist()} '
+                f'target_q={target_q.tolist()} command_q={command_q.tolist()}',
+                flush=True,
+            )
+        state = self._completion_state.setdefault(phase_key, {})
+        if joint_error <= tolerance:
+            state['joint_target_stable_steps'] = int(state.get('joint_target_stable_steps', 0)) + 1
+        else:
+            state['joint_target_stable_steps'] = 0
+        stable_steps = int(state['joint_target_stable_steps'])
+        required_stable_steps = max(int(spec.get('joint_target_stable_steps', 8)), 1)
+        if stable_steps >= required_stable_steps:
+            self._mark_complete(
+                task=task,
+                robot_name=robot_name,
+                skill_name=skill_name,
+                detail={
+                    'target_joint_positions': target_q.tolist(),
+                    'joint_error': joint_error,
+                    'joint_position_tolerance': tolerance,
+                    'stable_steps': stable_steps,
+                    'required_stable_steps': required_stable_steps,
+                },
+            )
         return action
 
     def _preshape_gripper_action(
@@ -4815,6 +6042,19 @@ class UR5eAssemblyAtomicSkillAdapter:
         object_name = self._object_name_from_spec(spec)
         if object_name is None:
             return None
+        _, _, attachment_mode = self._compliant_attachment_allowance(
+            object_name=object_name,
+            tracked_objects=tracked_objects,
+        )
+        if (
+            attachment_mode == 'compliant_joint'
+            and bool(spec.get('require_target_object_pose_convergence', False))
+            and bool(spec.get('allow_compliant_object_tcp_slip', True))
+        ):
+            # A compliant insertion intentionally lets the part move relative
+            # to the TCP. Its physical joint and object-pose convergence gates
+            # remain authoritative; the rigid-grasp slip gate is not.
+            return None
         object_pose = self._object_pose(
             task=task,
             object_name=object_name,
@@ -4908,7 +6148,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         spec: dict,
         close_ready: bool,
     ) -> dict[str, Any]:
-        """Bias the TCP toward a prematurely contacting finger during closure."""
+        """Shift the TCP away from a prematurely contacting finger during closure."""
         enabled = bool(spec.get('close_gate_recenter_single_finger_contact', False))
         result: dict[str, Any] = {
             'enabled': enabled,
@@ -4982,29 +6222,90 @@ class UR5eAssemblyAtomicSkillAdapter:
         axis_name = local_contact.get('best_axis')
         local_point = local_contact.get('local_point')
         contact_box_orientation = metrics.get('contact_box_orientation')
-        if axis_name not in {'x', 'y', 'z'} or local_point is None or contact_box_orientation is None:
-            result['reason'] = 'contact_frame_unavailable'
-            return result
-        axis_index = {'x': 0, 'y': 1, 'z': 2}[str(axis_name)]
-        signed_coordinate = float(local_point[axis_index])
-        if not math.isfinite(signed_coordinate) or abs(signed_coordinate) <= 1e-9:
-            result['reason'] = 'contact_side_unavailable'
-            return result
-
-        local_direction = np.zeros(3, dtype=float)
-        local_direction[axis_index] = math.copysign(1.0, signed_coordinate)
-        world_direction = quat_rotate(
-            normalize_quat(np.asarray(contact_box_orientation, dtype=float)),
-            local_direction,
+        latched_direction = np.asarray(
+            state.get('recenter_direction_world', np.zeros(3, dtype=float)),
+            dtype=float,
         )
-        world_direction = np.asarray(world_direction, dtype=float)
-        norm = float(np.linalg.norm(world_direction))
-        if norm <= 1e-9 or not np.all(np.isfinite(world_direction)):
-            result['reason'] = 'contact_direction_unavailable'
-            return result
-        world_direction /= norm
+        direction_latched = bool(
+            state.get('recenter_direction_side') == side
+            and latched_direction.shape == (3,)
+            and np.all(np.isfinite(latched_direction))
+            and float(np.linalg.norm(latched_direction)) > 1e-9
+        )
+        if direction_latched:
+            world_direction = latched_direction / float(np.linalg.norm(latched_direction))
+            axis_name = state.get('recenter_direction_axis', axis_name)
+        else:
+            left_sample = left.get('best_sample_position') or left.get('fingertip_position')
+            right_sample = right.get('best_sample_position') or right.get('fingertip_position')
+            contact_box_center = metrics.get('contact_box_center')
+            pair_values = (left_sample, right_sample, contact_box_center)
+            pair_available = all(value is not None for value in pair_values)
+            if pair_available:
+                left_position, right_position, object_center = (
+                    np.asarray(value, dtype=float) for value in pair_values
+                )
+                pair_available = bool(
+                    all(value.shape == (3,) and np.all(np.isfinite(value)) for value in (
+                        left_position,
+                        right_position,
+                        object_center,
+                    ))
+                )
+            if pair_available:
+                finger_axis = left_position - right_position
+                finger_axis_norm = float(np.linalg.norm(finger_axis))
+                if finger_axis_norm > 1e-9:
+                    finger_axis /= finger_axis_norm
+                    finger_midpoint = 0.5 * (left_position + right_position)
+                    center_error = float(np.dot(object_center - finger_midpoint, finger_axis))
+                    if math.isfinite(center_error) and abs(center_error) > 1e-9:
+                        world_direction = math.copysign(1.0, center_error) * finger_axis
+                        axis_name = 'finger_pair'
+                        result['finger_pair_center_error'] = center_error
+                    else:
+                        pair_available = False
+                else:
+                    pair_available = False
+            if not pair_available:
+                if axis_name not in {'x', 'y', 'z'} or local_point is None or contact_box_orientation is None:
+                    result['reason'] = 'contact_frame_unavailable'
+                    return result
+                axis_index = {'x': 0, 'y': 1, 'z': 2}[str(axis_name)]
+                signed_coordinate = float(local_point[axis_index])
+                if not math.isfinite(signed_coordinate) or abs(signed_coordinate) <= 1e-9:
+                    result['reason'] = 'contact_side_unavailable'
+                    return result
 
+                local_direction = np.zeros(3, dtype=float)
+                # Translate toward the side occupied by the first contacting
+                # finger, moving the opposite pad toward the object center.
+                local_direction[axis_index] = math.copysign(1.0, signed_coordinate)
+                world_direction = quat_rotate(
+                    normalize_quat(np.asarray(contact_box_orientation, dtype=float)),
+                    local_direction,
+                )
+                world_direction = np.asarray(world_direction, dtype=float)
+                norm = float(np.linalg.norm(world_direction))
+                if norm <= 1e-9 or not np.all(np.isfinite(world_direction)):
+                    result['reason'] = 'contact_direction_unavailable'
+                    return result
+                world_direction /= norm
+            # A sampled box can report a different best face while the same
+            # finger remains the only contacting finger. Keep the first valid
+            # correction direction until contact is centered so the servo does
+            # not alternate between unrelated Cartesian targets.
+            state['recenter_direction_world'] = world_direction.copy()
+            state['recenter_direction_side'] = side
+            state['recenter_direction_axis'] = str(axis_name)
+
+        gap_imbalance = abs(left_gap - right_gap)
         step = max(float(spec.get('close_gate_recenter_step', 0.00075)), 0.0)
+        configured_gap_gain = spec.get('close_gate_recenter_gap_gain')
+        gap_gain = None if configured_gap_gain is None else float(configured_gap_gain)
+        maximum_step = max(float(spec.get('close_gate_recenter_max_step', step)), step)
+        if gap_gain is not None and math.isfinite(gap_gain) and gap_gain > 0.0:
+            step = max(step, min(maximum_step, gap_gain * gap_imbalance))
         maximum_offset = max(
             float(spec.get('close_gate_recenter_max_offset', 0.025)),
             0.0,
@@ -5025,7 +6326,10 @@ class UR5eAssemblyAtomicSkillAdapter:
             {
                 'updated': bool(np.linalg.norm(updated - previous) > 1e-12),
                 'axis': axis_name,
+                'direction_latched': direction_latched,
                 'step': step,
+                'gap_imbalance': gap_imbalance,
+                'gap_gain': gap_gain,
                 'maximum_offset': maximum_offset,
                 'offset_world': updated.tolist(),
             }
@@ -5045,13 +6349,29 @@ class UR5eAssemblyAtomicSkillAdapter:
     ) -> tuple[bool, dict[str, Any]]:
         min_steps = max(int(spec.get('close_until_contact_min_steps', spec.get('close_ramp_steps', 24))), 0)
         required_stable_steps = max(int(spec.get('close_contact_stable_steps', 8)), 1)
-        stall_delta = float(spec.get('close_contact_stall_joint_delta', 0.0015))
-        blocked_margin = float(spec.get('close_contact_blocked_joint_margin', 0.025))
-        min_closure = float(spec.get('close_contact_min_joint_closure', 0.05))
-        hold_squeeze_margin = float(spec.get('close_contact_hold_squeeze_margin', 0.04))
-
         gripper_q = self._current_gripper_q(task=task, robot_name=robot_name)
         open_q, closed_q = self._gripper_open_closed_q(task=task, robot_name=robot_name)
+        joint_range = None
+        if open_q is not None and closed_q is not None:
+            joint_range = abs(float(open_q) - float(closed_q))
+
+        # The Robotiq drive spans about 0.8 while each Panda finger spans only
+        # 0.04. Scale implicit gates to the configured joint range so a valid
+        # short-stroke gripper can satisfy the same normalized grasp checks.
+        default_stall_delta = 0.0015 if joint_range is None else min(0.0015, 0.05 * joint_range)
+        default_blocked_margin = 0.025 if joint_range is None else min(0.025, 0.25 * joint_range)
+        default_min_closure = 0.05 if joint_range is None else min(0.05, 0.0625 * joint_range)
+        default_short_command_closure = 0.05 if joint_range is None else min(0.05, 0.10 * joint_range)
+        default_target_tolerance = 0.025 if joint_range is None else min(0.025, 0.05 * joint_range)
+        stall_delta = float(spec.get('close_contact_stall_joint_delta', default_stall_delta))
+        blocked_margin = float(spec.get('close_contact_blocked_joint_margin', default_blocked_margin))
+        min_closure = float(spec.get('close_contact_min_joint_closure', default_min_closure))
+        short_command_closure = float(
+            spec.get('close_contact_short_command_max_joint_closure', default_short_command_closure)
+        )
+        target_tolerance = float(spec.get('close_gripper_target_tolerance', default_target_tolerance))
+        hold_squeeze_margin = float(spec.get('close_contact_hold_squeeze_margin', 0.04))
+
         last_q = state.get('last_gripper_q')
         joint_delta = None
         if gripper_q is not None and last_q is not None:
@@ -5077,13 +6397,33 @@ class UR5eAssemblyAtomicSkillAdapter:
             blocked_before_full_close = abs(float(gripper_q) - float(closed_q)) >= blocked_margin
             moved_from_open = abs(float(gripper_q) - float(open_q)) >= min_closure
             target_q = float(closed_q) + float(gripper_openness) * (float(open_q) - float(closed_q))
-            reached_gripper_target = abs(float(gripper_q) - target_q) <= float(
-                spec.get('close_gripper_target_tolerance', 0.025)
-            )
+            reached_gripper_target = abs(float(gripper_q) - target_q) <= target_tolerance
         stalled = bool(joint_delta is not None and joint_delta <= stall_delta)
-        contact_candidate = bool(contact_ready and moved_from_open)
+        commanded_closure_from_open = (
+            None if target_q is None or open_q is None else abs(float(target_q) - float(open_q))
+        )
+        initial_strict_contact_for_short_close = bool(
+            spec.get('allow_initial_strict_contact_for_short_close', False)
+            and contact_ready
+            and contact_detail.get('strict_contact_ready') is True
+            and blocked_before_full_close
+            and commanded_closure_from_open is not None
+            and commanded_closure_from_open <= short_command_closure + 1e-9
+        )
+        initial_strict_contact_without_closure = bool(
+            spec.get('allow_initial_strict_contact_without_closure', False)
+            and contact_ready
+            and contact_detail.get('strict_contact_ready') is True
+            and blocked_before_full_close
+        )
+        initial_strict_contact_candidate = bool(
+            initial_strict_contact_for_short_close or initial_strict_contact_without_closure
+        )
+        contact_candidate = bool(contact_ready and (moved_from_open or initial_strict_contact_candidate))
+        require_strict_contact = bool(spec.get('require_strict_physical_contact', False))
         stall_contact = bool(
-            bool(spec.get('use_joint_stall_for_close_until_contact', True))
+            not require_strict_contact
+            and bool(spec.get('use_joint_stall_for_close_until_contact', True))
             and stalled
             and blocked_before_full_close
             and moved_from_open
@@ -5092,7 +6432,7 @@ class UR5eAssemblyAtomicSkillAdapter:
 
         configured_latch_after_stable = spec.get('close_contact_latch_after_stable')
         use_transient_hold_candidate = bool(
-            configured_latch_after_stable is None and not spec.get('require_strict_physical_contact', False)
+            configured_latch_after_stable is None and not require_strict_contact
         )
         if detected_clamp:
             state['close_contact_stable_steps'] = int(state.get('close_contact_stable_steps', 0)) + 1
@@ -5190,7 +6530,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 0,
             )
             latch_after_stable = bool(
-                spec.get('require_strict_physical_contact', False) and required_stable_steps <= max_deferred_latch_steps
+                require_strict_contact and required_stable_steps <= max_deferred_latch_steps
             )
         latch_after_stable = bool(latch_after_stable)
         latch_ready = bool(ready or not latch_after_stable)
@@ -5258,12 +6598,23 @@ class UR5eAssemblyAtomicSkillAdapter:
             'gripper_joint_delta': None if joint_delta is None else float(joint_delta),
             'gripper_open_position': None if open_q is None else float(open_q),
             'gripper_closed_position': None if closed_q is None else float(closed_q),
+            'gripper_joint_range': joint_range,
+            'close_contact_stall_joint_delta': stall_delta,
+            'close_contact_blocked_joint_margin': blocked_margin,
+            'close_contact_min_joint_closure': min_closure,
+            'close_contact_short_command_max_joint_closure': short_command_closure,
+            'commanded_closure_from_open': commanded_closure_from_open,
+            'initial_strict_contact_for_short_close': initial_strict_contact_for_short_close,
+            'initial_strict_contact_without_closure': initial_strict_contact_without_closure,
+            'initial_strict_contact_candidate': initial_strict_contact_candidate,
+            'close_gripper_target_tolerance': target_tolerance,
             'blocked_before_full_close': blocked_before_full_close,
             'moved_from_open': moved_from_open,
             'stalled': stalled,
             'contact_ready': contact_ready,
             'contact_candidate': contact_candidate,
             'stall_contact': stall_contact,
+            'require_strict_physical_contact': require_strict_contact,
             'detected_clamp': detected_clamp,
             'contact_detail': contact_detail,
         }
@@ -5406,4 +6757,5 @@ class UR5eAssemblyAtomicSkillAdapter:
 
 
 # Backward-compatible import for existing recipes and downstream code.
+AssemblyAtomicSkillAdapter = UR5eAssemblyAtomicSkillAdapter
 UR5ePlumbersBlockAtomicSkillAdapter = UR5eAssemblyAtomicSkillAdapter
