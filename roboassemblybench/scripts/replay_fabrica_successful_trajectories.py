@@ -11,7 +11,11 @@ from typing import Any
 import numpy as np
 
 from roboassemblybench.core.domain_randomization import normalize_randomization_profile
-from roboassemblybench.datasets.cartesian_episode import expected_replay_joint_widths
+try:
+    from roboassemblybench.datasets.cartesian_episode import expected_replay_joint_widths
+except ImportError:
+    # Older, stable collection branches predate this optional replay signature check.
+    expected_replay_joint_widths = None
 from roboassemblybench.scripts.collect_fabrica_plumbers_block_2k import (
     _exclusive_collection_lock,
     _quality_check_episode,
@@ -22,7 +26,7 @@ from roboassemblybench.scripts.collect_fabrica_plumbers_block_2k import (
 from toolkits.factory_dual_franka_assembly.task_specs import load_task_recipe
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(os.environ.get('RAB_REPO_ROOT', Path(__file__).resolve().parents[2])).resolve()
 MANIFEST_NAME = 'replay_manifest.json'
 VISUAL_PROFILES = ('object_distractors', 'texture', 'lighting', 'table_color', 'scene')
 
@@ -84,12 +88,14 @@ def _source_episodes(
 
 
 def _replay_command(args, *, sources: list[dict[str, Any]], batch_dir: Path, results_path: Path) -> list[str]:
+    thread_count = os.environ.get('ISAACSIM_OMP_NUM_THREADS', '1')
     environment = [
         'PYTHONNOUSERSITE=1',
         'PYTHONUNBUFFERED=1',
-        'OMP_NUM_THREADS=4',
-        'MKL_NUM_THREADS=4',
-        'OPENBLAS_NUM_THREADS=4',
+        f'OMP_NUM_THREADS={thread_count}',
+        f'MKL_NUM_THREADS={thread_count}',
+        f'OPENBLAS_NUM_THREADS={thread_count}',
+        f'NUMEXPR_NUM_THREADS={thread_count}',
     ]
     if args.isaac_python:
         executable = Path(args.isaac_python).expanduser().resolve()
@@ -169,10 +175,13 @@ def collect(args) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     recipe = load_task_recipe(args.recipe, scene_profile=args.scene_profile)
     recipe_fingerprint = str(recipe['recipe_fingerprint'])
+    expected_joint_widths = (
+        expected_replay_joint_widths(recipe.get('robots', [])) if expected_replay_joint_widths is not None else None
+    )
     source_episodes = _source_episodes(
         Path(args.source_dir).resolve(),
         expected_recipe_fingerprint=recipe_fingerprint,
-        expected_joint_widths=expected_replay_joint_widths(recipe.get('robots', [])),
+        expected_joint_widths=expected_joint_widths,
     )
     target = min(int(args.num_episodes), len(source_episodes))
     if target <= 0:
@@ -184,11 +193,23 @@ def collect(args) -> dict[str, Any]:
         contract = (
             manifest.get('randomization_profile'),
             Path(manifest.get('source_dir') or '').resolve(),
-            int(manifest.get('target_episodes', -1)),
         )
-        expected = (args.randomization_profile, Path(args.source_dir).resolve(), target)
+        expected = (args.randomization_profile, Path(args.source_dir).resolve())
         if contract != expected:
             raise RuntimeError(f'Replay manifest contract mismatch: {contract} != {expected}.')
+        previous_target = int(manifest.get('target_episodes', 0))
+        if target < previous_target:
+            raise RuntimeError(
+                f'Replay source set shrank from {previous_target} to {target}; '
+                'Stage-2 incremental replay requires an append-only Stage-1 manifest.'
+            )
+        # A new Stage-1 success extends the source set. Existing successful
+        # replays are retained; only source seeds absent from ``completed`` run.
+        manifest['source_count'] = len(source_episodes)
+        manifest['target_episodes'] = target
+        if target > previous_target:
+            manifest['complete'] = False
+            manifest['finished_at_unix'] = None
     else:
         manifest = _initial_manifest(args, source_episodes)
 

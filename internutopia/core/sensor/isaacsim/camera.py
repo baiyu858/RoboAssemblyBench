@@ -44,6 +44,7 @@ class IsaacsimCamera(ICamera):
         vertical_aperture: Optional[float] = None,
         clipping_range: Optional[Tuple[float, float]] = None,
     ):
+        self._ensure_replicator_overscan_defaults()
         self.name = name
         self.rgba = rgba
         self.distance_to_image_plane = distance_to_image_plane
@@ -66,6 +67,28 @@ class IsaacsimCamera(ICamera):
             clipping_range=clipping_range,
         )
         self.init_rp_annotators()
+
+    @staticmethod
+    def _ensure_replicator_overscan_defaults() -> None:
+        """Initialize Isaac Sim 5.1's unset Replicator overscan settings.
+
+        Replicator 1.12 assumes these global settings exist when reading a GPU
+        annotator.  Some headless Isaac Sim 5.1 launches leave them unset,
+        which makes its internal overscan resize path subtract ``None`` values.
+        Preserve explicitly configured overscan and fill only missing defaults.
+        """
+        import carb
+
+        settings = carb.settings.get_settings()
+        defaults = {
+            '/rtx/dataWindowNDC/0': 0.0,
+            '/rtx/dataWindowNDC/1': 0.0,
+            '/rtx/dataWindowNDC/2': 1.0,
+            '/rtx/dataWindowNDC/3': 1.0,
+        }
+        for key, value in defaults.items():
+            if settings.get(key) is None:
+                settings.set(key, value)
 
     @staticmethod
     def _apply_camera_intrinsics(

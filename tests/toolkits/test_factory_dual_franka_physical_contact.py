@@ -199,13 +199,65 @@ def test_task_pose_uses_physical_hand_and_reports_lula_frame_delta():
     }
 
     position, orientation = task._get_robot_task_pose('franka_right')
+    control_position, control_orientation = task._get_robot_control_pose('franka_right')
     diagnostic = task._get_robot_pose_frame_diagnostic('franka_right')
 
     np.testing.assert_allclose(position, physical_position)
     np.testing.assert_allclose(orientation, physical_orientation)
+    np.testing.assert_allclose(control_position, kinematic_position)
+    np.testing.assert_allclose(control_orientation, kinematic_orientation)
     np.testing.assert_allclose(diagnostic['kinematics_position'], kinematic_position)
     assert np.isclose(diagnostic['position_error'], 0.001)
     assert diagnostic['orientation_error'] > 0.0
+
+
+def test_robot_target_reached_uses_control_frame_when_physical_hand_is_pi_rotated():
+    task = _task()
+    target_position = np.asarray([0.4, -0.2, 1.1], dtype=float)
+    target_orientation = np.asarray([1.0, 0.0, 0.0, 0.0], dtype=float)
+    task.resolve_robot_target_pose = lambda *_args, **_kwargs: (
+        'grasp',
+        target_position,
+        target_orientation,
+        {},
+    )
+    task._get_robot_kinematics_pose = lambda _name: (target_position, target_orientation)
+    task._get_robot_task_pose = lambda _name: (
+        target_position,
+        np.asarray([0.0, 0.0, 0.0, 1.0], dtype=float),
+    )
+
+    target_info = task._resolve_phase_target_pose(
+        'franka_right',
+        'grasp',
+        default_position_tolerance=0.005,
+        default_orientation_tolerance=0.1,
+    )
+
+    assert target_info['target_reached'] is True
+    assert np.isclose(target_info['position_error'], 0.0)
+    assert np.isclose(target_info['orientation_error'], 0.0)
+
+
+def test_physical_relative_pose_is_converted_to_pi_rotated_control_frame():
+    task = _task()
+    task._get_robot_task_pose = lambda _name: (
+        np.asarray([0.4, -0.2, 1.1], dtype=float),
+        np.asarray([0.0, 0.0, 0.0, 1.0], dtype=float),
+    )
+    task._get_robot_control_pose = lambda _name: (
+        np.asarray([0.4, -0.2, 1.1], dtype=float),
+        np.asarray([1.0, 0.0, 0.0, 0.0], dtype=float),
+    )
+
+    position, orientation = task._physical_relative_pose_to_control_frame(
+        'franka_right',
+        [0.02, -0.03, 0.1],
+        [1.0, 0.0, 0.0, 0.0],
+    )
+
+    np.testing.assert_allclose(position, [-0.02, 0.03, 0.1], atol=1e-12)
+    np.testing.assert_allclose(np.abs(orientation), [0.0, 0.0, 0.0, 1.0], atol=1e-12)
 
 
 def test_compliant_attachment_uses_a_distinct_joint_prim_path(monkeypatch):
@@ -369,6 +421,101 @@ def test_phase_entry_interactions_run_before_next_control_step(monkeypatch):
     task._update_task_state()
 
     assert interaction_phases == ['place', 'release_and_lock']
+
+
+def test_skill_phase_transition_request_requires_current_completed_skill():
+    task = _task()
+    task.phase_specs = [
+        {'name': 'insert_08'},
+        {'name': 'insert_09'},
+        {'name': 'release_and_lock'},
+    ]
+    task.phase_index = 0
+    task.phase = 'insert_08'
+    task.phase_entry_step = 40
+    task.phase_step_counter = 12
+    task.step_counter = 52
+    task.phase_history = ['insert_08']
+    task.phase_transition_history = []
+    task.phase_attempts = {'insert_08': 1}
+    task.phase_status = 'running'
+    task.last_transition_reason = None
+    task._phase_initialized = True
+    task._phase_transition_request = None
+    task._local_skill_completions = {}
+
+    assert (
+        task.request_phase_transition(
+            target_phase='release_and_lock',
+            expected_phase_index=0,
+            expected_phase_entry_step=39,
+            robot_name='franka_left',
+            skill_name='ur5e_move_part_to_target',
+        )
+        is False
+    )
+    assert (
+        task.request_phase_transition(
+            target_phase='release_and_lock',
+            expected_phase_index=0,
+            expected_phase_entry_step=40,
+            robot_name='franka_left',
+            skill_name='ur5e_move_part_to_target',
+            reason='final-insertion-captured',
+            detail={'position_error': 0.011},
+        )
+        is True
+    )
+    assert task._consume_phase_transition_request() is False
+
+    task.mark_local_skill_complete(
+        robot_name='franka_left',
+        skill_name='ur5e_move_part_to_target',
+        detail={'position_error': 0.011},
+    )
+    assert task._consume_phase_transition_request() is True
+    assert task.phase == 'release_and_lock'
+    assert task.phase_transition_history[-1]['transition_type'] == 'skill-request'
+    assert task.phase_transition_history[-1]['skipped_phase_count'] == 1
+
+
+def test_insertion_capture_transition_uses_success_tolerance():
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    requests = []
+    task = SimpleNamespace(
+        phase_index=8,
+        phase_entry_step=100,
+        request_phase_transition=lambda **payload: requests.append(payload) or True,
+    )
+    spec = {
+        'insertion_capture_transition_phase': 'release_and_lock',
+        'insertion_capture_transition_position_tolerance': 0.015,
+    }
+
+    assert (
+        adapter._request_insertion_capture_transition(
+            task=task,
+            robot_name='franka_left',
+            skill_name='ur5e_move_part_to_target',
+            spec=spec,
+            capture_detail={'position_error': 0.0151},
+        )
+        is False
+    )
+    assert requests == []
+    assert (
+        adapter._request_insertion_capture_transition(
+            task=task,
+            robot_name='franka_left',
+            skill_name='ur5e_move_part_to_target',
+            spec=spec,
+            capture_detail={'position_error': 0.0149},
+        )
+        is True
+    )
+    assert requests[0]['target_phase'] == 'release_and_lock'
+    assert requests[0]['expected_phase_index'] == 8
+    assert requests[0]['expected_phase_entry_step'] == 100
 
 
 def test_final_phase_timeout_is_checked_while_waiting_for_success_stability(monkeypatch):
@@ -760,6 +907,63 @@ def test_insertion_compliance_waits_for_stable_object_motion(monkeypatch):
         )
         is False
     )
+
+
+def test_insertion_compliance_can_capture_dynamic_contact_when_enabled(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    task = SimpleNamespace(
+        step_counter=42,
+        phase='insert',
+        phase_step_counter=10,
+        target_poses={
+            'part_assembled': {
+                'position': np.zeros(3),
+                'orientation': np.asarray([1.0, 0.0, 0.0, 0.0]),
+            }
+        },
+    )
+    relaxed = []
+    task.relax_fixed_attachment_to_physical_hold = lambda name, **_kwargs: relaxed.append(name) or True
+    task.lock_attached_object_at_current_pose = lambda *_args, **_kwargs: pytest.fail(
+        'dynamic capture must remain attached until release_and_lock'
+    )
+    monkeypatch.setattr(
+        adapter,
+        '_object_pose',
+        lambda **_: {
+            'position': np.asarray([0.0, 0.0, 0.005]),
+            'orientation': np.asarray([1.0, 0.0, 0.0, 0.0]),
+        },
+    )
+    monkeypatch.setattr(
+        adapter,
+        '_object_motion_detail',
+        lambda **_: {
+            'valid': True,
+            'linear_speed': 0.5,
+            'angular_speed': 60.0,
+        },
+    )
+    spec = {
+        'object': 'part',
+        'target_object_final_target': 'part_assembled',
+        'relax_fixed_attachment_within_final_position_tolerance': 0.015,
+        'relax_fixed_attachment_final_orientation_tolerance': 0.15,
+        'relax_fixed_attachment_stable_steps': 1,
+        'relax_fixed_attachment_allow_dynamic_capture': True,
+        'keep_fixed_attachment_until_release_lock': True,
+    }
+
+    assert (
+        adapter._maybe_relax_insertion_attachment(
+            task=task,
+            spec=spec,
+            tracked_objects={},
+        )
+        is False
+    )
+    assert relaxed == []
+    assert (id(task), 'part') in adapter._completed_insertion_compliance_transitions
 
 
 def test_insertion_compliance_waits_for_current_waypoint_proximity(monkeypatch):

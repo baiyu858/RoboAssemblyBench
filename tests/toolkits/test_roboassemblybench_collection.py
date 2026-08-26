@@ -280,11 +280,13 @@ def _write_visual_test_video(
     light_streak: bool = False,
     broad_bright_surface: bool = False,
     temporal_render_artifact: bool = False,
+    flat_background_frames: set[int] | None = None,
 ) -> None:
     width, height = 320, 240
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*'mp4v'), 10.0, (width, height))
     assert writer.isOpened()
     missing_robot_frames = missing_robot_frames or {}
+    flat_background_frames = flat_background_frames or set()
 
     def draw_robot(frame, *, base_center: tuple[int, int], reaches_right: bool) -> None:
         base_x, base_y = base_center
@@ -310,6 +312,11 @@ def _write_visual_test_video(
                 np.asarray((55, 80, 110), dtype=np.uint8),
                 np.asarray((115, 145, 175), dtype=np.uint8),
             )
+            if frame_index in flat_background_frames:
+                frame[
+                    int(0.03 * height) : int(0.38 * height),
+                    int(0.25 * width) : int(0.75 * width),
+                ] = (75, 95, 115)
             left_visible_in_frame = left_robot_visible and frame_index not in missing_robot_frames.get('left', set())
             right_visible_in_frame = right_robot_visible and frame_index not in missing_robot_frames.get('right', set())
             if left_visible_in_frame:
@@ -416,6 +423,21 @@ def test_visual_quality_gate_does_not_treat_a_broad_bright_scene_surface_as_a_st
     quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
 
     assert 'visual:light-streak' not in quality['errors']
+
+
+def test_visual_quality_gate_uses_typical_background_frame_instead_of_single_flat_frame(tmp_path: Path):
+    metadata_path = _write_quality_fixture(tmp_path / 'one-flat-background-frame', rendering_interval=7)
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    _write_visual_test_video(
+        Path(metadata['videos'][collector.FRONT_CAMERA_KEY]),
+        flat_background_frames={0},
+    )
+
+    quality = collector._quality_check_episode(metadata_path, require_visual_quality=True)
+
+    assert quality['visual_quality']['background_edge_mean_min'] < collector.BACKGROUND_EDGE_MEAN_THRESHOLD
+    assert quality['visual_quality']['background_edge_mean_median'] >= collector.BACKGROUND_EDGE_MEAN_THRESHOLD
+    assert 'visual:factory-background-not-visible' not in quality['errors']
 
 
 def test_visual_quality_gate_allows_shared_workspace_motion_and_only_graces_first_two_frames(tmp_path: Path):
@@ -558,6 +580,46 @@ def test_two_stage_pipeline_keeps_position_rgbd_and_exports_six_groups():
     assert '--require-extended-observations' in stage1
     assert '--require-visual-quality' in stage1
     assert 'raw="$OUTPUT_ROOT/stage1/$task"' in script
+
+
+def test_two_stage_pipeline_replays_successful_demos_before_stage1_shard_completes():
+    script_path = (
+        Path(__file__).resolve().parents[2]
+        / 'roboassemblybench'
+        / 'scripts'
+        / 'collect_fabrica_7tasks_50k_twostage_multigpu.sh'
+    )
+    script = script_path.read_text(encoding='utf-8')
+    replay_loop = script[script.index('pipeline_replay_loop()') : script.index('lerobot_complete()')]
+
+    assert 'PIPELINED_REPLAY="${PIPELINED_REPLAY:-1}"' in script
+    assert 'PIPELINE_REPLAY_WORKERS_PER_GPU="${PIPELINE_REPLAY_WORKERS_PER_GPU:-1}"' in script
+    assert 'stage1_shard_has_unreplayed_success()' in replay_loop
+    assert 'source_seeds - replayed_seeds' in replay_loop
+    assert 'if ! stage1_shard_has_unreplayed_success "$task" "$profile" "$shard_id"' in replay_loop
+    assert 'run_replay_job "$gpu" "$worker_id" "$task" "$profile" "$shard_id"' in replay_loop
+    assert replay_loop.index('stage1_shard_has_unreplayed_success') < replay_loop.index('run_replay_job')
+    pipeline_loop = replay_loop[replay_loop.index('pipeline_replay_loop()') : replay_loop.index('replay_shard_complete()')]
+    assert 'stage1_shard_complete' not in pipeline_loop
+    assert 'wait_for_stage1_barrier' not in replay_loop
+
+
+def test_two_stage_pipeline_can_pause_stage1_and_assign_all_slots_to_replay():
+    root = Path(__file__).resolve().parents[2]
+    collector_script = (
+        root / 'roboassemblybench' / 'scripts' / 'collect_fabrica_7tasks_50k_twostage_multigpu.sh'
+    ).read_text(encoding='utf-8')
+    launcher_script = (
+        root / 'roboassemblybench' / 'scripts' / 'launch_fabrica_ur5e_60060_autodl.sh'
+    ).read_text(encoding='utf-8')
+
+    assert 'STAGE1_COLLECTION_ENABLED="${STAGE1_COLLECTION_ENABLED:-1}"' in collector_script
+    launch_block = collector_script[collector_script.index('cd "$REPO_ROOT"') :]
+    assert 'if (( STAGE1_COLLECTION_ENABLED == 1 )); then' in launch_block
+    assert 'STAGE1_COLLECTION_ENABLED="${STAGE1_COLLECTION_ENABLED:-0}"' in launcher_script
+    assert 'PIPELINE_REPLAY_WORKERS_PER_GPU="${PIPELINE_REPLAY_WORKERS_PER_GPU:-3}"' in launcher_script
+    assert 'PIPELINE_REPLAY_RAMP_SECONDS="${PIPELINE_REPLAY_RAMP_SECONDS:-30}"' in launcher_script
+    assert 'ISAACSIM_PORTABLE_BASE="${ISAACSIM_PORTABLE_BASE:-$PROJECT_ROOT/runtime/isaacsim_portable}"' in launcher_script
 
 
 def test_visual_quality_gate_rejects_empty_scene_metadata(tmp_path: Path):
@@ -779,6 +841,22 @@ def test_cgroup_memory_limit_takes_precedence_over_host_memory(tmp_path: Path):
     available = collector._cgroup_available_memory_bytes(((limit, current),))
 
     assert available == 39 * 1024**3
+
+
+def test_cgroup_memory_available_reclaims_inactive_file_cache(tmp_path: Path):
+    limit = tmp_path / 'memory.max'
+    current = tmp_path / 'memory.current'
+    stat = tmp_path / 'memory.stat'
+    limit.write_text(str(440 * 1024**3), encoding='utf-8')
+    current.write_text(str(401 * 1024**3), encoding='utf-8')
+    stat.write_text(f'inactive_file {120 * 1024**3}\n', encoding='utf-8')
+
+    available = collector._cgroup_available_memory_bytes(
+        ((limit, current),),
+        (stat,),
+    )
+
+    assert available == 159 * 1024**3
 
 
 def test_collection_lock_rejects_a_second_writer(tmp_path: Path):

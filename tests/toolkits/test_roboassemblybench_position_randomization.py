@@ -496,6 +496,9 @@ def test_ur5e_atomic_skill_api_compiles_runtime_contract_and_keeps_old_import():
     assert phases[2]['advance']['type'] == 'local_skill_complete'
     assert phases[0]['local_skill']['cartesian_servo'] is True
     assert phases[0]['local_skill']['guard_ik_branch_jump'] is True
+    assert phases[0]['local_skill']['ik_branch_jump_limit'] == 0.45
+    assert phases[0]['local_skill']['ik_branch_jump_reference_mode'] == 'reference'
+    assert phases[0]['local_skill']['allow_initial_ik_branch_jump'] is False
     assert phases[0]['local_skill']['max_command_tracking_error'] == 0.18
     assert phases[0]['local_skill']['cartesian_position_step'] == 0.015
     assert phases[0]['local_skill']['cartesian_orientation_step'] == 0.030
@@ -507,6 +510,31 @@ def test_ur5e_atomic_skill_api_compiles_runtime_contract_and_keeps_old_import():
     assert phases[2]['local_skill']['servo_target_object_pose'] is True
     assert phases[3]['local_skill']['cartesian_servo'] is False
     assert phases[3]['local_skill']['joint_target_stable_steps'] == 8
+
+
+def test_cartesian_skill_uses_kinematics_pose_instead_of_physical_gripper_frame():
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    task = SimpleNamespace(
+        _get_robot_kinematics_pose=lambda _name: (
+            np.asarray([0.1, 0.2, 0.3]),
+            np.asarray([1.0, 0.0, 0.0, 0.0]),
+        )
+    )
+    tracked_robots = {
+        'franka_right': {
+            'position': [0.1, 0.2, 0.3],
+            'orientation': [0.0, 1.0, 0.0, 0.0],
+        }
+    }
+
+    pose = adapter._current_robot_pose(
+        task=task,
+        robot_name='franka_right',
+        tracked_robots=tracked_robots,
+    )
+
+    np.testing.assert_allclose(pose['position'], [0.1, 0.2, 0.3])
+    np.testing.assert_allclose(pose['orientation'], [1.0, 0.0, 0.0, 0.0])
 
 
 def test_preshape_gripper_requires_both_joint_and_object_stability(monkeypatch):
@@ -543,6 +571,41 @@ def test_preshape_gripper_requires_both_joint_and_object_stability(monkeypatch):
 
     assert action['gripper_controller'] == [0.65]
     assert completed[-1]['skill_name'] == 'ur5e_preshape_gripper'
+
+
+def test_preshape_accepts_a_static_safe_aperture_when_the_target_stalls(monkeypatch):
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    completed = []
+    task = SimpleNamespace(
+        phase_index=1,
+        phase_entry_step=0,
+        phase_step_counter=0,
+        mark_local_skill_complete=lambda **payload: completed.append(payload),
+    )
+    monkeypatch.setattr(adapter, '_hold_joint_action', lambda **_kwargs: {})
+    # Requested openness is 0.564 (q=0.349), but a static q=0.394 still
+    # leaves openness 0.508, above the grasp-safe aperture 0.444.
+    monkeypatch.setattr(adapter, '_current_gripper_q', lambda **_kwargs: 0.394)
+    monkeypatch.setattr(adapter, '_gripper_open_closed_q', lambda **_kwargs: (0.0, 0.8))
+
+    adapter.act(
+        task=task,
+        robot_name='franka_left',
+        phase_spec={},
+        skill_spec={
+            'name': 'ur5e_preshape_gripper',
+            'object': 'part_6',
+            'gripper_openness': 0.564,
+            'minimum_gripper_openness': 0.444,
+            'stable_steps': 1,
+        },
+        tracked_robots={},
+        tracked_objects={'part_6': {'linear_speed': 0.0, 'angular_speed': 0.0}},
+    )
+
+    assert completed[-1]['skill_name'] == 'ur5e_preshape_gripper'
+    assert completed[-1]['detail']['target_gripper_ready'] is False
+    assert completed[-1]['detail']['minimum_opening_ready'] is True
 
 
 def test_object_relative_hover_retracts_along_the_grasp_axis():
@@ -1651,6 +1714,52 @@ def test_transport_uses_observed_fixed_attachment_pose_and_invalidates_regrasp()
     )
     np.testing.assert_allclose(second_position, [-0.3, -0.2, -0.1])
     np.testing.assert_allclose(second_orientation, [0.0, 1.0, 0.0, 0.0])
+
+
+def test_transport_converts_physical_attachment_pose_to_control_frame():
+    adapter = UR5eAssemblyAtomicSkillAdapter({})
+    conversions = []
+    task = SimpleNamespace(
+        _physical_relative_pose_to_control_frame=lambda robot, position, orientation: (
+            conversions.append((robot, np.asarray(position), np.asarray(orientation)))
+            or (
+                np.asarray([-0.1, -0.2, 0.3], dtype=float),
+                np.asarray([0.0, 0.0, 0.0, 1.0], dtype=float),
+            )
+        )
+    )
+    attachment = {
+        'robot_name': 'franka_right',
+        'mode': 'fixed_joint',
+        'attach_step': 10,
+        'joint_path': '/World/part/joint',
+        'position': [0.1, 0.2, 0.3],
+        'orientation': [1.0, 0.0, 0.0, 0.0],
+    }
+
+    position, orientation = adapter._object_tcp_relative_pose(
+        phase_key=('transport',),
+        task=task,
+        robot_name='franka_right',
+        object_name='part',
+        spec={},
+        tracked_robots={},
+        object_pose={
+            'position': np.asarray([1.0, 2.0, 3.0], dtype=float),
+            'orientation': np.asarray([1.0, 0.0, 0.0, 0.0], dtype=float),
+        },
+        tracked_objects={
+            'part': {
+                'attached_to': 'franka_right',
+                'attachment': attachment,
+            }
+        },
+    )
+
+    assert conversions[0][0] == 'franka_right'
+    np.testing.assert_allclose(conversions[0][1], attachment['position'])
+    np.testing.assert_allclose(position, [-0.1, -0.2, 0.3])
+    np.testing.assert_allclose(orientation, [0.0, 0.0, 0.0, 1.0])
 
 
 def test_close_pose_gate_timeout_allows_in_progress_stability_window(monkeypatch):

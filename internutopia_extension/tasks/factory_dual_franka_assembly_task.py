@@ -148,6 +148,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._handoff_history = []
         self._recovery_history = []
         self._local_skill_completions = {}
+        self._phase_transition_request = None
         self._object_state_sanity_recovery_attempts = {}
         self._object_metadata_map = {
             metadata['name']: copy.deepcopy(metadata)
@@ -317,6 +318,77 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             str(robot_name),
             str(skill_name),
         ) in self._local_skill_completions
+
+    def request_phase_transition(
+        self,
+        *,
+        target_phase: str,
+        expected_phase_index: int,
+        expected_phase_entry_step: int,
+        robot_name: str,
+        skill_name: str,
+        reason: str = 'local-skill-request',
+        detail: dict | None = None,
+    ) -> bool:
+        """Request a forward transition bound to the current skill invocation."""
+
+        if (
+            int(expected_phase_index) != int(self.phase_index)
+            or int(expected_phase_entry_step) != int(self.phase_entry_step)
+        ):
+            return False
+        target_index = self._phase_index_for_name(str(target_phase))
+        if target_index is None or target_index <= int(self.phase_index):
+            return False
+        self._phase_transition_request = {
+            'from_phase_index': int(self.phase_index),
+            'from_phase_entry_step': int(self.phase_entry_step),
+            'target_phase': str(target_phase),
+            'target_phase_index': int(target_index),
+            'robot_name': str(robot_name),
+            'skill_name': str(skill_name),
+            'reason': str(reason),
+            'detail': copy.deepcopy(detail or {}),
+        }
+        return True
+
+    def _consume_phase_transition_request(self) -> bool:
+        request = getattr(self, '_phase_transition_request', None)
+        if not isinstance(request, dict):
+            return False
+        if (
+            int(request.get('from_phase_index', -1)) != int(self.phase_index)
+            or int(request.get('from_phase_entry_step', -1)) != int(self.phase_entry_step)
+        ):
+            self._phase_transition_request = None
+            return False
+        robot_name = str(request.get('robot_name', ''))
+        skill_name = str(request.get('skill_name', ''))
+        if not robot_name or not skill_name or not self.is_local_skill_complete(robot_name, skill_name):
+            return False
+        target_index = self._phase_index_for_name(request.get('target_phase'))
+        if target_index is None or target_index <= int(self.phase_index):
+            self._phase_transition_request = None
+            return False
+
+        transition_detail = copy.deepcopy(request.get('detail') or {})
+        transition_detail.update(
+            {
+                'requested_by_robot': robot_name,
+                'requested_by_skill': skill_name,
+                'skipped_phase_count': int(target_index - self.phase_index - 1),
+            }
+        )
+        reason = str(request.get('reason') or 'local-skill-request')
+        self._phase_transition_request = None
+        self._set_phase(
+            target_index,
+            reason=reason,
+            transition_type='skill-request',
+            status='running',
+            detail=transition_detail,
+        )
+        return True
 
     def get_target_pose(self, target_name: str) -> dict:
         pose = self.target_poses[target_name]
@@ -551,11 +623,16 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
 
         local_position = np.asarray(local_position, dtype=float)
         local_orientation = np.asarray(local_orientation, dtype=float)
+        local_position, local_orientation = self._physical_relative_pose_to_control_frame(
+            robot_name,
+            local_position,
+            local_orientation,
+        )
         payload_target_position = np.asarray(payload_target_position, dtype=float)
         payload_target_orientation = np.asarray(payload_target_orientation, dtype=float)
 
         if bool(target_spec.get('position_only') or target_spec.get('ignore_orientation')):
-            _, current_robot_orientation = self._get_robot_task_pose(robot_name)
+            _, current_robot_orientation = self._get_robot_control_pose(robot_name)
             robot_target_orientation = np.asarray(current_robot_orientation, dtype=float)
         else:
             robot_target_orientation = quat_multiply(payload_target_orientation, quat_conjugate(local_orientation))
@@ -644,6 +721,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 detail=detail,
             )
         )
+        self._phase_transition_request = None
         self._phase_initialized = False
 
     def _extract_object_name(self, entry):
@@ -1209,7 +1287,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
             default_position_tolerance=default_position_tolerance,
             default_orientation_tolerance=default_orientation_tolerance,
         )
-        current_position, current_orientation = self._get_robot_task_pose(robot_name)
+        current_position, current_orientation = self._get_robot_control_pose(robot_name)
         position_error, orientation_error = pose_error(
             current_position=current_position,
             current_orientation=current_orientation,
@@ -1269,6 +1347,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                 detail=detail,
             )
         )
+        self._phase_transition_request = None
         self._phase_initialized = False
 
     def _resolve_object(self, object_name: str):
@@ -2851,6 +2930,37 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
                     return np.asarray(position, dtype=float), np.asarray(orientation, dtype=float)
         return None
 
+    def _get_robot_control_pose(self, robot_name: str):
+        """Return the frame used by Cartesian targets and the IK controller."""
+
+        kinematics_pose = self._get_robot_kinematics_pose(robot_name)
+        if kinematics_pose is not None:
+            return kinematics_pose
+        return self._get_robot_task_pose(robot_name)
+
+    def _physical_relative_pose_to_control_frame(
+        self,
+        robot_name: str,
+        local_position,
+        local_orientation,
+    ):
+        """Express a physical-gripper relative pose in Lula's control frame."""
+
+        physical_position, physical_orientation = self._get_robot_task_pose(robot_name)
+        control_position, control_orientation = self._get_robot_control_pose(robot_name)
+        world_position, world_orientation = compose_pose(
+            base_position=physical_position,
+            base_orientation=physical_orientation,
+            local_position=local_position,
+            local_orientation=local_orientation,
+        )
+        return relative_pose(
+            base_position=control_position,
+            base_orientation=control_orientation,
+            world_position=world_position,
+            world_orientation=world_orientation,
+        )
+
     def _get_robot_pose_frame_diagnostic(self, robot_name: str) -> dict:
         """Expose the physical-hand versus Lula-frame agreement for rollouts."""
 
@@ -2884,7 +2994,7 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         return diagnostic
 
     def _get_robot_task_pose(self, robot_name: str):
-        """Use the simulated hand frame for contact, attachment, and completion.
+        """Use the simulated hand frame for contact, attachment, and recording.
 
         Lula is the IK solver, not the source of truth for physical interaction.
         Keeping this contract explicit prevents a solver/USD TCP mismatch from
@@ -5549,6 +5659,14 @@ class FactoryDualFrankaAssemblyTask(BaseTask):
         self._sync_object_states()
         if self.success or self.failed:
             return
+
+        if self._consume_phase_transition_request():
+            self._initialize_phase()
+            self._process_phase_interactions(self.get_current_phase_spec())
+            self._sync_object_states()
+            if self.success or self.failed:
+                return
+            phase_spec = self.get_current_phase_spec()
 
         if self._advance_condition_met(phase_spec):
             if self.phase_index + 1 < len(self.phase_specs):

@@ -54,6 +54,7 @@ fabrica_canonical:
   insertion_compliance_capture_stable_steps: 8
   insertion_compliance_geometric_capture_after_steps: 1200
   insertion_compliance_minimum_gravity_alignment: 0.70
+  insertion_capture_keep_fixed_until_release_lock: true
   insertion_compliant_alignment_retraction_limit: 0.006
   insertion_compliant_track_object_orientation: true
   insertion_lateral_alignment_cartesian_position_step: 0.00025
@@ -73,6 +74,14 @@ fabrica_canonical:
   post_release_park_distance: 0.35
   post_release_park_vertical_offset: 0.02
   post_release_park_minimum_planar_radius: 0.28
+  # The final retreat already leaves the completed assembly clear. A terminal
+  # park has no successor and can trap a successful rollout at an unreachable
+  # relative Cartesian target, so finish immediately after that retreat.
+  skip_terminal_park: true
+  # Release-and-lock already verifies that every part is released and static.
+  # The final retreat has no downstream safety role and can likewise turn a
+  # completed assembly into a timeout near a Cartesian singularity.
+  skip_terminal_retreat: true
   pickup_translation_range:
     x: [-0.08, 0.08]
     y: [-0.08, 0.08]

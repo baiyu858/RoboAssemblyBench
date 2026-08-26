@@ -186,6 +186,20 @@ def test_80hz_control_scales_phase_counts_and_motion_steps_from_240hz():
     )
 
 
+@pytest.mark.parametrize(
+    ('recipe', 'terminal_phase'),
+    [
+        ('fabrica_gamepad_ur5e_staged', 'assemble_04_part_4_release_and_lock'),
+        ('fabrica_plumbers_block_ur5e_staged', 'assemble_03_part_4_release_and_lock'),
+    ],
+)
+def test_80hz_long_fabrica_tasks_reserve_terminal_phase_budget(recipe, terminal_phase):
+    task = build_dual_franka_assembly_episode(recipe=recipe, seed=3, control_fps=80)
+
+    assert task.phase_specs[-1]['name'] == terminal_phase
+    assert task.max_steps >= round(len(task.phase_specs) * 420 / 3)
+
+
 def test_asset_backed_recipes_default_to_taoyuan_tabletop():
     screw_fastening = load_task_recipe('screw_fastening')
     peg_insertion = load_task_recipe('peg_insertion')

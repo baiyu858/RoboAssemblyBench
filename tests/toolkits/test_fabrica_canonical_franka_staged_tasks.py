@@ -929,6 +929,41 @@ def test_prealign_seeds_approach_ik_from_physical_grasp_endpoint(monkeypatch):
     )
 
 
+def test_prealign_target_ik_can_stay_on_the_current_warm_start_branch(monkeypatch):
+    adapter = AssemblyAtomicSkillAdapter({})
+    reference_q = np.zeros(6, dtype=float)
+    solve_calls = []
+    task = SimpleNamespace(phase='part_move_above', phase_step_counter=0, step_counter=0)
+    monkeypatch.setattr(adapter, '_current_arm_q', lambda *_args: reference_q.copy())
+    monkeypatch.setattr(adapter, '_command_reference_q', lambda **_kwargs: reference_q.copy())
+
+    def solve_ik(**kwargs):
+        solve_calls.append(kwargs)
+        return np.full(6, 0.2, dtype=float)
+
+    monkeypatch.setattr(adapter, '_solve_ik', solve_ik)
+    adapter._prealign_action(
+        phase_key=('warm-start-only-prealign',),
+        task=task,
+        robot_name='franka_right',
+        target_pose={
+            'position': np.asarray([0.4, -0.2, 1.2]),
+            'orientation': np.asarray([1.0, 0.0, 0.0, 0.0]),
+        },
+        spec={
+            'prealign_steps': 240,
+            'prealign_target_ik': True,
+            'prealign_require_warm_start_ik': True,
+            'prealign_warm_start_ik_only': True,
+        },
+    )
+
+    assert len(solve_calls) == 1
+    np.testing.assert_allclose(solve_calls[0]['warm_start'], reference_q)
+    assert solve_calls[0]['spec']['require_warm_start_ik'] is True
+    assert solve_calls[0]['spec']['warm_start_ik_only'] is True
+
+
 def test_distant_locked_transport_target_falls_back_to_continuous_cartesian(monkeypatch):
     adapter = AssemblyAtomicSkillAdapter({})
     phase_key = ('transport-fallback',)
@@ -1092,8 +1127,6 @@ def test_shared_atomic_skill_adapter_reseeds_a_stalled_cartesian_ik_solution():
         command_target_pose=command_target_pose,
         spec=spec,
     )
-
-
 def test_warm_start_only_ik_temporarily_excludes_default_cspace_seeds():
     class RawSolver:
         def __init__(self):

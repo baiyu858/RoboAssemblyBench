@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 import os
 from collections import OrderedDict
@@ -76,7 +77,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         self._insertion_lateral_clearance_anchors: dict[tuple[Any, ...], float] = {}
         self._target_object_settle_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._physically_relaxed_insertion_objects: set[tuple[int, str]] = set()
-        self._completed_insertion_compliance_transitions: set[tuple[int, str]] = set()
+        self._completed_insertion_compliance_transitions: dict[tuple[int, str], dict[str, Any]] = {}
         self._insertion_compliance_transition_state: dict[tuple[int, str], dict[str, Any]] = {}
         self._compliant_motion_recovery_state: dict[tuple[int, str], dict[str, Any]] = {}
 
@@ -325,7 +326,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         object_name = self._object_name_from_spec(spec)
         compliance_transition_key = None if object_name is None else (id(task), object_name)
         if compliance_transition_key in self._completed_insertion_compliance_transitions:
-            self._completed_insertion_compliance_transitions.discard(compliance_transition_key)
+            capture_detail = self._completed_insertion_compliance_transitions.pop(compliance_transition_key)
             self._mark_complete(
                 task=task,
                 robot_name=robot_name,
@@ -334,7 +335,15 @@ class UR5eAssemblyAtomicSkillAdapter:
                     'completion_reason': 'stable_physical_insertion_capture',
                     'object': object_name,
                     'phase': getattr(task, 'phase', None),
+                    **capture_detail,
                 },
+            )
+            self._request_insertion_capture_transition(
+                task=task,
+                robot_name=robot_name,
+                skill_name=skill_name,
+                spec=spec,
+                capture_detail=capture_detail,
             )
             return self._held_transport_action(
                 task=task,
@@ -2759,17 +2768,79 @@ class UR5eAssemblyAtomicSkillAdapter:
             spec=spec,
             motion_detail=motion_detail,
         )
-        motion_ready = bool(velocity_ready or pose_stable_ready or pose_history_velocity_override_ready)
+        # A hard grasp joint can become dynamically overconstrained exactly at
+        # tight contact, so waiting for low velocity can deadlock compliance
+        # capture. Selected insertion geometries may complete from a valid pose
+        # gate even while moving, while retaining the fixed joint until the
+        # following release-and-lock phase secures the object.
+        dynamic_capture_ready = bool(spec.get('relax_fixed_attachment_allow_dynamic_capture', False))
+        motion_ready = bool(
+            dynamic_capture_ready
+            or velocity_ready
+            or pose_stable_ready
+            or pose_history_velocity_override_ready
+        )
         if motion_ready:
             transition_state['stable_steps'] = int(transition_state.get('stable_steps', 0)) + 1
         else:
             transition_state['stable_steps'] = 0
         required_stable_steps = max(
-            int(spec.get('relax_fixed_attachment_stable_steps', 8)),
+            int(
+                spec.get(
+                    'relax_fixed_attachment_dynamic_capture_stable_steps',
+                    1,
+                )
+                if dynamic_capture_ready
+                else spec.get('relax_fixed_attachment_stable_steps', 8)
+            ),
             1,
         )
         if int(transition_state['stable_steps']) < required_stable_steps:
             return True
+
+        capture_detail = {
+            'final_target': str(final_target_name),
+            'position_error': float(position_error),
+            'position_tolerance': float(position_tolerance),
+            'orientation_error': float(orientation_error),
+            'waypoint_position_error': (
+                None if waypoint_position_error is None else float(waypoint_position_error)
+            ),
+            'waypoint_axial_position_error': (
+                None if waypoint_axial_position_error is None else float(waypoint_axial_position_error)
+            ),
+            'waypoint_lateral_position_error': (
+                None if waypoint_lateral_position_error is None else float(waypoint_lateral_position_error)
+            ),
+        }
+
+        keep_fixed_until_lock = bool(spec.get('keep_fixed_attachment_until_release_lock', False))
+        if dynamic_capture_ready or keep_fixed_until_lock:
+            # Keep the grasp joint authoritative until the requested
+            # release-and-lock phase. That transition is consumed in the same
+            # task update, so pre-locking here only duplicates the release
+            # phase's pose gate and can strand a valid contact capture when
+            # live USD and policy observations differ by one physics sample.
+            capture_mode = 'fixed_joint_dynamic' if dynamic_capture_ready else 'fixed_joint_stable'
+            self._completed_insertion_compliance_transitions[relaxation_key] = {
+                **capture_detail,
+                'capture_mode': capture_mode,
+            }
+            self._insertion_compliance_transition_state.pop(relaxation_key, None)
+            print(
+                '[ur5e-insertion-compliance] '
+                f"step={getattr(task, 'step_counter', None)} "
+                f"phase={getattr(task, 'phase', None)} object={object_name} "
+                f'final_target={final_target_name} '
+                f'position_error={position_error} position_tolerance={position_tolerance} '
+                f'waypoint_position_error={waypoint_position_error} '
+                f'waypoint_axial_position_error={waypoint_axial_position_error} '
+                f'waypoint_lateral_position_error={waypoint_lateral_position_error} '
+                f'orientation_error={orientation_error} '
+                f'mode={capture_mode}_capture',
+                flush=True,
+            )
+            return False
 
         relax_fn = getattr(task, 'relax_fixed_attachment_to_physical_hold', None)
         if not callable(relax_fn) or not bool(
@@ -2781,7 +2852,10 @@ class UR5eAssemblyAtomicSkillAdapter:
             return True
 
         self._physically_relaxed_insertion_objects.add(relaxation_key)
-        self._completed_insertion_compliance_transitions.add(relaxation_key)
+        self._completed_insertion_compliance_transitions[relaxation_key] = {
+            **capture_detail,
+            'capture_mode': 'compliant_joint',
+        }
         self._insertion_compliance_transition_state.pop(relaxation_key, None)
         print(
             '[ur5e-insertion-compliance] '
@@ -3834,11 +3908,27 @@ class UR5eAssemblyAtomicSkillAdapter:
                 and np.all(np.isfinite(attachment_position))
                 and np.all(np.isfinite(attachment_orientation))
             ):
+                convert_relative_pose = getattr(
+                    task,
+                    '_physical_relative_pose_to_control_frame',
+                    None,
+                )
+                if callable(convert_relative_pose):
+                    try:
+                        attachment_position, attachment_orientation = convert_relative_pose(
+                            robot_name,
+                            attachment_position,
+                            attachment_orientation,
+                        )
+                        attachment_position = np.asarray(attachment_position, dtype=float)
+                        attachment_orientation = normalize_quat(attachment_orientation)
+                    except Exception:
+                        return None
                 cache[cache_key] = {
                     'position': attachment_position.copy(),
                     'orientation': attachment_orientation.copy(),
                     'attachment_identity': attachment_identity,
-                    'source': 'observed_attachment',
+                    'source': 'observed_attachment_control_frame',
                 }
                 return (
                     attachment_position.copy(),
@@ -4421,6 +4511,18 @@ class UR5eAssemblyAtomicSkillAdapter:
                                     spec.get('hard_preferred_joint_abs_limit', True)
                                 ),
                             )
+                prealign_require_warm_start = bool(
+                    spec.get(
+                        'prealign_require_warm_start_ik',
+                        terminal_seed_q is not None,
+                    )
+                )
+                prealign_warm_start_only = bool(
+                    spec.get(
+                        'prealign_warm_start_ik_only',
+                        prealign_require_warm_start,
+                    )
+                )
                 ik_result = self._solve_ik(
                     task=task,
                     robot_name=robot_name,
@@ -4428,8 +4530,8 @@ class UR5eAssemblyAtomicSkillAdapter:
                     warm_start=terminal_seed_q if terminal_seed_q is not None else reference_q,
                     spec={
                         **spec,
-                        'require_warm_start_ik': terminal_seed_q is not None,
-                        'warm_start_ik_only': terminal_seed_q is not None,
+                        'require_warm_start_ik': prealign_require_warm_start,
+                        'warm_start_ik_only': prealign_warm_start_only,
                     },
                 )
                 if ik_result is not None:
@@ -4793,6 +4895,22 @@ class UR5eAssemblyAtomicSkillAdapter:
 
     @staticmethod
     def _current_robot_pose(*, task, robot_name: str, tracked_robots: dict):
+        # Cartesian IK must measure error in the solver's end-effector frame.
+        # The physical gripper body remains the source of truth for contacts
+        # and recorded state, but some UR5e assets mount it with a fixed pi
+        # rotation relative to Lula's configured frame.
+        get_kinematics_pose = getattr(task, '_get_robot_kinematics_pose', None)
+        if callable(get_kinematics_pose):
+            try:
+                kinematics_pose = get_kinematics_pose(robot_name)
+            except Exception:
+                kinematics_pose = None
+            if kinematics_pose is not None:
+                position, orientation = kinematics_pose
+                return {
+                    'position': np.asarray(position, dtype=float),
+                    'orientation': normalize_quat(orientation),
+                }
         robot_state = tracked_robots.get(robot_name, {})
         if robot_state.get('position') is not None and robot_state.get('orientation') is not None:
             return {
@@ -5791,13 +5909,37 @@ class UR5eAssemblyAtomicSkillAdapter:
         gripper_q = self._current_gripper_q(task=task, robot_name=robot_name)
         open_q, closed_q = self._gripper_open_closed_q(task=task, robot_name=robot_name)
         target_q = None
+        actual_openness = None
         if open_q is not None and closed_q is not None:
             target_q = float(open_q) + (1.0 - openness) * (float(closed_q) - float(open_q))
-        gripper_ready = bool(
+            joint_span = float(closed_q) - float(open_q)
+            if gripper_q is not None and abs(joint_span) > 1e-9:
+                actual_openness = float(
+                    np.clip(1.0 - (float(gripper_q) - float(open_q)) / joint_span, 0.0, 1.0)
+                )
+        target_gripper_ready = bool(
             gripper_q is not None
             and target_q is not None
             and abs(float(gripper_q) - target_q) <= float(spec.get('gripper_position_tolerance', 0.015))
         )
+        minimum_openness = spec.get('minimum_gripper_openness')
+        minimum_opening_ready = False
+        if minimum_openness is not None:
+            minimum_openness = float(minimum_openness)
+            if not np.isfinite(minimum_openness) or not 0.0 <= minimum_openness <= 1.0:
+                return self._failure_or_hold(
+                    task,
+                    robot_name,
+                    spec,
+                    'invalid_minimum_gripper_openness',
+                    diagnostics={'minimum_gripper_openness': minimum_openness},
+                )
+            minimum_opening_ready = bool(
+                actual_openness is not None and actual_openness >= minimum_openness
+            )
+        # Exact aperture remains preferred.  The geometric minimum is a safe
+        # fallback only when it preserves the clearance needed for the grasp.
+        gripper_ready = bool(target_gripper_ready or minimum_opening_ready)
 
         motion_detail = {'valid': True, 'checked': False}
         motion_ready = True
@@ -5831,6 +5973,10 @@ class UR5eAssemblyAtomicSkillAdapter:
             'gripper_openness': openness,
             'gripper_joint_position': None if gripper_q is None else float(gripper_q),
             'target_gripper_joint_position': target_q,
+            'actual_gripper_openness': actual_openness,
+            'minimum_gripper_openness': minimum_openness,
+            'target_gripper_ready': target_gripper_ready,
+            'minimum_opening_ready': minimum_opening_ready,
             'gripper_ready': gripper_ready,
             'motion_ready': motion_ready,
             'motion_detail': motion_detail,
@@ -6668,6 +6814,51 @@ class UR5eAssemblyAtomicSkillAdapter:
         marker = getattr(task, 'mark_local_skill_complete', None)
         if callable(marker):
             marker(robot_name=robot_name, skill_name=skill_name, detail=detail)
+
+    @staticmethod
+    def _request_insertion_capture_transition(
+        *,
+        task,
+        robot_name: str,
+        skill_name: str,
+        spec: dict,
+        capture_detail: dict[str, Any],
+    ) -> bool:
+        target_phase = spec.get('insertion_capture_transition_phase')
+        if target_phase is None:
+            return False
+        try:
+            position_error = float(capture_detail['position_error'])
+            position_tolerance = float(
+                spec.get('insertion_capture_transition_position_tolerance', 0.015)
+            )
+        except (KeyError, TypeError, ValueError):
+            return False
+        if (
+            not np.isfinite(position_error)
+            or not np.isfinite(position_tolerance)
+            or position_tolerance <= 0.0
+            or position_error > position_tolerance
+        ):
+            return False
+        requester = getattr(task, 'request_phase_transition', None)
+        if not callable(requester):
+            return False
+        phase_index = getattr(task, 'phase_index', None)
+        phase_entry_step = getattr(task, 'phase_entry_step', None)
+        if phase_index is None or phase_entry_step is None:
+            return False
+        return bool(
+            requester(
+                target_phase=str(target_phase),
+                expected_phase_index=int(phase_index),
+                expected_phase_entry_step=int(phase_entry_step),
+                robot_name=str(robot_name),
+                skill_name=str(skill_name),
+                reason='final-insertion-captured',
+                detail=copy.deepcopy(capture_detail),
+            )
+        )
 
     def _grasp_contact_ready(self, *, task, robot_name: str, spec: dict) -> tuple[bool, dict[str, Any]]:
         object_name = str(spec.get('object', spec.get('object_name', spec.get('held_object', ''))))

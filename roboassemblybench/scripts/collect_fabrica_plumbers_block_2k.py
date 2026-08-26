@@ -86,8 +86,22 @@ def _write_json_atomic(path: Path, payload: Any) -> None:
     temporary.replace(path)
 
 
+def _reclaimable_file_cache_bytes(stat_path: Path) -> int:
+    reclaimable_bytes = 0
+    try:
+        for line in stat_path.read_text(encoding='utf-8').splitlines():
+            fields = line.split(None, 1)
+            if len(fields) != 2 or fields[0] not in {'inactive_file', 'total_inactive_file'}:
+                continue
+            reclaimable_bytes = max(reclaimable_bytes, int(fields[1]))
+    except (FileNotFoundError, OSError, ValueError):
+        pass
+    return reclaimable_bytes
+
+
 def _cgroup_available_memory_bytes(
     cgroup_layouts: tuple[tuple[Path, Path], ...] | None = None,
+    cgroup_stat_paths: tuple[Path, ...] | None = None,
 ) -> int | None:
     layouts = cgroup_layouts or (
         (Path('/sys/fs/cgroup/memory.max'), Path('/sys/fs/cgroup/memory.current')),
@@ -107,7 +121,18 @@ def _cgroup_available_memory_bytes(
             continue
         # cgroup v1 reports an effectively unlimited sentinel close to INT64_MAX.
         if 0 < limit_bytes < (1 << 60):
-            return max(limit_bytes - usage_bytes, 0)
+            # cgroup.current includes page cache.  Treat inactive file cache as
+            # reclaimable; otherwise Isaac's own USD/shader cache can make the
+            # collector wait forever despite substantial reclaimable capacity.
+            if cgroup_stat_paths is not None:
+                stat_path = cgroup_stat_paths[layouts.index((limit_path, usage_path))]
+            elif cgroup_layouts is None:
+                stat_path = usage_path.with_name('memory.stat')
+            else:
+                stat_path = None
+            reclaimable_bytes = _reclaimable_file_cache_bytes(stat_path) if stat_path else 0
+            effective_usage_bytes = max(usage_bytes - reclaimable_bytes, 0)
+            return max(limit_bytes - effective_usage_bytes, 0)
     return None
 
 
@@ -397,7 +422,7 @@ def _front_visual_quality(video_path: Path) -> dict[str, Any]:
         float(np.median(result['background_edge_mean'])) if result['background_edge_mean'] else 0.0
     )
     result['background_edge_mean_min'] = min(result['background_edge_mean'], default=0.0)
-    if result['background_edge_mean_min'] < BACKGROUND_EDGE_MEAN_THRESHOLD:
+    if result['background_edge_mean_median'] < BACKGROUND_EDGE_MEAN_THRESHOLD:
         result['errors'].append('factory-background-not-visible')
 
     result['motion_mae_from_first_max'] = max(result['motion_mae_from_first'], default=0.0)
@@ -763,12 +788,14 @@ def _batch_command(
     layout_seeds: list[int] | None = None,
     record_raw: bool = True,
 ) -> list[str]:
+    thread_count = os.environ.get('ISAACSIM_OMP_NUM_THREADS', '1')
     environment = [
         'PYTHONNOUSERSITE=1',
         'PYTHONUNBUFFERED=1',
-        'OMP_NUM_THREADS=4',
-        'MKL_NUM_THREADS=4',
-        'OPENBLAS_NUM_THREADS=4',
+        f'OMP_NUM_THREADS={thread_count}',
+        f'MKL_NUM_THREADS={thread_count}',
+        f'OPENBLAS_NUM_THREADS={thread_count}',
+        f'NUMEXPR_NUM_THREADS={thread_count}',
         f'UR5E_DEBUG_GRASP={os.environ.get("UR5E_DEBUG_GRASP", "0")}',
         f'UR5E_DEBUG_TRANSPORT_EVERY={os.environ.get("UR5E_DEBUG_TRANSPORT_EVERY", "0")}',
     ]

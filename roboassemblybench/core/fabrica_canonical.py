@@ -2928,6 +2928,7 @@ def _append_pick_and_attach_phases(
     preshape_timeout_steps: int,
     preshape_open_margin: float,
     preshape_gripper_position_tolerance: float,
+    preshape_minimum_open_margin_ratio: float,
     descend_timeout_steps: int,
     descend_position_tolerance: float,
     descend_orientation_tolerance: float,
@@ -2957,6 +2958,13 @@ def _append_pick_and_attach_phases(
     preclose_openness = min(
         1.0,
         grasp_open_ratio + float(preshape_open_margin),
+    )
+    # The Robotiq fingers can stop slightly short of their commanded pre-shape
+    # aperture while still leaving enough clearance for the specified grasp.
+    # Require an aperture above the grasp itself rather than treating a small
+    # actuator tracking error as a failed pickup.
+    minimum_preshape_openness = grasp_open_ratio + float(preshape_minimum_open_margin_ratio) * (
+        preclose_openness - grasp_open_ratio
     )
     closed_openness = max(0.0, grasp_open_ratio - 0.035)
     closed_joint_position = 0.8 * (1.0 - closed_openness)
@@ -3043,6 +3051,7 @@ def _append_pick_and_attach_phases(
             parameters={
                 'object': object_name,
                 'gripper_openness': preclose_openness,
+                'minimum_gripper_openness': minimum_preshape_openness,
                 'hold_steps': 36,
                 'preshape_timeout_steps': preshape_timeout_steps,
                 'gripper_position_tolerance': float(preshape_gripper_position_tolerance),
@@ -3209,6 +3218,14 @@ def _append_pick_and_attach_phases(
                 'lock_target_orientation': True,
                 'gripper_command': 'contact_hold',
                 'position_tolerance': 0.012,
+                # A grasp can finish close to a UR5e wrist singularity.  The
+                # first upward Cartesian solve may then require a different
+                # redundant branch even though the subsequent lift is fully
+                # feasible.  Admit that first solution through the existing
+                # per-joint command limiter, then guard continuity against the
+                # accepted branch for the rest of the retreat.
+                'ik_branch_jump_reference_mode': 'previous_target',
+                'allow_initial_ik_branch_jump': True,
             },
         )
     )
@@ -3242,6 +3259,7 @@ def _append_transport_phase(
     insertion_compliance_capture_max_linear_speed: float = 0.10,
     insertion_compliance_capture_max_angular_speed: float = 2.0,
     insertion_compliance_capture_stable_steps: int = 8,
+    insertion_compliance_dynamic_capture_stable_steps: int = 1,
     insertion_compliance_position_tolerance: float = 0.015,
     insertion_compliance_after_steps: int = 0,
     insertion_compliance_require_waypoint_proximity: bool = False,
@@ -3250,10 +3268,14 @@ def _append_transport_phase(
     insertion_compliance_waypoint_lateral_position_tolerance: float | None = None,
     insertion_compliance_geometric_capture_after_steps: int = 0,
     insertion_compliance_minimum_gravity_alignment: float = 0.70,
+    insertion_compliance_allow_dynamic_capture: bool = False,
+    insertion_capture_keep_fixed_until_release_lock: bool = False,
     insertion_compliant_alignment_retraction_limit: float = 0.006,
     insertion_compliant_track_object_orientation: bool = False,
     target_object_entry_capture_max_steps: int = 0,
     final_target_name: str | None = None,
+    insertion_capture_transition_phase: str | None = None,
+    insertion_capture_transition_position_tolerance: float = 0.015,
     settle_at_target: bool = True,
 ) -> None:
     position_tolerance = 0.006 if insertion or strict_alignment else 0.014
@@ -3352,6 +3374,15 @@ def _append_transport_phase(
                 'target_object_max_linear_speed': 0.03,
                 'target_object_max_angular_speed': 2.0,
                 'target_object_allow_pose_stable_override': True,
+                **(
+                    {
+                        'target_object_allow_pose_history_velocity_override': True,
+                        'pose_history_velocity_override_position_tolerance': 0.0005,
+                        'pose_history_velocity_override_orientation_tolerance': 0.01,
+                    }
+                    if strict_alignment
+                    else {}
+                ),
                 # A strict hover is a goal for the held object's pose. The
                 # measured grasp attachment can shift the Panda TCP several
                 # millimetres without making the physical hold invalid.
@@ -3379,6 +3410,24 @@ def _append_transport_phase(
                         'relax_fixed_attachment_minimum_gravity_alignment': float(
                             insertion_compliance_minimum_gravity_alignment
                         ),
+                        'relax_fixed_attachment_allow_dynamic_capture': bool(
+                            insertion_compliance_allow_dynamic_capture
+                        ),
+                        'keep_fixed_attachment_until_release_lock': bool(
+                            insertion_capture_keep_fixed_until_release_lock
+                        ),
+                        **(
+                            {
+                                'insertion_capture_transition_phase': str(
+                                    insertion_capture_transition_phase
+                                ),
+                                'insertion_capture_transition_position_tolerance': float(
+                                    insertion_capture_transition_position_tolerance
+                                ),
+                            }
+                            if insertion_capture_transition_phase is not None
+                            else {}
+                        ),
                         **(
                             {
                                 'relax_fixed_attachment_waypoint_axial_position_tolerance': float(
@@ -3398,6 +3447,9 @@ def _append_transport_phase(
                             insertion_compliance_capture_max_angular_speed
                         ),
                         'relax_fixed_attachment_stable_steps': int(insertion_compliance_capture_stable_steps),
+                        'relax_fixed_attachment_dynamic_capture_stable_steps': int(
+                            insertion_compliance_dynamic_capture_stable_steps
+                        ),
                         'relax_fixed_attachment_allow_pose_stable_override': True,
                         'compliant_servo_pause_linear_speed': 0.20,
                         'compliant_servo_pause_angular_speed': 5.0,
@@ -3663,6 +3715,7 @@ def _compile_targets_and_phases(
     preshape_timeout_steps = int(spec.get('preshape_timeout_steps', 720))
     preshape_open_margin = float(spec.get('preshape_open_margin', 0.20))
     preshape_gripper_position_tolerance = float(spec.get('preshape_gripper_position_tolerance', 0.025))
+    preshape_minimum_open_margin_ratio = float(spec.get('preshape_minimum_open_margin_ratio', 0.40))
     descend_timeout_steps = int(spec.get('descend_timeout_steps', 900))
     descend_position_tolerance = float(spec.get('descend_position_tolerance', 0.007))
     descend_orientation_tolerance = float(spec.get('descend_orientation_tolerance', 0.10))
@@ -3763,6 +3816,11 @@ def _compile_targets_and_phases(
         spec.get('insertion_compliance_capture_max_angular_speed', 2.0)
     )
     insertion_compliance_capture_stable_steps = int(spec.get('insertion_compliance_capture_stable_steps', 8))
+    insertion_compliance_dynamic_capture_stable_steps = int(
+        spec.get('insertion_compliance_dynamic_capture_stable_steps', 1)
+    )
+    if insertion_compliance_dynamic_capture_stable_steps < 1:
+        raise ValueError('insertion_compliance_dynamic_capture_stable_steps must be positive.')
     insertion_compliance_geometric_capture_after_steps = int(
         spec.get('insertion_compliance_geometric_capture_after_steps', 1200)
     )
@@ -3774,6 +3832,105 @@ def _compile_targets_and_phases(
     )
     insertion_compliance_minimum_gravity_alignment = float(
         spec.get('insertion_compliance_minimum_gravity_alignment', 0.70)
+    )
+    insertion_compliance_start_waypoint_overrides_raw = spec.get(
+        'insertion_compliance_start_waypoint_overrides',
+        {},
+    )
+    if not isinstance(insertion_compliance_start_waypoint_overrides_raw, dict):
+        raise ValueError('insertion_compliance_start_waypoint_overrides must be a mapping.')
+    insertion_path_lengths = {
+        str(step['move_part']): len(step['disassembly_path'])
+        for step in task['assembly_steps']
+    }
+    insertion_compliance_start_waypoint_overrides: dict[str, int] = {}
+    for configured_part_id, configured_waypoint_index in (
+        insertion_compliance_start_waypoint_overrides_raw.items()
+    ):
+        part_id = str(configured_part_id)
+        if part_id not in insertion_path_lengths:
+            raise ValueError(
+                'insertion_compliance_start_waypoint_overrides references '
+                f'non-moving part {part_id!r}.'
+            )
+        try:
+            waypoint_index = int(configured_waypoint_index)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                'insertion_compliance_start_waypoint_overrides values must be integer '
+                'waypoint indices.'
+            ) from exc
+        if waypoint_index < 0 or waypoint_index > insertion_path_lengths[part_id]:
+            raise ValueError(
+                'insertion_compliance_start_waypoint_overrides index for part '
+                f'{part_id!r} must be in [0, {insertion_path_lengths[part_id]}]; '
+                'the path length disables insertion compliance for that part.'
+            )
+        insertion_compliance_start_waypoint_overrides[part_id] = waypoint_index
+    insertion_compliance_dynamic_capture_parts_raw = spec.get(
+        'insertion_compliance_dynamic_capture_parts',
+        [],
+    )
+    if not isinstance(insertion_compliance_dynamic_capture_parts_raw, list):
+        raise ValueError('insertion_compliance_dynamic_capture_parts must be a list of moving part ids.')
+    insertion_compliance_dynamic_capture_parts = {
+        str(part_id) for part_id in insertion_compliance_dynamic_capture_parts_raw
+    }
+    unknown_dynamic_capture_parts = sorted(
+        insertion_compliance_dynamic_capture_parts - set(insertion_path_lengths)
+    )
+    if unknown_dynamic_capture_parts:
+        raise ValueError(
+            'insertion_compliance_dynamic_capture_parts references non-moving parts: '
+            f'{unknown_dynamic_capture_parts}.'
+        )
+    insertion_compliance_early_release_parts_raw = spec.get(
+        'insertion_compliance_early_release_parts',
+        [],
+    )
+    if not isinstance(insertion_compliance_early_release_parts_raw, list):
+        raise ValueError('insertion_compliance_early_release_parts must be a list of moving part ids.')
+    insertion_compliance_early_release_parts = {
+        str(part_id) for part_id in insertion_compliance_early_release_parts_raw
+    }
+    unknown_early_release_parts = sorted(
+        insertion_compliance_early_release_parts - insertion_compliance_dynamic_capture_parts
+    )
+    if unknown_early_release_parts:
+        raise ValueError(
+            'insertion_compliance_early_release_parts must also be listed in '
+            'insertion_compliance_dynamic_capture_parts: '
+            f'{unknown_early_release_parts}.'
+        )
+
+    def part_tolerance_overrides(config_key: str) -> dict[str, float]:
+        raw_overrides = spec.get(config_key, {})
+        if not isinstance(raw_overrides, dict):
+            raise ValueError(f'{config_key} must be a mapping.')
+        overrides: dict[str, float] = {}
+        for configured_part_id, raw_tolerance in raw_overrides.items():
+            part_id = str(configured_part_id)
+            if part_id not in insertion_path_lengths:
+                raise ValueError(f'{config_key} references non-moving part {part_id!r}.')
+            tolerance = float(raw_tolerance)
+            if not math.isfinite(tolerance) or tolerance <= 0.0 or tolerance > 0.05:
+                raise ValueError(
+                    f'{config_key} value for part {part_id!r} must be finite and in (0, 0.05].'
+                )
+            overrides[part_id] = tolerance
+        return overrides
+
+    insertion_compliance_waypoint_axial_tolerance_overrides = part_tolerance_overrides(
+        'insertion_compliance_waypoint_axial_tolerance_overrides'
+    )
+    insertion_compliance_waypoint_lateral_tolerance_overrides = part_tolerance_overrides(
+        'insertion_compliance_waypoint_lateral_tolerance_overrides'
+    )
+    insertion_compliance_position_tolerance_overrides = part_tolerance_overrides(
+        'insertion_compliance_position_tolerance_overrides'
+    )
+    insertion_capture_keep_fixed_until_release_lock = bool(
+        spec.get('insertion_capture_keep_fixed_until_release_lock', False)
     )
     insertion_compliant_alignment_retraction_limit = float(
         spec.get('insertion_compliant_alignment_retraction_limit', 0.006)
@@ -3858,6 +4015,9 @@ def _compile_targets_and_phases(
         or not math.isfinite(preshape_gripper_position_tolerance)
         or preshape_gripper_position_tolerance <= 0.0
         or preshape_gripper_position_tolerance > 0.1
+        or not math.isfinite(preshape_minimum_open_margin_ratio)
+        or preshape_minimum_open_margin_ratio < 0.0
+        or preshape_minimum_open_margin_ratio > 1.0
         or not math.isfinite(descend_position_tolerance)
         or descend_position_tolerance <= 0.0
         or not math.isfinite(descend_relaxed_position_tolerance)
@@ -3944,6 +4104,7 @@ def _compile_targets_and_phases(
             'Move-above and preshape timeouts must be positive, prealign steps cannot be negative, '
             'preshape_open_margin must be in [0, 1], descend tolerances must be positive and ordered, '
             'preshape gripper tolerance must be in (0, 0.1], descend and '
+            'preshape minimum-open-margin ratio must be in [0, 1], '
             'transport/insertion/base-place '
             'timeouts must '
             'be positive, and delayed descend/insertion tolerances must be positive and ordered, '
@@ -4201,6 +4362,7 @@ def _compile_targets_and_phases(
         preshape_timeout_steps=preshape_timeout_steps,
         preshape_open_margin=preshape_open_margin,
         preshape_gripper_position_tolerance=preshape_gripper_position_tolerance,
+        preshape_minimum_open_margin_ratio=preshape_minimum_open_margin_ratio,
         descend_timeout_steps=descend_timeout_steps,
         descend_position_tolerance=descend_position_tolerance,
         descend_orientation_tolerance=descend_orientation_tolerance,
@@ -4349,6 +4511,9 @@ def _compile_targets_and_phases(
         park_timeout_steps=post_release_park_timeout_steps,
         lock_position_tolerance=base_lock_position_tolerance,
     )
+    placement_position_tolerance_by_part = {
+        base_part_id: base_lock_position_tolerance,
+    }
 
     for step_index, step in enumerate(task['assembly_steps']):
         part_id = str(step['move_part'])
@@ -4422,6 +4587,7 @@ def _compile_targets_and_phases(
             preshape_timeout_steps=preshape_timeout_steps,
             preshape_open_margin=preshape_open_margin,
             preshape_gripper_position_tolerance=preshape_gripper_position_tolerance,
+            preshape_minimum_open_margin_ratio=preshape_minimum_open_margin_ratio,
             descend_timeout_steps=descend_timeout_steps,
             descend_position_tolerance=descend_position_tolerance,
             descend_orientation_tolerance=descend_orientation_tolerance,
@@ -4518,8 +4684,11 @@ def _compile_targets_and_phases(
             insertion_relaxed_after_steps=insertion_relaxed_after_steps,
         )
         release_position_tolerance = 0.015
+        release_phase_name = f'{prefix}_release_and_lock'
+        compliance_start_waypoint = insertion_compliance_start_waypoint_overrides.get(part_id, 0)
         for waypoint_index, waypoint_name in enumerate(waypoint_names):
             is_final_waypoint = waypoint_name == final_targets[part_id]
+            compliance_enabled = waypoint_index >= compliance_start_waypoint
             is_entry_waypoint = waypoint_index == 0
             is_pre_final_waypoint = len(waypoint_names) > 1 and waypoint_index == len(waypoint_names) - 2
             if len(waypoint_positions) > 1:
@@ -4582,7 +4751,19 @@ def _compile_targets_and_phases(
                         * insertion_compliance_waypoint_axial_tolerance_object_extent_scale,
                     ),
                 )
+            compliance_waypoint_axial_tolerance = (
+                insertion_compliance_waypoint_axial_tolerance_overrides.get(
+                    part_id,
+                    compliance_waypoint_axial_tolerance,
+                )
+            )
             compliance_waypoint_lateral_tolerance = intermediate_insertion_lateral_position_tolerance
+            compliance_waypoint_lateral_tolerance = (
+                insertion_compliance_waypoint_lateral_tolerance_overrides.get(
+                    part_id,
+                    compliance_waypoint_lateral_tolerance,
+                )
+            )
             insertion_path_depth = max(
                 sum(insertion_entry_delta[axis] * normalized_insertion_axis[axis] for axis in range(3)),
                 0.0,
@@ -4604,6 +4785,11 @@ def _compile_targets_and_phases(
                 compliance_position_tolerance += math.dist(
                     waypoint_positions[waypoint_index],
                     waypoint_positions[-1],
+                )
+            if part_id in insertion_compliance_position_tolerance_overrides:
+                compliance_position_tolerance = max(
+                    compliance_position_tolerance,
+                    insertion_compliance_position_tolerance_overrides[part_id],
                 )
             waypoint_lateral_tolerance = (
                 geometry_lateral_tolerance
@@ -4672,6 +4858,9 @@ def _compile_targets_and_phases(
                 insertion_compliance_capture_max_linear_speed=(insertion_compliance_capture_max_linear_speed),
                 insertion_compliance_capture_max_angular_speed=(insertion_compliance_capture_max_angular_speed),
                 insertion_compliance_capture_stable_steps=(insertion_compliance_capture_stable_steps),
+                insertion_compliance_dynamic_capture_stable_steps=(
+                    insertion_compliance_dynamic_capture_stable_steps
+                ),
                 insertion_compliance_position_tolerance=(compliance_position_tolerance),
                 insertion_compliance_after_steps=(0),
                 insertion_compliance_require_waypoint_proximity=True,
@@ -4680,15 +4869,39 @@ def _compile_targets_and_phases(
                 insertion_compliance_waypoint_lateral_position_tolerance=(compliance_waypoint_lateral_tolerance),
                 insertion_compliance_geometric_capture_after_steps=(insertion_compliance_geometric_capture_after_steps),
                 insertion_compliance_minimum_gravity_alignment=(insertion_compliance_minimum_gravity_alignment),
+                insertion_compliance_allow_dynamic_capture=(
+                    part_id in insertion_compliance_dynamic_capture_parts
+                ),
+                insertion_capture_keep_fixed_until_release_lock=(
+                    insertion_capture_keep_fixed_until_release_lock
+                ),
                 insertion_compliant_alignment_retraction_limit=(insertion_compliant_alignment_retraction_limit),
                 insertion_compliant_track_object_orientation=(insertion_compliant_track_object_orientation),
                 target_object_entry_capture_max_steps=(
                     max(4, insertion_compliance_capture_stable_steps + 4) if is_final_waypoint else 0
                 ),
-                final_target_name=(final_targets[part_id]),
+                final_target_name=(final_targets[part_id] if compliance_enabled else None),
+                insertion_capture_transition_phase=(
+                    release_phase_name
+                    if compliance_enabled
+                    and (
+                        is_final_waypoint
+                        or part_id in insertion_compliance_dynamic_capture_parts
+                        or part_id in insertion_compliance_early_release_parts
+                    )
+                    else None
+                ),
+                insertion_capture_transition_position_tolerance=min(
+                    compliance_position_tolerance,
+                    insertion_compliance_position_tolerance_overrides.get(
+                        part_id,
+                        0.015,
+                    ),
+                ),
                 settle_at_target=is_final_waypoint,
             )
         assembled_objects.append(object_name)
+        placement_position_tolerance_by_part[part_id] = release_position_tolerance
         _append_release_and_retreat(
             phases,
             prefix=prefix,
@@ -4731,7 +4944,7 @@ def _compile_targets_and_phases(
             {
                 'object': f'fabrica_{assembly}_{part_id}',
                 'target': final_targets[part_id],
-                'position_tolerance': 0.015,
+                'position_tolerance': placement_position_tolerance_by_part.get(part_id, 0.015),
                 'orientation_tolerance': 0.15,
                 'require_released': True,
                 'require_static': True,
@@ -5202,6 +5415,8 @@ def _apply_ik_execution_policy(phases: list[dict[str, Any]], spec: dict[str, Any
         'locked_transport_fallback_joint_delta',
         'prealign_target_ik',
         'prealign_terminal_ik_seed',
+        'prealign_require_warm_start_ik',
+        'prealign_warm_start_ik_only',
         'prealign_until_converged',
         'prealign_joint_position_tolerance',
         'prealign_joint_velocity_tolerance',
@@ -5430,7 +5645,11 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         int(resolved.get('max_steps', 0)),
         22000,
         len(task['parts']) * 7000,
-        len(phases) * 360,
+        # Long assemblies can spend most of the old per-part allowance before
+        # entering the final release/park phases.  Budget by the generated
+        # phase graph as well so lower control rates do not truncate an
+        # otherwise successful episode during its terminal retreat.
+        len(phases) * 420,
     )
     resolved['fabrica_canonical_resolved'] = {
         'assembly': assembly,
@@ -5462,6 +5681,13 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         'insertion_timeout_steps': int(spec.get('insertion_timeout_steps', 3600)),
         'base_place_timeout_steps': int(spec.get('base_place_timeout_steps', 4800)),
+        'preshape_open_margin': float(spec.get('preshape_open_margin', 0.20)),
+        'preshape_gripper_position_tolerance': float(
+            spec.get('preshape_gripper_position_tolerance', 0.025)
+        ),
+        'preshape_minimum_open_margin_ratio': float(
+            spec.get('preshape_minimum_open_margin_ratio', 0.40)
+        ),
         'descend_timeout_steps': int(spec.get('descend_timeout_steps', 900)),
         'descend_orientation_tolerance': float(spec.get('descend_orientation_tolerance', 0.10)),
         'close_position_tolerance': float(
@@ -5541,6 +5767,9 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             spec.get('insertion_compliance_capture_max_angular_speed', 2.0)
         ),
         'insertion_compliance_capture_stable_steps': int(spec.get('insertion_compliance_capture_stable_steps', 8)),
+        'insertion_compliance_dynamic_capture_stable_steps': int(
+            spec.get('insertion_compliance_dynamic_capture_stable_steps', 1)
+        ),
         'insertion_compliance_geometric_capture_after_steps': int(
             spec.get('insertion_compliance_geometric_capture_after_steps', 1200)
         ),
@@ -5552,6 +5781,59 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         'insertion_compliance_minimum_gravity_alignment': float(
             spec.get('insertion_compliance_minimum_gravity_alignment', 0.70)
+        ),
+        'insertion_compliance_start_waypoint_overrides': {
+            str(part_id): int(waypoint_index)
+            for part_id, waypoint_index in (
+                spec.get('insertion_compliance_start_waypoint_overrides') or {}
+            ).items()
+        },
+        'insertion_compliance_dynamic_capture_parts': sorted(
+            str(part_id)
+            for part_id in (spec.get('insertion_compliance_dynamic_capture_parts') or [])
+        ),
+        'insertion_compliance_early_release_parts': sorted(
+            str(part_id)
+            for part_id in (spec.get('insertion_compliance_early_release_parts') or [])
+        ),
+        **(
+            {
+                'insertion_compliance_waypoint_axial_tolerance_overrides': {
+                    str(part_id): float(tolerance)
+                    for part_id, tolerance in spec[
+                        'insertion_compliance_waypoint_axial_tolerance_overrides'
+                    ].items()
+                }
+            }
+            if spec.get('insertion_compliance_waypoint_axial_tolerance_overrides')
+            else {}
+        ),
+        **(
+            {
+                'insertion_compliance_waypoint_lateral_tolerance_overrides': {
+                    str(part_id): float(tolerance)
+                    for part_id, tolerance in spec[
+                        'insertion_compliance_waypoint_lateral_tolerance_overrides'
+                    ].items()
+                }
+            }
+            if spec.get('insertion_compliance_waypoint_lateral_tolerance_overrides')
+            else {}
+        ),
+        **(
+            {
+                'insertion_compliance_position_tolerance_overrides': {
+                    str(part_id): float(tolerance)
+                    for part_id, tolerance in spec[
+                        'insertion_compliance_position_tolerance_overrides'
+                    ].items()
+                }
+            }
+            if spec.get('insertion_compliance_position_tolerance_overrides')
+            else {}
+        ),
+        'insertion_capture_keep_fixed_until_release_lock': bool(
+            spec.get('insertion_capture_keep_fixed_until_release_lock', False)
         ),
         'insertion_compliant_alignment_retraction_limit': float(
             spec.get('insertion_compliant_alignment_retraction_limit', 0.006)

@@ -522,8 +522,27 @@ class SimulatorRunner:
             portable_root = str(Path(portable_root).expanduser().resolve())
             Path(portable_root).mkdir(parents=True, exist_ok=True)
             sys.argv.extend(['--portable-root', portable_root])
+        extra_args = []
         if headless:
-            launch_config['extra_args'] = ['--/app/extensions/fsWatcherEnabled=0']
+            extra_args.append('--/app/extensions/fsWatcherEnabled=0')
+        # Kit otherwise derives a large worker pool per SimulationApp.  Bound
+        # it explicitly for multi-process collection so concurrent instances
+        # do not exhaust the host's thread limit during extension startup.
+        thread_count = os.environ.get('ISAACSIM_THREAD_COUNT')
+        if thread_count:
+            try:
+                thread_count = max(1, int(thread_count))
+            except ValueError:
+                log.warning('Ignoring invalid ISAACSIM_THREAD_COUNT=%r', thread_count)
+            else:
+                extra_args.extend(
+                    [
+                        f'--/plugins/carb.tasking.plugin/threadCount={thread_count}',
+                        f'--/plugins/omni.tbb.globalcontrol/maxThreadCount={thread_count}',
+                    ]
+                )
+        if extra_args:
+            launch_config['extra_args'] = extra_args
         try:
             self._simulation_app = SimulationApp(launch_config)
         finally:

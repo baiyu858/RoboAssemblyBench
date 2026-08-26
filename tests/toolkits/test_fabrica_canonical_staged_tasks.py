@@ -272,7 +272,9 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             2.0,
         )
         assert resolved['insertion_compliance_capture_stable_steps'] == 8
+        assert resolved['insertion_compliance_dynamic_capture_stable_steps'] == 1
         assert resolved['insertion_compliance_geometric_capture_after_steps'] == 1200
+        assert resolved['insertion_capture_keep_fixed_until_release_lock'] is True
         assert np.isclose(
             resolved['insertion_compliance_minimum_gravity_alignment'],
             0.70,
@@ -407,8 +409,11 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             for group in recipe['domain_randomization']['groups'].values()
         )
         assert len(recipe['success']) == TASKS[task_name]
-        assert recipe['max_steps'] >= len(recipe['phases']) * 360
+        assert recipe['max_steps'] >= len(recipe['phases']) * 420
         assert recipe['max_steps'] >= TASKS[task_name] * 7000
+        assert resolved['skip_terminal_park'] is True
+        assert resolved['skip_terminal_retreat'] is True
+        assert recipe['phases'][-1]['name'].endswith('_release_and_lock')
         base_part_id = recipe['fabrica_canonical_resolved']['base_part']
         base_release = next(
             phase for phase in recipe['phases'] if phase['name'] == f'base_{base_part_id}_release_and_lock'
@@ -622,6 +627,8 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
                         'relax_fixed_attachment_waypoint_lateral_position_tolerance',
                         'relax_fixed_attachment_geometric_capture_after_steps',
                         'relax_fixed_attachment_minimum_gravity_alignment',
+                        'relax_fixed_attachment_allow_dynamic_capture',
+                        'keep_fixed_attachment_until_release_lock',
                         'relax_fixed_attachment_final_orientation_tolerance',
                         'relax_fixed_attachment_max_linear_speed',
                         'relax_fixed_attachment_max_angular_speed',
@@ -629,33 +636,99 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
                         'compliant_servo_max_alignment_retraction',
                         'compliant_servo_track_object_orientation',
                     }
-                    assert local_skill['target_object_final_target'].endswith('_assembled')
-                    assert local_skill['relax_fixed_attachment_after_steps'] == 0
-                    assert local_skill['relax_fixed_attachment_require_waypoint_proximity'] is True
-                    assert local_skill['relax_fixed_attachment_waypoint_position_tolerance'] == 0.010
-                    assert local_skill['relax_fixed_attachment_waypoint_axial_position_tolerance'] == 0.010
-                    compliance_lateral_tolerance = local_skill[
-                        'relax_fixed_attachment_waypoint_lateral_position_tolerance'
-                    ]
-                    assert (
-                        local_skill['target_object_lateral_position_tolerance'] <= compliance_lateral_tolerance <= 0.002
-                    )
-                    assert local_skill['relax_fixed_attachment_geometric_capture_after_steps'] == 1200
-                    assert np.isclose(
-                        local_skill['relax_fixed_attachment_minimum_gravity_alignment'],
-                        0.70,
-                    )
-                    if is_final_insertion:
-                        assert 0.015 <= local_skill['relax_fixed_attachment_within_final_position_tolerance'] <= 0.060
+                    compliance_enabled = 'target_object_final_target' in local_skill
+                    if compliance_enabled:
+                        assert local_skill['target_object_final_target'].endswith('_assembled')
+                        assert local_skill['relax_fixed_attachment_after_steps'] == 0
+                        assert local_skill['relax_fixed_attachment_require_waypoint_proximity'] is True
+                        assert local_skill['relax_fixed_attachment_waypoint_position_tolerance'] == 0.010
+                        part_id = phase['name'].split('_part_', 1)[1].split('_', 1)[0]
+                        expected_axial_tolerance = resolved.get(
+                            'insertion_compliance_waypoint_axial_tolerance_overrides',
+                            {},
+                        ).get(part_id, 0.010)
+                        assert (
+                            local_skill['relax_fixed_attachment_waypoint_axial_position_tolerance']
+                            == expected_axial_tolerance
+                        )
+                        compliance_lateral_tolerance = local_skill[
+                            'relax_fixed_attachment_waypoint_lateral_position_tolerance'
+                        ]
+                        expected_lateral_tolerance = resolved.get(
+                            'insertion_compliance_waypoint_lateral_tolerance_overrides',
+                            {},
+                        ).get(part_id, 0.002)
+                        assert (
+                            local_skill['target_object_lateral_position_tolerance']
+                            <= compliance_lateral_tolerance
+                            == expected_lateral_tolerance
+                        )
+                        assert local_skill['relax_fixed_attachment_geometric_capture_after_steps'] == 1200
+                        assert np.isclose(
+                            local_skill['relax_fixed_attachment_minimum_gravity_alignment'],
+                            0.70,
+                        )
+                        dynamic_capture_parts = set(
+                            resolved['insertion_compliance_dynamic_capture_parts']
+                        )
+                        expected_dynamic_capture_parts = {
+                            'car': {'3', '0', '5', '4'},
+                            'duct': {'2', '4', '5', '6', '7'},
+                        }.get(task_name, set())
+                        expected_dynamic_capture = bool(
+                            any(
+                                f'_part_{part_id}_' in phase['name']
+                                for part_id in expected_dynamic_capture_parts
+                            )
+                            and phase['name'].endswith(('_insert_08', '_insert_09'))
+                        )
+                        assert (
+                            local_skill['relax_fixed_attachment_allow_dynamic_capture']
+                            is expected_dynamic_capture
+                        )
+                        assert local_skill['keep_fixed_attachment_until_release_lock'] is True
+                        expected_early_release_parts = set(
+                            resolved['insertion_compliance_early_release_parts']
+                        )
+                        early_release_enabled = bool(
+                            part_id in dynamic_capture_parts
+                            or part_id in expected_early_release_parts
+                        )
+                        if is_final_insertion or early_release_enabled:
+                            assert local_skill['insertion_capture_transition_phase'].endswith(
+                                '_release_and_lock'
+                            )
+                            expected_transition_tolerance = resolved.get(
+                                'insertion_compliance_position_tolerance_overrides',
+                                {},
+                            ).get(part_id, 0.015)
+                            assert local_skill['insertion_capture_transition_position_tolerance'] == min(
+                                local_skill['relax_fixed_attachment_within_final_position_tolerance'],
+                                expected_transition_tolerance,
+                            )
+                        else:
+                            assert 'insertion_capture_transition_phase' not in local_skill
+                            assert 'insertion_capture_transition_position_tolerance' not in local_skill
+                        if expected_dynamic_capture:
+                            assert expected_dynamic_capture_parts.issubset(dynamic_capture_parts)
+                        if is_final_insertion:
+                            assert (
+                                0.015
+                                <= local_skill['relax_fixed_attachment_within_final_position_tolerance']
+                                <= 0.060
+                            )
+                        else:
+                            assert local_skill['relax_fixed_attachment_within_final_position_tolerance'] >= 0.015
+                        assert compliance_keys.issubset(local_skill)
+                        assert local_skill['relax_fixed_attachment_final_orientation_tolerance'] == 0.15
+                        assert local_skill['relax_fixed_attachment_max_linear_speed'] == 0.10
+                        assert local_skill['relax_fixed_attachment_max_angular_speed'] == 2.0
+                        assert local_skill['relax_fixed_attachment_stable_steps'] == 8
+                        assert local_skill['relax_fixed_attachment_dynamic_capture_stable_steps'] == 1
+                        assert local_skill['compliant_servo_max_alignment_retraction'] == 0.006
+                        assert local_skill['compliant_servo_track_object_orientation'] is True
                     else:
-                        assert local_skill['relax_fixed_attachment_within_final_position_tolerance'] >= 0.015
-                    assert compliance_keys.issubset(local_skill)
-                    assert local_skill['relax_fixed_attachment_final_orientation_tolerance'] == 0.15
-                    assert local_skill['relax_fixed_attachment_max_linear_speed'] == 0.10
-                    assert local_skill['relax_fixed_attachment_max_angular_speed'] == 2.0
-                    assert local_skill['relax_fixed_attachment_stable_steps'] == 8
-                    assert local_skill['compliant_servo_max_alignment_retraction'] == 0.006
-                    assert local_skill['compliant_servo_track_object_orientation'] is True
+                        assert compliance_keys.isdisjoint(local_skill)
                     assert local_skill['target_object_settle_hold_steps'] == 48
                     assert local_skill['target_object_settle_retry_servo_steps'] == 8
                     assert np.isclose(
@@ -690,6 +763,20 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             assert success['require_static'] is True
 
         if task_name == 'car':
+            assert resolved['insertion_compliance_start_waypoint_overrides'] == {
+                '3': 8,
+                '0': 8,
+                '5': 8,
+                '4': 8,
+            }
+            assert resolved['insertion_compliance_dynamic_capture_parts'] == ['0', '3', '4', '5']
+            assert resolved['insertion_compliance_waypoint_axial_tolerance_overrides'] == {
+                '5': 0.020,
+                '4': 0.020,
+            }
+            assert resolved['insertion_compliance_waypoint_lateral_tolerance_overrides'] == {
+                '5': 0.0025,
+            }
             car_cover_final = next(
                 phase['local_skill'] for phase in recipe['phases'] if phase['name'] == 'assemble_00_part_1_insert_09'
             )
@@ -700,14 +787,55 @@ def test_staged_recipes_compile_complete_contact_gated_skill_sequences():
             car_horizontal_insert = next(
                 phase['local_skill'] for phase in recipe['phases'] if phase['name'] == 'assemble_01_part_3_insert_00'
             )
-            assert (
-                abs(car_horizontal_insert['target_object_convergence_axis'][2])
-                < car_horizontal_insert['relax_fixed_attachment_minimum_gravity_alignment']
-            )
+            assert 'target_object_final_target' not in car_horizontal_insert
             assert np.isclose(
                 car_horizontal_insert['target_object_lateral_position_tolerance'],
                 0.002,
             )
+            car_horizontal_final = next(
+                phase['local_skill'] for phase in recipe['phases'] if phase['name'] == 'assemble_01_part_3_insert_09'
+            )
+            assert car_horizontal_final['target_object_final_target'].endswith('_assembled')
+            assert car_horizontal_final['relax_fixed_attachment_allow_dynamic_capture'] is True
+        if task_name == 'duct':
+            assert selected_base_grasp['grasp_id'] == 510
+            assert selected_base_grasp['source_collision_count'] == 1
+            assert resolved['insertion_compliance_start_waypoint_overrides'] == {
+                '2': 8,
+                '4': 8,
+                '5': 8,
+                '6': 8,
+                '7': 8,
+            }
+            assert resolved['insertion_compliance_dynamic_capture_parts'] == [
+                '2',
+                '4',
+                '5',
+                '6',
+                '7',
+            ]
+            assert resolved['insertion_compliance_early_release_parts'] == ['4', '5', '7']
+            assert resolved['insertion_compliance_waypoint_axial_tolerance_overrides'] == {
+                '2': 0.020,
+                '4': 0.020,
+                '5': 0.020,
+                '6': 0.020,
+                '7': 0.020,
+            }
+            assert resolved['insertion_compliance_position_tolerance_overrides'] == {
+                '2': 0.022,
+                '4': 0.020,
+                '5': 0.020,
+                '6': 0.022,
+                '7': 0.020,
+            }
+            assert resolved['insertion_compliance_waypoint_lateral_tolerance_overrides'] == {
+                '2': 0.0035,
+                '4': 0.004,
+                '5': 0.005,
+                '6': 0.004,
+                '7': 0.005,
+            }
 
 
 def test_staged_transport_uses_layout_aware_high_clearance_paths():
@@ -728,6 +856,7 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
         assert np.isclose(transport_tcp_height, 0.3525)
         assert recipe['fabrica_canonical_resolved']['transport_timeout_steps'] == 4800
         assert recipe['fabrica_canonical_resolved']['insertion_timeout_steps'] == 3600
+        assert recipe['fabrica_canonical_resolved']['preshape_minimum_open_margin_ratio'] == 0.40
         grasp_by_part = {
             str(task['base_part']): recipe['fabrica_canonical_resolved']['selected_base_grasp'],
             **recipe['fabrica_canonical_resolved']['selected_move_grasps'],
@@ -759,12 +888,20 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
                 preshape_by_part[part_id]['gripper_openness'],
                 min(1.0, float(grasp['robotiq_open_ratio']) + 0.20),
             )
+            np.testing.assert_allclose(
+                preshape_by_part[part_id]['minimum_gripper_openness'],
+                float(grasp['robotiq_open_ratio'])
+                + 0.40
+                * (min(1.0, float(grasp['robotiq_open_ratio']) + 0.20) - float(grasp['robotiq_open_ratio'])),
+            )
 
         base_part = str(task['base_part'])
         base_prefix = f'base_{base_part}'
         assert phase_order[f'{base_prefix}_lift'] < phase_order[f'{base_prefix}_pickup_clearance']
         assert phases[f'{base_prefix}_lift']['local_skill']['lock_target_position'] is True
         assert phases[f'{base_prefix}_lift']['local_skill']['lock_target_orientation'] is True
+        assert phases[f'{base_prefix}_lift']['local_skill']['ik_branch_jump_reference_mode'] == 'previous_target'
+        assert phases[f'{base_prefix}_lift']['local_skill']['allow_initial_ik_branch_jump'] is True
         assert phase_order[f'{base_prefix}_pickup_clearance'] < phase_order[f'{base_prefix}_assembly_clearance']
         assert phase_order[f'{base_prefix}_assembly_clearance'] < phase_order[f'{base_prefix}_transport_hover']
         assert phases[f'{base_prefix}_assembly_clearance']['timeout_steps'] == 4800
@@ -796,8 +933,14 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
             part_id = str(step['move_part'])
             prefix = f'assemble_{step_index:02d}_part_{part_id}'
             assert phase_order[f'{prefix}_lift'] < phase_order[f'{prefix}_pickup_clearance']
+            assert phases[f'{prefix}_lift']['local_skill']['ik_branch_jump_reference_mode'] == 'previous_target'
+            assert phases[f'{prefix}_lift']['local_skill']['allow_initial_ik_branch_jump'] is True
             assert phase_order[f'{prefix}_pickup_clearance'] < phase_order[f'{prefix}_assembly_clearance']
             assert phase_order[f'{prefix}_assembly_clearance'] < phase_order[f'{prefix}_transport_hover']
+            transport_hover_skill = phases[f'{prefix}_transport_hover']['local_skill']
+            assert transport_hover_skill['target_object_allow_pose_history_velocity_override'] is True
+            assert transport_hover_skill['pose_history_velocity_override_position_tolerance'] == 0.0005
+            assert transport_hover_skill['pose_history_velocity_override_orientation_tolerance'] == 0.01
             insertion_phases = [phase for phase in recipe['phases'] if phase['name'].startswith(f'{prefix}_insert_')]
             for insertion_index, insertion_phase in enumerate(insertion_phases):
                 insertion_skill = insertion_phase['local_skill']
@@ -833,6 +976,10 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
                     'compliant_servo_orientation_correction_deadband',
                     'compliant_servo_hold_orientation_during_lateral_alignment',
                 }
+                if 'target_object_final_target' not in insertion_skill:
+                    assert compliance_keys.isdisjoint(insertion_skill)
+                    assert 'insertion_capture_transition_phase' not in insertion_skill
+                    continue
                 assert compliance_keys.issubset(insertion_skill)
                 assert insertion_skill['relax_fixed_attachment_stable_steps'] == 8
                 assert insertion_skill['relax_fixed_attachment_after_steps'] == 0
@@ -845,8 +992,14 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
                 compliance_lateral_tolerance = insertion_skill[
                     'relax_fixed_attachment_waypoint_lateral_position_tolerance'
                 ]
+                expected_compliance_lateral_tolerance = recipe['fabrica_canonical_resolved'].get(
+                    'insertion_compliance_waypoint_lateral_tolerance_overrides',
+                    {},
+                ).get(part_id, 0.002)
                 assert (
-                    insertion_skill['target_object_lateral_position_tolerance'] <= compliance_lateral_tolerance <= 0.002
+                    insertion_skill['target_object_lateral_position_tolerance']
+                    <= compliance_lateral_tolerance
+                    == expected_compliance_lateral_tolerance
                 )
                 assert insertion_skill['relax_fixed_attachment_allow_pose_stable_override'] is True
                 assert insertion_skill['compliant_servo_pause_linear_speed'] == 0.20
@@ -894,6 +1047,14 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
                 assert insertion_path_depths[-1] > insertion_path_depths[0]
             else:
                 assert all(depth == 0.0 for depth in insertion_path_depths)
+            is_terminal_assembly = step_index == len(task['assembly_steps']) - 1
+            if (
+                is_terminal_assembly
+                and recipe['fabrica_canonical_resolved']['skip_terminal_retreat']
+            ):
+                assert f'{prefix}_retreat' not in phases
+                assert f'{prefix}_park' not in phases
+                continue
             retreat_offset = np.asarray(
                 phases[f'{prefix}_retreat']['local_skill']['offset'],
                 dtype=float,
