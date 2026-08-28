@@ -712,6 +712,7 @@ class CompactCartesianEpisodeRecorder:
         video_crf: int = 23,
         video_preset: str = 'veryfast',
         depth_compression_level: int = 5,
+        allow_replay_recipe_fingerprint_mismatch: bool = False,
         overwrite: bool = False,
     ):
         self.output_dir = Path(output_dir).resolve()
@@ -725,6 +726,7 @@ class CompactCartesianEpisodeRecorder:
         self.video_crf = int(video_crf)
         self.video_preset = str(video_preset)
         self.depth_compression_level = int(depth_compression_level)
+        self._allow_replay_recipe_fingerprint_mismatch = bool(allow_replay_recipe_fingerprint_mismatch)
         configured_resolution = (
             int(os.environ.get('RAB_DATASET_OUTPUT_WIDTH', output_resolution[0])),
             int(os.environ.get('RAB_DATASET_OUTPUT_HEIGHT', output_resolution[1])),
@@ -805,6 +807,8 @@ class CompactCartesianEpisodeRecorder:
         )
         self._source_actions: np.ndarray | None = None
         self._replay_source_metadata_path: str | None = None
+        self._replay_source_recipe_fingerprint: str | None = None
+        self._replay_recipe_fingerprint_mismatch = False
         self._finalized = False
 
     @staticmethod
@@ -999,10 +1003,13 @@ class CompactCartesianEpisodeRecorder:
         source_metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
         source_fingerprint = str(source_metadata.get('recipe_fingerprint', '') or '')
         if self._expected_recipe_fingerprint and source_fingerprint != self._expected_recipe_fingerprint:
-            raise ValueError(
-                f'Replay source recipe fingerprint {source_fingerprint!r} does not match '
-                f'the runtime recipe {self._expected_recipe_fingerprint!r}: {metadata_path}.'
-            )
+            if not self._allow_replay_recipe_fingerprint_mismatch:
+                raise ValueError(
+                    f'Replay source recipe fingerprint {source_fingerprint!r} does not match '
+                    f'the runtime recipe {self._expected_recipe_fingerprint!r}: {metadata_path}.'
+                )
+            self._replay_recipe_fingerprint_mismatch = True
+        self._replay_source_recipe_fingerprint = source_fingerprint
         trajectory_path = Path(source_metadata.get('trajectory_path') or '')
         if not trajectory_path.is_file():
             raise FileNotFoundError(f'Replay source trajectory is missing: {trajectory_path}.')
@@ -1343,6 +1350,9 @@ class CompactCartesianEpisodeRecorder:
                 else ('rendered' if self.record_media else 'trajectory_only')
             ),
             'replay_source_metadata_path': self._replay_source_metadata_path,
+            'replay_source_recipe_fingerprint': self._replay_source_recipe_fingerprint,
+            'replay_recipe_fingerprint_mismatch': self._replay_recipe_fingerprint_mismatch,
+            'replay_recipe_fingerprint_mismatch_allowed': self._allow_replay_recipe_fingerprint_mismatch,
             'trajectory_path': str(trajectory_path),
             'state_names': list(STATE_NAMES),
             'action_names': list(ACTION_NAMES),

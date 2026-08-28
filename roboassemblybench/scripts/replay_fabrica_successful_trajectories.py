@@ -40,6 +40,7 @@ def _source_episodes(
     *,
     expected_recipe_fingerprint: str,
     expected_joint_widths: list[int] | None,
+    allow_recipe_fingerprint_mismatch: bool,
 ) -> list[dict[str, Any]]:
     manifest_path = source_dir / 'collection_manifest.json'
     if not manifest_path.is_file():
@@ -57,7 +58,7 @@ def _source_episodes(
         if not bool((metadata.get('metrics') or {}).get('success', False)):
             raise ValueError(f'Stage-1 manifest references an unsuccessful trajectory: {metadata_path}.')
         source_fingerprint = str(metadata.get('recipe_fingerprint', '') or '')
-        if source_fingerprint != expected_recipe_fingerprint:
+        if source_fingerprint != expected_recipe_fingerprint and not allow_recipe_fingerprint_mismatch:
             raise ValueError(
                 f'Stage-1 recipe fingerprint {source_fingerprint!r} does not match '
                 f'{expected_recipe_fingerprint!r}: {metadata_path}.'
@@ -138,6 +139,8 @@ def _replay_command(args, *, sources: list[dict[str, Any]], batch_dir: Path, res
             '--headless',
         ]
     )
+    if args.allow_recipe_fingerprint_mismatch:
+        command.append('--worker-allow-recipe-fingerprint-mismatch')
     return command
 
 
@@ -182,6 +185,7 @@ def collect(args) -> dict[str, Any]:
         Path(args.source_dir).resolve(),
         expected_recipe_fingerprint=recipe_fingerprint,
         expected_joint_widths=expected_joint_widths,
+        allow_recipe_fingerprint_mismatch=bool(args.allow_recipe_fingerprint_mismatch),
     )
     target = min(int(args.num_episodes), len(source_episodes))
     if target <= 0:
@@ -329,6 +333,11 @@ def main() -> None:
     parser.add_argument('--video-preset', default='veryfast')
     parser.add_argument('--depth-compression-level', type=int, default=5)
     parser.add_argument('--require-visual-quality', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        '--allow-recipe-fingerprint-mismatch',
+        action='store_true',
+        help='Allow visual replay of legacy trajectories after a recipe-only revision; robot signatures remain strict.',
+    )
     parser.add_argument('--min-available-memory-gib', type=float, default=32.0)
     parser.add_argument('--abort-available-memory-gib', type=float, default=16.0)
     parser.add_argument('--resource-poll-seconds', type=float, default=10.0)

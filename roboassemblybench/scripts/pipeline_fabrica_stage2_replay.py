@@ -267,6 +267,8 @@ def _command_for_job(args: argparse.Namespace, job: ReplayJob, gpu: int) -> list
             str(args.min_output_free_gib),
         ]
     )
+    if args.allow_recipe_fingerprint_mismatch:
+        command.append('--allow-recipe-fingerprint-mismatch')
     # Replays yield CPU scheduling priority to the always-on stage-1 collectors.
     return ['nice', '-n', str(args.nice_increment), *command]
 
@@ -561,6 +563,11 @@ def main() -> None:
     parser.add_argument('--video-preset', default='veryfast')
     parser.add_argument('--depth-compression-level', type=int, default=8)
     parser.add_argument('--nice-increment', type=int, default=15)
+    parser.add_argument(
+        '--allow-recipe-fingerprint-mismatch',
+        action='store_true',
+        help='Permit legacy Stage-1 trajectories after recipe-only revisions while retaining robot signature checks.',
+    )
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()

@@ -945,6 +945,7 @@ def _run_replay_sequence(
     video_crf: int,
     video_preset: str,
     depth_compression_level: int,
+    allow_recipe_fingerprint_mismatch: bool,
 ) -> list[dict[str, Any]]:
     if len(task_configs) != len(source_metadata_paths):
         raise ValueError('Replay requires exactly one task config per source trajectory.')
@@ -984,6 +985,7 @@ def _run_replay_sequence(
                 video_crf=video_crf,
                 video_preset=video_preset,
                 depth_compression_level=depth_compression_level,
+                allow_replay_recipe_fingerprint_mismatch=allow_recipe_fingerprint_mismatch,
         )
         frame_count = recorder.prepare_replay_source(Path(source_metadata_path))
         with np.load(source_trajectory_path) as trajectory:
@@ -1018,6 +1020,7 @@ def _run_replay_sequence(
             'mode': 'kinematic_visual_replay',
             'source_metadata_path': str(Path(source_metadata_path).resolve()),
             'frame_count': frame_count,
+            'recipe_fingerprint_mismatch_allowed': bool(allow_recipe_fingerprint_mismatch),
         }
         recorded_dataset = recorder.finalize(task=task, metrics=source_metrics)
         result = dict(source_metrics)
@@ -1072,6 +1075,7 @@ def _worker_mode(args, *, headless: bool):
             video_crf=args.video_crf,
             video_preset=args.video_preset,
             depth_compression_level=args.depth_compression_level,
+            allow_recipe_fingerprint_mismatch=bool(args.worker_allow_replay_fingerprint_mismatch),
         )
         return
     if args.worker_mode == 'search':
@@ -1450,6 +1454,7 @@ def main():
     parser.add_argument('--worker-seeds', nargs='*', default=None)
     parser.add_argument('--worker-layout-seeds', nargs='*', default=None)
     parser.add_argument('--worker-replay-sources', nargs='*', default=None)
+    parser.add_argument('--worker-allow-replay-fingerprint-mismatch', action='store_true')
     parser.add_argument(
         '--worker-rendering-interval',
         type=int,
