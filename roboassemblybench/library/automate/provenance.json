@@ -1,0 +1,21 @@
+{
+  "project": "Isaac Lab AutoMate",
+  "source_repository": "https://github.com/isaac-sim/IsaacLab.git",
+  "source_path": "source/isaaclab_tasks/isaaclab_tasks/direct/automate",
+  "source_tag": "v2.3.2",
+  "source_commit": "37ddf626871758333d6ed89cf64ad702aef127d0",
+  "source_license": "BSD-3-Clause",
+  "isaac_sim_version": "5.1.0",
+  "python_version": "3.11",
+  "environment_ids": [
+    "RoboAssemblyBench-AutoMate-Assembly-Direct-v0",
+    "RoboAssemblyBench-AutoMate-Disassembly-Direct-v0"
+  ],
+  "upstream_environment_ids": [
+    "Isaac-AutoMate-Assembly-Direct-v0",
+    "Isaac-AutoMate-Disassembly-Direct-v0"
+  ],
+  "asset_root": "roboassemblybench/library/automate/assets/AutoMate",
+  "asset_source": "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/IsaacLab/AutoMate/",
+  "asset_note": "The local asset mirror is ignored by Git; automate_assets_manifest.json records the downloaded objects."
+}
