@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 
+from roboassemblybench.core.fabrica_mass_properties import part_mass_kg
 from roboassemblybench.core.paths import BENCHMARK_ROOT
 from roboassemblybench.core.scene_profiles import deep_merge
 from toolkits.factory_dual_franka_assembly.ur5e_skill_api import UR5eAssemblySkillAPI
@@ -1666,6 +1667,7 @@ def _part_object(
         'auto_collider': False,
         'rigid_body': True,
         'tracked': True,
+        'mass': part_mass_kg(part),
         'static_friction': 0.8,
         'dynamic_friction': 0.7,
         'restitution': 0.0,
@@ -5002,8 +5004,7 @@ def compile_continuous_beam_recipe(payload: dict[str, Any]) -> dict[str, Any]:
                 entry['angular_damping'] = max(float(entry.get('angular_damping', 0.0) or 0.0), 16.0)
                 # Sit slightly above the deck so SDF does not sink into it.
                 entry['spawn_clearance'] = max(float(entry.get('spawn_clearance', 0.0) or 0.0), 0.004)
-                # Lighter parts so finger friction can accelerate them (default mass=1kg).
-                entry['mass'] = min(float(entry.get('mass') or 1.0), 0.25)
+                # Preserve the same density/volume mass as the generic compiler.
             elif name == 'fabrica_fixture':
                 # Bolted nest. min combine keeps this low coefficient, and the
                 # kinematic anchor stops the thin tray from being carried away.

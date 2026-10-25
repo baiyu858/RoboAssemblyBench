@@ -302,7 +302,8 @@ class BeamPhysicsDiagnostics:
                 for key, probe in getattr(task, '_contact_probes', {}).items():
                     if isinstance(key, tuple) and key[0] == path:
                         candidate = _view(probe)
-                        if candidate is not None and candidate.is_physics_handle_valid():
+                        if (candidate is not None and candidate.is_physics_handle_valid()
+                                and callable(getattr(candidate, 'get_world_poses', None))):
                             view, source = candidate, 'cached_pair_probe'
                             break
             result.update(_body_snapshot(view), source=source)

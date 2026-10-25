@@ -70809,6 +70809,15 @@
             0.0762000066,
             0.015239998000000005
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.012872312627763116,
+            "source_mesh": "beam/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "396252420009a78d5e4652db9bcbbd23a4bc9bba676632bd564ffcd466cce99b",
+            "volume_m3": 1.0297850102210493e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_beam_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -70840,6 +70849,15 @@
             0.0762000066,
             0.015239998000000005
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.012872312369057674,
+            "source_mesh": "beam/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "397067979a6e46442eaa70034e209aff79ee09cad388ae65ac42b76cf50a708a",
+            "volume_m3": 1.029784989524614e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_beam_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -70871,6 +70889,15 @@
             0.0120033237,
             0.076199998
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.00946949504815864,
+            "source_mesh": "beam/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "6490644d0d7e2bc83e04a4e99b31212672209a50a34255e0adab0b360865ec7f",
+            "volume_m3": 7.575596038526912e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_beam_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -70902,6 +70929,15 @@
             0.012003323699999999,
             0.076199998
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.009469496816191983,
+            "source_mesh": "beam/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "5203caf27b7236fe779b7fc9e191af3097140d0c1e838f6001fc6dcf858ed493",
+            "volume_m3": 7.575597452953586e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_beam_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -70933,6 +70969,15 @@
             0.0177800494,
             0.0127
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.0393188407189315,
+            "source_mesh": "beam/6.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "0c955119f0ac1fe83da8e3d9c1e8ec962f394683e9a144efb9b4bf4aa198cea3",
+            "volume_m3": 3.1455072575145197e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_beam_6",
           "part_id": "6",
           "pickup_orientation": [
@@ -185795,6 +185840,15 @@
             0.035,
             0.0349487
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.017890736260677245,
+            "source_mesh": "car/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "8006e871e75772e5ae65be09a15780bc30c2eddd41428536767e1694092a2d68",
+            "volume_m3": 1.4312589008541796e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_car_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -185826,6 +185880,15 @@
             0.05,
             0.06194100000000001
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.36692386851491016,
+            "source_mesh": "car/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "e3e64f79788902ae709d4c763975f789af1522f0ada455edcca4ff8b6a32669e",
+            "volume_m3": 0.0002935390948119281,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_car_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -185857,6 +185920,15 @@
             0.045,
             0.06
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.437536125,
+            "source_mesh": "car/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "f7831bfa4505db098bebbe751d2ce7770886895e181a28d08a67204b783d61fd",
+            "volume_m3": 0.0003500289,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_car_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -185888,6 +185960,15 @@
             0.035,
             0.0349487
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.01789074524359854,
+            "source_mesh": "car/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "9e1c5a1e5bfe3612a6cb9b470e51b523ad5bdd11511940ef2238b2a18c8d5198",
+            "volume_m3": 1.4312596194878833e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_car_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -185919,6 +186000,15 @@
             0.035,
             0.0349487
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.01789073626067724,
+            "source_mesh": "car/4.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "cdc96ccce5a1730905bee0a6c100c67974ff62409f04f542f5a6404bb1fc64dd",
+            "volume_m3": 1.4312589008541793e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_car_4",
           "part_id": "4",
           "pickup_orientation": [
@@ -185950,6 +186040,15 @@
             0.035,
             0.0349487
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.01789074524359854,
+            "source_mesh": "car/5.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "04ec6e0f6f2a6d9be66270d45ec6f13790ae61c2b4cd120a8df27f94f0bb8be2",
+            "volume_m3": 1.4312596194878833e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_car_5",
           "part_id": "5",
           "pickup_orientation": [
@@ -253559,6 +253658,15 @@
             0.01749724,
             0.04650000000000001
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.005264290612412795,
+            "source_mesh": "cooling_manifold/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "407bfaac855922cdd44b86325c1a5442adc4c405ce45a61bf7c8c25328d27ba7",
+            "volume_m3": 4.211432489930237e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -253590,6 +253698,15 @@
             0.1199988,
             0.035
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.3119918564527784,
+            "source_mesh": "cooling_manifold/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "dddc4790227326809da165c530b09dc1289ad3f02d9f26845f624016ae662a13",
+            "volume_m3": 0.00024959348516222273,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -253621,6 +253738,15 @@
             0.020057799999999994,
             0.035
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.008007482827362494,
+            "source_mesh": "cooling_manifold/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "7765e62e59f7e1cfa9bf4cd608d756e1ae5d827ce47e8a316816853bb8b28bfc",
+            "volume_m3": 6.4059862618899955e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -253652,6 +253778,15 @@
             0.019824599999999998,
             0.035
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.008007446747349994,
+            "source_mesh": "cooling_manifold/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "5c7a5050d1a88f00fa2513c0924042554f2098a2ccdd7331888b148aabaf9575",
+            "volume_m3": 6.405957397879996e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -253683,6 +253818,15 @@
             0.01749724,
             0.04650000000000001
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.0052642906124127945,
+            "source_mesh": "cooling_manifold/4.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "35f50f56593fa73a749bdffdb8cb5b8a4158dbbcfbf88cf447264e5d3d67e279",
+            "volume_m3": 4.211432489930236e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_4",
           "part_id": "4",
           "pickup_orientation": [
@@ -253714,6 +253858,15 @@
             0.020481,
             0.035
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.008007516376108336,
+            "source_mesh": "cooling_manifold/5.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "e0b639d9f15cd56858077cfe642e3cf0b4163bf5aaa9ffd41fb244a2fbebe9e2",
+            "volume_m3": 6.40601310088667e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_5",
           "part_id": "5",
           "pickup_orientation": [
@@ -253745,6 +253898,15 @@
             0.020094599999999997,
             0.035
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.008007483270779171,
+            "source_mesh": "cooling_manifold/6.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "2099168cdbf374eb8c630e511ea633864e36b5ed4abff903ea6d8c3625a12209",
+            "volume_m3": 6.405986616623337e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_cooling_manifold_6",
           "part_id": "6",
           "pickup_orientation": [
@@ -333445,6 +333607,15 @@
             0.12,
             0.1436602497
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.3051789505181184,
+            "source_mesh": "duct/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "e5402187d4e9fab1c86ad961d24e1804162e04a367a6e75e6f2e4c5caf6f3c6a",
+            "volume_m3": 0.0002441431604144947,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -333476,6 +333647,15 @@
             0.12,
             0.0709166145
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.08286365280598272,
+            "source_mesh": "duct/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "e001b6ec7bad64e090bb31f7be39f553d772e81eb499003d042bd3f8cff5bed3",
+            "volume_m3": 6.629092224478617e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -333507,6 +333687,15 @@
             0.0230903375,
             0.0397664833
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.01123953569921646,
+            "source_mesh": "duct/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "edc4e69af8340b8a8a650a520cf43face1f3041ac1f44a9453d27511fcd74044",
+            "volume_m3": 8.991628559373168e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -333538,6 +333727,15 @@
             0.0230903375,
             0.03976649279999998
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.011239535328634895,
+            "source_mesh": "duct/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "fd32e742ab97cc3b54b186a1e8700feafbdae678d974698f5b365b851ac2b471",
+            "volume_m3": 8.991628262907916e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -333569,6 +333767,15 @@
             0.023045973700000007,
             0.039866514199999994
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.01123953631008729,
+            "source_mesh": "duct/4.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "51c24dd90367a0d73d060496c822d45c053cddf98936d18b414205b102047396",
+            "volume_m3": 8.991629048069833e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_4",
           "part_id": "4",
           "pickup_orientation": [
@@ -333600,6 +333807,15 @@
             0.0230598307,
             0.03984541890000001
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.011239535083454788,
+            "source_mesh": "duct/5.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "5942aaa5bfc902ec8ec53e56578e0595dcaba0065a6b24ebd53bd5e27e7ba934",
+            "volume_m3": 8.99162806676383e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_5",
           "part_id": "5",
           "pickup_orientation": [
@@ -333631,6 +333847,15 @@
             0.0230903351,
             0.0397664833
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.011239535065206365,
+            "source_mesh": "duct/6.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "62d99b90145023c253ac4bc11cf4de7acfe2335087f0194ad3e62d34d7796b7c",
+            "volume_m3": 8.991628052165092e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_6",
           "part_id": "6",
           "pickup_orientation": [
@@ -333662,6 +333887,15 @@
             0.023060046400000003,
             0.03984505660000001
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.011239539071561507,
+            "source_mesh": "duct/7.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "48237f113fe4ff2e07464daafc26118dc03dc98b5600039f193a864cdce8d9a7",
+            "volume_m3": 8.991631257249205e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_duct_7",
           "part_id": "7",
           "pickup_orientation": [
@@ -377494,6 +377728,15 @@
             0.012000000000000002,
             0.02853392
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.002518982149525137,
+            "source_mesh": "gamepad/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "5384f886afd51ead037b85e96860baee31d8b85c943db3be60e762795377b3da",
+            "volume_m3": 2.0151857196201096e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_gamepad_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -377525,6 +377768,15 @@
             0.023,
             0.03000002
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.010845492191687964,
+            "source_mesh": "gamepad/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "3544fc4f9dad9f94e15709ae412c3adfbbf034715e3e9352b44de916cfcbcf40",
+            "volume_m3": 8.676393753350371e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_gamepad_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -377556,6 +377808,15 @@
             0.022999980000000003,
             0.03000002
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.011571147822493615,
+            "source_mesh": "gamepad/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "716b393eb4b9fdfa1c967e3150b30dd200052704e349355725d5723d7ec005cf",
+            "volume_m3": 9.256918257994893e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_gamepad_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -377587,6 +377848,15 @@
             0.0755827,
             0.02499998
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.17608524838711853,
+            "source_mesh": "gamepad/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "4a99c1664f36905f339ac291c96ad0cf2dea1c11c5a48142f8f56deb28a35801",
+            "volume_m3": 0.00014086819870969482,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_gamepad_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -377618,6 +377888,15 @@
             0.06,
             0.011999979999999999
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.0062548145766963105,
+            "source_mesh": "gamepad/4.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "04d3db3f934c1cbe0bef4d527a928f9bb1ca0342999c2486239ab6cdd3df537a",
+            "volume_m3": 5.0038516613570485e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_gamepad_4",
           "part_id": "4",
           "pickup_orientation": [
@@ -377649,6 +377928,15 @@
             0.012000000000000002,
             0.02853392
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.002518982283380688,
+            "source_mesh": "gamepad/5.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "a83e17a2c73c2f05ed44a80c5bc3b7cf556e93f450234bc831abf452e099ba00",
+            "volume_m3": 2.0151858267045504e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_gamepad_5",
           "part_id": "5",
           "pickup_orientation": [
@@ -435098,6 +435386,15 @@
             0.08,
             0.04950004
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.14119460807987402,
+            "source_mesh": "plumbers_block/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "40f4526acafe491f0bb5ca527717dda37dec127d3f78682ee81292bd63e8070f",
+            "volume_m3": 0.00011295568646389921,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_plumbers_block_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -435129,6 +435426,15 @@
             0.0250012,
             0.06999999999999999
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.0202291866978199,
+            "source_mesh": "plumbers_block/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "bd9692d99fe3e39e7bc4b2f0164e7417d0ae0726d1ab099468d3026d5b989fb0",
+            "volume_m3": 1.6183349358255918e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_plumbers_block_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -435160,6 +435466,15 @@
             0.04000000000000001,
             0.065
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.29495437381431616,
+            "source_mesh": "plumbers_block/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "58e89ee69d328904350366f0b54fec2393f2aacea15d458cb6ae911bb0e5e9de",
+            "volume_m3": 0.00023596349905145292,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_plumbers_block_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -435191,6 +435506,15 @@
             0.04000000000000001,
             0.0261473
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.07414201184234881,
+            "source_mesh": "plumbers_block/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "755819cd94145622361c5c24d2a682747d314e16cec9c2a249e59809cb76223e",
+            "volume_m3": 5.931360947387905e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_plumbers_block_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -435222,6 +435546,15 @@
             0.0250012,
             0.06999999999999999
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.020229185079224277,
+            "source_mesh": "plumbers_block/4.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "71f5874be268c476b736b30e66c120797ef6d404fcbb8b9f348301c1805eeb73",
+            "volume_m3": 1.6183348063379423e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_plumbers_block_4",
           "part_id": "4",
           "pickup_orientation": [
@@ -573801,6 +574134,15 @@
             0.018,
             0.03
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.009011196609543741,
+            "source_mesh": "stool_circular/0.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "10f0c3c68799be94ec8679c3a633060713f821308e9e8073be6b54389b8ecc96",
+            "volume_m3": 7.208957287634992e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_0",
           "part_id": "0",
           "pickup_orientation": [
@@ -573832,6 +574174,15 @@
             0.018,
             0.095
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.029710478251250002,
+            "source_mesh": "stool_circular/1.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "b9bf6f008973c12c8d14a2a572d21b6dbd8413c3d3bcd5df562af0c8f897c048",
+            "volume_m3": 2.3768382601000002e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_1",
           "part_id": "1",
           "pickup_orientation": [
@@ -573863,6 +574214,15 @@
             0.075,
             0.0165
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.10197350979068379,
+            "source_mesh": "stool_circular/2.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "d91bbfb2fd808919f75750dbf0da068967239bf5f620e6ce4482df1139d90a0e",
+            "volume_m3": 8.157880783254703e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_2",
           "part_id": "2",
           "pickup_orientation": [
@@ -573894,6 +574254,15 @@
             0.018,
             0.095
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.02971047825125,
+            "source_mesh": "stool_circular/3.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "7ca503126391037a7d9aaf1f0589f6fc43ab3cd5b2f8a9dbd0c669957c62eb3f",
+            "volume_m3": 2.3768382601e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_3",
           "part_id": "3",
           "pickup_orientation": [
@@ -573925,6 +574294,15 @@
             0.018,
             0.03
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.009011197065616152,
+            "source_mesh": "stool_circular/4.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "b8f0a589928e25cec5731e496b91651e8489c1d2284ca6c9023b588f465d9ee6",
+            "volume_m3": 7.2089576524929216e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_4",
           "part_id": "4",
           "pickup_orientation": [
@@ -573956,6 +574334,15 @@
             0.018,
             0.095
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.029710478251250002,
+            "source_mesh": "stool_circular/5.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "eca5c9cbcf5f5e4755d55be7988227d5f5f11dc48fb86b29ca5107816c182483",
+            "volume_m3": 2.3768382601000002e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_5",
           "part_id": "5",
           "pickup_orientation": [
@@ -573987,6 +574374,15 @@
             0.018,
             0.03
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.009011196981115528,
+            "source_mesh": "stool_circular/6.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "857e9382f1122e9c8d48b9fbdd96f7450b9a683fdbf9ba12e5235020a655af80",
+            "volume_m3": 7.208957584892422e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_6",
           "part_id": "6",
           "pickup_orientation": [
@@ -574018,6 +574414,15 @@
             0.018,
             0.095
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.029710478251250002,
+            "source_mesh": "stool_circular/7.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "b3dbf8384135529da9904f0005813774c0e09ff2f293509c1ef84eb925beb1c3",
+            "volume_m3": 2.3768382601000002e-05,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_7",
           "part_id": "7",
           "pickup_orientation": [
@@ -574049,6 +574454,15 @@
             0.018,
             0.03
           ],
+          "mass_properties": {
+            "density_kg_per_m3": 1250.0,
+            "mass_kg": 0.009011196448489198,
+            "source_mesh": "stool_circular/8.obj",
+            "source_mesh_scale_to_m": 0.01,
+            "source_mesh_sha256": "3de2e8e2926cb96082dc3503bb65fdcae1feec5c4c6748b495d435c6a7ee41ec",
+            "volume_m3": 7.208957158791359e-06,
+            "volume_method": "watertight_triangle_mesh_weld_1e-8m"
+          },
           "name": "fabrica_stool_circular_8",
           "part_id": "8",
           "pickup_orientation": [

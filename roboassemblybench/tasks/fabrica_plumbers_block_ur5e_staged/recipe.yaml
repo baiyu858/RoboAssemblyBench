@@ -1,9 +1,120 @@
 extends: _fabrica_canonical_ur5e.yaml
 task_name: fabrica_plumbers_block_ur5e_staged
-prompt: Assemble the canonical Fabrica plumbers block with staged UR5e pick, transport, insertion, release, and retreat skills.
+prompt: Assemble the canonical Fabrica plumbers block with continuous physical UR5e grasping, transport, insertion, release, and retreat.
+
+policy_auto_grasp: false
+# World-space lighting for the 0.99 m tabletop. Large area lights soften
+# robot shadows while keeping the small parts and dark finger pads visible.
+scene_lights:
+  - name: warehouse_dome_fill
+    kind: dome
+    intensity: 250
+    exposure: 0.0
+    color: [1.0, 1.0, 1.0]
+  - name: plumbers_overhead_key
+    kind: rect
+    position: [0.55, -0.10, 2.70]
+    width: 1.8
+    height: 1.4
+    intensity: 1050
+    color: [1.0, 0.98, 0.95]
+  - name: plumbers_front_fill
+    kind: rect
+    position: [1.70, 0.0, 2.00]
+    rotation_euler: [0.0, 45.0, 0.0]
+    width: 2.0
+    height: 1.2
+    intensity: 460
+    color: [0.96, 0.98, 1.0]
+
+robots:
+  - name: franka_left
+    preserve_continuous_arm_joints: true
+    gripper_drive_kp: 7500.0
+    gripper_drive_kd: 173.0
+    gripper_drive_max_effort: null  # Retain and verify the authored asset limit.
+    gripper_require_drive_readback: true
+    gripper_pad_static_friction: 1.0
+    gripper_pad_dynamic_friction: 0.8
+  - name: franka_right
+    preserve_continuous_arm_joints: true
+    gripper_drive_kp: 7500.0
+    gripper_drive_kd: 173.0
+    gripper_drive_max_effort: null
+    gripper_require_drive_readback: true
+    gripper_pad_static_friction: 1.0
+    gripper_pad_dynamic_friction: 0.8
 
 fabrica_canonical:
   assembly: plumbers_block
+  continuous_physics: true
+  # Anti-droop only for the empty assembly_robot (left) while waiting.
+  # Skip initial settling; never change base_robot (right) control. Capture
+  # its last joint target once, hold with zero velocity, exit on active work.
+  physical_idle_hold_anchor: true
+  # Regrasp the exposed +X low flange, support every left-arm insertion,
+  # then release/withdraw before each original unloaded verification window.
+  # Geometric candidate: tilted distal pads contact the 0-20 mm sidewall.
+  physical_base_support:
+    enabled: true
+    grasp_center_m: [0.074, 0.0012658, 0.022]
+    approach_tilt_degrees: 30.0
+    pad_center_m: 0.143
+    approach_distance_m: 0.08
+    # Lift/orient/transfer while empty, then lower and approach the last 80 mm.
+    coarse_tcp_height_above_base_origin_m: 0.30
+  stabilize_fixture_parts: false
+  skip_terminal_retreat: false
+  skip_terminal_park: false
+  physical_settle_steps: 120
+  # Close qualification only; raw contact, excess-force and pose guards remain.
+  # Enter with both raw/mean forces >= 4 N; retain down to 3.5 N, never below.
+  close_force_stability:
+    enabled: true
+    window_steps: 5  # About 21 ms at 240 Hz; require a full fresh window.
+    hysteresis_margin: 0.5  # N below the 4 N entry threshold.
+  # SO(3) reference limits: rad/s, rad/s^2, rad (0.573 degrees lead).
+  # Experimental starting values; 3 mm / 5 degree grasp guards are unchanged.
+  physical_rotation_speed: 0.10
+  physical_rotation_acceleration: 0.30
+  physical_rotation_lookahead: 0.010
+  # Keep the old candidate/layout to isolate native-pad alignment. Its Fabrica
+  # pinch distance is 168.37 mm; the Isaac pad target is 143 mm. Advance the
+  # gripper 25.37 mm along its approach, rather than pinching the part's top edge.
+  # Both transform directions are corrected before clearance and full-path IK.
+  base_grasp_id: 944
+  pickup_yaw_candidates_degrees: [90.0]
+  physical_base_pad_center_m: 0.143
+  # The solid left sidewall spans about x=-50..-25 mm above the slot.
+  # Shift its old center x=-48.88 mm inward; do not aim at the central void.
+  physical_base_grasp_center_offset_m: [0.012, 0.0, 0.0]
+  # Simulation experiment, carrying only. Initial closure stays at 4-12 N.
+  # Set enabled: false for the original force-band control comparison.
+  hold_force_control:
+    enabled: true
+    low: 6.0
+    target: 8.0
+    # Experimental carrying band, not an Isaac/Robotiq hardware force rating.
+    # Mild excess stops preload and relieves slowly when the weak side >= 8 N.
+    # Keep moving (provided grip is stable), tapering speed toward 50% at 18 N.
+    soft_limit: 14.0
+    unload: 18.0
+    hard_limit: 40.0
+    soft_limit_action: limit_and_slow
+    soft_limit_motion_scale: 0.5
+    joint_rate: 0.025
+    unload_rate: 0.025
+    max_command_lead: 0.001
+    max_seek: 0.03
+    max_closing_travel: 0.03
+    filter_tau: 0.02
+    stable_steps: 24
+    resume_steps: 48
+    recovery_timeout_steps: 480
+    # Pause when fixed-reference slip grows by 0.1 mm over 48 physics steps.
+    # This is an early motion guard, not a replacement for 3 mm / 5 degrees.
+    slip_window_steps: 48
+    slip_growth: 0.0001
   pickup_origin: [0.35, -0.48, 0.0125]
   assembly_origin: [0.70, -0.18, 0.0125]
   board_origin: [0.47, -0.14, 0.0125]

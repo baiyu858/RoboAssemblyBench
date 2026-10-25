@@ -25,6 +25,14 @@ from toolkits.factory_dual_franka_assembly.planner_primitives import (
     quat_rotate,
     relative_pose,
 )
+from toolkits.factory_dual_franka_assembly.physical_grasp_reference import (
+    capture_grasp_reference,
+    measure_grasp_point_slip,
+)
+from toolkits.factory_dual_franka_assembly.contact_reports import (
+    create_prepared_contact_view,
+    prepare_contact_reports,
+)
 
 
 from toolkits.factory_dual_franka_assembly.beam_support_state import BeamSupportState
@@ -154,6 +162,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         self._object_collision_enabled = {}
         self._contact_probes = {}
         self._contact_sensors = {}
+        self._prepared_contact_report_paths = set()
         self._handoff_history = []
         self._recovery_history = []
         self._local_skill_completions = {}
@@ -211,6 +220,21 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
     def set_up_scene(self, scene: IScene) -> None:
         super().set_up_scene(scene)
         self._preconfigure_attachment_gripper_collision_filters()
+        self._preconfigure_contact_reports()
+
+    def _preconfigure_contact_reports(self) -> None:
+        """Author reports after loading assets, before the runner builds PhysX views."""
+        try:
+            from isaacsim.core.utils.prims import get_prim_at_path
+        except ImportError:
+            from omni.isaac.core.utils.prims import get_prim_at_path
+
+        # Include the entire gripper (not only its two fingers), target parts
+        # and static supports. Extra diagnostic probes can then be enabled
+        # without adding schemas to an instanced body during the rollout.
+        roots = [get_prim_at_path(item.config.prim_path)
+                 for item in [*self.robots.values(), *self.objects.values()]]
+        self._prepared_contact_report_paths = prepare_contact_reports(roots)
 
     def _preconfigure_attachment_gripper_collision_filters(self) -> None:
         """Author fixed-transport collision pairs before PhysX builds its view."""
@@ -2180,45 +2204,31 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
 
     def _get_contact_probe(self, prim_path: str, filter_prim_path: str):
         try:
-            from isaacsim.core.prims import RigidPrim
-            from isaacsim.core.utils.prims import is_prim_path_valid
+            from isaacsim.core.utils.prims import get_prim_at_path
         except ImportError:
-            from omni.isaac.core.prims import RigidPrim
-            from omni.isaac.core.utils.prims import is_prim_path_valid
+            from omni.isaac.core.utils.prims import get_prim_at_path
 
-        if not is_prim_path_valid(prim_path) or not is_prim_path_valid(filter_prim_path):
+        prim = get_prim_at_path(prim_path)
+        filter_prim = get_prim_at_path(filter_prim_path)
+        if not prim or not prim.IsValid() or not filter_prim or not filter_prim.IsValid():
             return None
 
         key = (prim_path, filter_prim_path)
         probe = self._contact_probes.get(key)
-        if probe is not None and getattr(probe, 'is_valid', lambda: False)():
+        if probe is not None and probe.is_physics_handle_valid():
             return probe
 
         probe_name = (
             f"{self.name or 'dual_franka'}_" f"{prim_path.split('/')[-1]}_to_{filter_prim_path.split('/')[-1]}_contact"
         )
-        try:
-            probe = RigidPrim(
-                prim_paths_expr=prim_path,
-                name=probe_name,
-                reset_xform_properties=False,
-                track_contact_forces=True,
-                prepare_contact_sensors=True,
-                contact_filter_prim_paths_expr=[filter_prim_path],
-                max_contact_count=64,
-                disable_stablization=not bool((self.get_current_phase_spec() or {}).get('beam_coordinated')),
-            )
-        except Exception:
-            return None
-        try:
-            from isaacsim.core.simulation_manager import SimulationManager
-
-            simulation_view = SimulationManager.get_physics_sim_view()
-            if simulation_view is not None and hasattr(probe, 'initialize'):
-                if not getattr(probe, 'is_physics_handle_valid', lambda: False)():
-                    probe.initialize(physics_sim_view=simulation_view)
-        except Exception:
-            pass
+        # A RigidPrim wrapper would still author rigid-body/sleep properties
+        # even with prepare_contact_sensors=False when force tracking is on.
+        # Read the prepared reports directly instead; missing setup must fail
+        # visibly rather than silently adding APIs to a running body.
+        probe = create_prepared_contact_view(
+            prim, filter_prim, name=probe_name,
+            disable_stablization=not bool((self.get_current_phase_spec() or {}).get('beam_coordinated')),
+        )
         self._contact_probes[key] = probe
         return probe
 
@@ -3043,6 +3053,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             'relative_orientation': np.asarray(relative_orientation).tolist(),
             'grasp_reference_position': None if attachment is None else attachment.get('position'),
             'grasp_reference_orientation': None if attachment is None else attachment.get('orientation'),
+            'hold_grasp_reference': None if attachment is None else attachment.get('hold_grasp_reference'),
             'attach_step': None if attachment is None else attachment.get('attach_step'),
             'contact_metrics': slim_metrics, 'strict_contact': strict_contact,
             'collision_enabled': self._object_collision_enabled.get(object_name),
@@ -3657,7 +3668,8 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                     'robot_name': str(attachment_state.get('robot_name', '')),
                     'filtered_paths': list(filtered_paths),
                 }
-        if enable_collision:
+        continuous = bool(((attachment_state or {}).get('attach_spec') or {}).get('continuous_physics'))
+        if enable_collision and (not continuous or not self._object_collision_enabled.get(object_name, True)):
             self._set_object_collision(object_name, True)
         return attachment_state
 
@@ -3802,6 +3814,18 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             return None
         return float(np.max(np.abs(gripper_positions)))
 
+    def _gripper_normalized_openness(self, robot_name: str) -> float | None:
+        """Read measured opening in [closed=0, open=1], not raw joint radians."""
+        config = self.robots[robot_name].config
+        open_q = getattr(config, 'gripper_open_position', None)
+        closed_q = getattr(config, 'gripper_closed_position', None)
+        measured = self._get_robot_gripper_opening(robot_name)
+        if any(value is None or not np.isfinite(value) for value in (open_q, closed_q, measured)):
+            return None
+        if abs(open_q - closed_q) < 1e-8:
+            return None
+        return float(np.clip((measured - closed_q) / (open_q - closed_q), 0.0, 1.0))
+
     @staticmethod
     def _contact_axis_for_gripper_limit(contact_metrics: dict | None) -> str | None:
         if not isinstance(contact_metrics, dict):
@@ -3820,6 +3844,15 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         hold_phase: bool = False,
         within_grace: bool = False,
     ) -> float:
+        if attach_spec.get('continuous_physics') and 'release_open_openness' in attach_spec:
+            config = self.robots[attach_spec['robot']].config
+            open_q = getattr(config, 'gripper_open_position', None)
+            closed_q = getattr(config, 'gripper_closed_position', None)
+            if open_q is not None and closed_q is not None and closed_q > open_q:
+                # Robotiq driver radians increase while closing. The Franka
+                # upper-width test would reject a stronger, valid pinch. Here
+                # force/contact/slip gates establish grasp; this is a range guard.
+                return float(closed_q) + 0.01
         base_threshold = float(attach_spec.get('gripper_closed_threshold', self._GRIPPER_CLOSED_THRESHOLD))
         default_margin = 0.004 if hold_phase else 0.002
         base_margin = float(attach_spec.get('gripper_closed_margin', default_margin))
@@ -3881,6 +3914,24 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         min_release_steps = max(int(attach_spec.get('release_min_steps', 4)), 0)
         if int(self.phase_step_counter) < min_release_steps:
             return False
+
+        if 'release_open_openness' in attach_spec:
+            openness = self._gripper_normalized_openness(robot_name)
+            if openness is None or openness < float(attach_spec['release_open_openness']):
+                return False
+            metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
+            threshold = float(attach_spec.get('contact_force_threshold', 0.1))
+            # A missing probe is not evidence of release; nor is losing just
+            # one contact while the other finger still loads the part.
+            for side in ('left_finger', 'right_finger'):
+                finger = metrics.get(side, {})
+                try:
+                    force = float(finger.get('force', np.nan))
+                except (TypeError, ValueError):
+                    return False
+                if not finger.get('force_probe_valid') or not np.isfinite(force) or not 0.0 <= force < threshold:
+                    return False
+            return True
 
         gripper_opening = self._get_robot_gripper_opening(robot_name)
         physical_grasp_min_opening = float(
@@ -4567,6 +4618,13 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         desired_object_position = object_position
         desired_object_orientation = object_orientation
         attach_spec = attach_spec or {}
+        point_reference = attach_spec.get('hold_position_slip_reference') == 'grasp_point'
+        if point_reference:
+            existing = self._attachment_for(object_name, robot_name)
+            if existing is not None:
+                # Repeated registration is not a new grasp. Never refresh a
+                # missing/old anchor to make a slipping hold valid again.
+                return
         continuous_grasp = bool(attach_spec.get('continuous_physics')) and self._attachment_mode(attach_spec) in {
             'pure_physical_grasp', 'contact_pure_physical_grasp',
         }
@@ -4674,6 +4732,28 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             self._frozen_lock_poses.pop(object_name, None)
             return
         if attach_mode in {'pure_physical_grasp', 'contact_pure_physical_grasp'}:
+            hold_reference = None
+            if point_reference:
+                if not continuous_grasp:
+                    raise ValueError('grasp_point slip reference requires a continuous pure physical grasp.')
+                try:
+                    if not joint_contact_ready:
+                        raise ValueError('Strict physical contact is not ready.')
+                    hold_reference = capture_grasp_reference(
+                        object_position=object_position,
+                        object_orientation=object_orientation,
+                        tcp_position=robot_pose[0],
+                        tcp_orientation=robot_pose[1],
+                        contact_metrics=contact_metrics,
+                        target_prim_path=str(rigid_body.unwrap().prim_path),
+                        step=int(self.step_counter),
+                    )
+                except ValueError as exc:
+                    self._maybe_write_attach_debug({
+                        'step_counter': int(self.step_counter), 'object': object_name, 'robot': robot_name,
+                        'blocked_by': 'grasp_reference_unavailable', 'detail': str(exc),
+                    })
+                    return
             new_state = {
                 'robot_name': robot_name,
                 'position': relative_position.tolist(),
@@ -4690,6 +4770,8 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 'attach_world_position': np.asarray(desired_object_position, dtype=float).tolist(),
                 'attach_world_orientation': np.asarray(desired_object_orientation, dtype=float).tolist(),
             }
+            if hold_reference is not None:
+                new_state['hold_grasp_reference'] = hold_reference
             if attach_spec.get('allow_shared_physical_grasp'):
                 self._store_physical_grasp(object_name, new_state)
             else:
@@ -4882,6 +4964,23 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         anchor_position = np.asarray(attachment_state.get('position', relative_position), dtype=float)
         anchor_orientation = np.asarray(attachment_state.get('orientation', relative_orientation), dtype=float)
         position_slip = float(np.linalg.norm(np.asarray(relative_position, dtype=float) - anchor_position))
+        slip_detail = {'position_slip_reference': 'object_origin', 'object_origin_position_slip': position_slip}
+        if attach_spec.get('hold_position_slip_reference') == 'grasp_point':
+            try:
+                measured = measure_grasp_point_slip(
+                    attachment_state.get('hold_grasp_reference'),
+                    relative_position=relative_position, relative_orientation=relative_orientation,
+                )
+            except ValueError as exc:
+                return self._record_physical_hold_result(
+                    object_name, attachment_state, ['grasp_reference_invalid'],
+                    position_slip_reference='grasp_point', reference_error=str(exc),
+                )
+            # Position/orientation transport anchors remain untouched. The hold
+            # check uses its independently frozen reference, never current contact.
+            position_slip = measured.pop('position_slip')
+            anchor_orientation = np.asarray(measured.pop('orientation_anchor'), dtype=float)
+            slip_detail = measured
         _, orientation_slip = pose_error(
             current_position=np.zeros(3, dtype=float),
             current_orientation=np.asarray(relative_orientation, dtype=float),
@@ -4950,6 +5049,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             gripper_opening_limit=float(gripper_opening_limit), contact_ready=contact_ready,
             strict_contact_ready=bool(strict_contact.get('physical_contact_ready')),
             within_grace=within_grace,
+            **slip_detail,
             fingers={name: {key: contact_metrics.get(name, {}).get(key)
                             for key in ('force', 'force_probe_valid', 'force_contact')}
                      for name in ('left_finger', 'right_finger')})
@@ -4957,7 +5057,11 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
     def _detach_object(self, object_name: str, detach_spec=None):
         detach_spec = detach_spec if isinstance(detach_spec, dict) else {}
         state = self._attachment_for(object_name, detach_spec.get('robot'))
-        if state and state.get('attach_spec', {}).get('allow_shared_physical_grasp'):
+        if state is None:
+            # Release interactions run every tick. Never turn later no-ops
+            # into repeated velocity resets after the physical state is gone.
+            return
+        if state.get('attach_spec', {}).get('allow_shared_physical_grasp'):
             self._remove_physical_grasp(object_name, state['robot_name'])
             return
         continuous_physics = bool(
@@ -4968,7 +5072,8 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         keep_filter = bool(detach_spec.get('keep_gripper_collision_filter', False))
         # World collision must be on before the weld breaks so the next physics
         # step can catch the part on the board/support.
-        self._set_object_collision(object_name, True)
+        if not continuous_physics:
+            self._set_object_collision(object_name, True)
         self._clear_attachment_state(
             object_name,
             enable_collision=True,
@@ -4986,6 +5091,8 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         if object_name is None or anchor_name is None or anchor_name not in self.target_poses:
             return
         if object_name in self._rebased_anchors:
+            return
+        if spec.get('require_released') and object_name in self._attachments:
             return
         current_position, current_orientation = self._resolve_object(object_name).get_pose()
         anchor_target = self.target_poses[anchor_name]
@@ -6319,6 +6426,77 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 return False
         return True
 
+    def _physical_settle_ready(self, advance: dict) -> bool:
+        """Require an unloaded, low-velocity pose window without changing bodies.
+
+        Unlike the legacy static check, a pose-history override cannot excuse
+        high measured velocity. Duplicate calls in one task step do not count.
+        """
+        token = (self.phase_index, self.phase_entry_step)
+        state = getattr(self, '_physical_settle_state', None)
+        if state is None or state['token'] != token:
+            state = self._physical_settle_state = {'token': token, 'step': None, 'count': 0, 'poses': {}}
+        step = int(self.step_counter)
+        required = max(2, int(advance.get('stable_steps', 120)))
+        if state['step'] == step:
+            return state['count'] >= required
+        if state['step'] is not None and step != state['step'] + 1:
+            state.update(count=0, poses={})
+        state['step'] = step
+        reason, poses = None, {}
+        objects = self._as_list(advance.get('objects'))
+        if not objects:
+            reason = 'no_objects'
+        for entry in objects:
+            name = self._extract_object_name(entry)
+            if (name is None or name in self._attachments or name in self._locked_targets
+                    or not self._object_collision_enabled.get(name, True)):
+                reason = f'{name}:not_free_dynamic_with_collision'
+                break
+            try:
+                velocity = self._object_velocity_metrics(name)
+                speeds = (velocity.get('linear_speed'), velocity.get('angular_speed'))
+                if (not velocity.get('valid') or any(v is None or not np.isfinite(v) for v in speeds)
+                        or speeds[0] > float(advance.get('linear_velocity_threshold', 0.01))
+                        or speeds[1] > float(advance.get('angular_velocity_threshold', 0.1))):
+                    reason = f'{name}:velocity'
+                    break
+                position, orientation = self._resolve_object(name).get_pose()
+                position, orientation = np.asarray(position).copy(), np.asarray(orientation).copy()
+                if not np.all(np.isfinite(position)) or not np.all(np.isfinite(orientation)):
+                    reason = f'{name}:invalid_pose'
+                    break
+                if isinstance(entry, dict) and (entry.get('target') or entry.get('target_name') or entry.get('target_pose')):
+                    if not self._object_targets_reached([entry], tolerance=0.03, orientation_tolerance=None):
+                        reason = f'{name}:target'
+                        break
+                poses[name] = (position, orientation)
+                if name in state['poses']:
+                    reference_position, reference_orientation = state['poses'][name]
+                    position_drift, orientation_drift = pose_error(
+                        current_position=position, current_orientation=orientation,
+                        target_position=reference_position, target_orientation=reference_orientation)
+                    if (not np.isfinite(position_drift) or orientation_drift is None
+                            or not np.isfinite(orientation_drift)
+                            or position_drift > float(advance.get('position_drift_tolerance', 0.002))
+                            or orientation_drift > float(advance.get('orientation_drift_tolerance', 0.03))):
+                        reason = f'{name}:pose_drift'
+                        break
+            except Exception as exc:
+                reason = f'{name}:readback:{type(exc).__name__}'
+                break
+        if reason is not None:
+            state.update(count=0, poses={})
+        else:
+            if not state['poses']:
+                state['poses'] = poses
+            state['count'] += 1
+        self._physical_settle_diagnostics = {
+            'phase': self.phase, 'step': step, 'stable_steps': state['count'],
+            'required_stable_steps': required, 'reason': reason,
+        }
+        return state['count'] >= required
+
     def _advance_condition_met(self, phase_spec: dict) -> bool:
         if not self._phase_interactions_complete(phase_spec):
             return False
@@ -6334,6 +6512,17 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             return False
 
         advance_type = advance.get('type', 'timer')
+        if advance_type == 'plumbers_support_ready':
+            from toolkits.factory_dual_franka_assembly.plumbers_support import base_support_status
+            support = phase_spec.get('plumbers_base_support')
+            return bool(support and base_support_status(self, support)['ready'])
+        if advance_type == 'physical_settle':
+            return self._physical_settle_ready(advance)
+        if advance_type == 'gripper_open':
+            openness = self._gripper_normalized_openness(advance['robot'])
+            return openness is not None and openness >= float(advance.get('minimum_openness', 0.95))
+        if advance_type == 'targets_rebased':
+            return advance['object'] in self._rebased_anchors
         if advance_type == 'beam_table_supported':
             return self._beam_table_supported(advance)
         if advance_type == 'all_of':
@@ -6492,6 +6681,18 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         return True
 
     def _check_success(self) -> bool:
+        if (self.phase_specs and self.phase_specs[-1].get('physical_unloaded_verification')
+                and not self.policy_evaluation_mode):
+            final = self.phase_specs[-1]
+            audit = getattr(self, '_physical_settle_diagnostics', None) or {}
+            terminal_verified = bool(
+                self.phase_index == len(self.phase_specs) and getattr(self, 'success', False)
+                and audit.get('phase') == final['name'] and audit.get('reason') is None
+                and audit.get('stable_steps', 0) >= int(final['advance']['stable_steps']))
+            if self.failed or (not terminal_verified and (
+                    self.phase_index != len(self.phase_specs) - 1
+                    or not self._evaluate_advance_condition(phase_spec=final, advance=final['advance']))):
+                return False
         if self.phase_specs and self.phase_specs[0].get('beam_coordinated'):
             final = self.phase_specs[-1]
             if (self.phase_index != len(self.phase_specs) - 1
@@ -6999,6 +7200,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             'tracked_objects': self.get_tracked_object_states(),
             'tracked_robots': self.get_tracked_robot_states(),
             'success_diagnostics': self._success_diagnostics(),
+            'physical_settle': copy.deepcopy(getattr(self, '_physical_settle_diagnostics', None)),
             'timeout_count': self.phase_timeout_count,
             'recovery_count': self.phase_recovery_count,
             'handoff_history': self._handoff_history,

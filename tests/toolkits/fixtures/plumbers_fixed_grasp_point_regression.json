@@ -1,0 +1,126 @@
+{
+  "capture": {
+    "contact_metrics": {
+      "left_finger": {
+        "force_contact": true,
+        "force_observation": {
+          "contacts": [
+            {
+              "normal_force": 6.83920431137085,
+              "point_world": [
+                0.4120701849460602,
+                -0.3316456973552704,
+                1.1522976160049438
+              ]
+            },
+            {
+              "normal_force": 0.03762992471456528,
+              "point_world": [
+                0.4120701551437378,
+                -0.3316456973552704,
+                1.1522976160049438
+              ]
+            }
+          ],
+          "details_at_capacity": false,
+          "details_valid": true,
+          "other_body": "/World/env_0/episode_000000/objects/fabrica_plumbers_block_2",
+          "source": "filtered_contact_probe",
+          "valid": true
+        },
+        "force_probe_valid": true
+      },
+      "right_finger": {
+        "force_contact": true,
+        "force_observation": {
+          "contacts": [
+            {
+              "normal_force": 5.762534141540527,
+              "point_world": [
+                0.41219231486320496,
+                -0.29164591431617737,
+                1.1524059772491455
+              ]
+            },
+            {
+              "normal_force": 1.7903685569763184,
+              "point_world": [
+                0.40125149488449097,
+                -0.29159361124038696,
+                1.1454273462295532
+              ]
+            },
+            {
+              "normal_force": 0.5451732873916626,
+              "point_world": [
+                0.4097890257835388,
+                -0.291608601808548,
+                1.1413451433181763
+              ]
+            },
+            {
+              "normal_force": 0.0016682629939168692,
+              "point_world": [
+                0.40125149488449097,
+                -0.2915935814380646,
+                1.1454273462295532
+              ]
+            },
+            {
+              "normal_force": 0.016544334590435028,
+              "point_world": [
+                0.41219228506088257,
+                -0.29164591431617737,
+                1.1524059772491455
+              ]
+            }
+          ],
+          "details_at_capacity": false,
+          "details_valid": true,
+          "other_body": "/World/env_0/episode_000000/objects/fabrica_plumbers_block_2",
+          "source": "filtered_contact_probe",
+          "valid": true
+        },
+        "force_probe_valid": true
+      }
+    },
+    "object_orientation": [
+      0.876858115196228,
+      0.0019190931925550103,
+      0.4807449281215668,
+      -0.0006893838872201741
+    ],
+    "object_position": [
+      0.38421571254730225,
+      -0.31261613965034485,
+      1.075238823890686
+    ],
+    "step": 1866,
+    "target_prim_path": "/World/env_0/episode_000000/objects/fabrica_plumbers_block_2",
+    "tcp_orientation": [
+      0.32382112741470337,
+      -0.001001313328742981,
+      -0.9461169838905334,
+      -0.001290561631321907
+    ],
+    "tcp_position": [
+      0.49860742688179016,
+      -0.3121072053909302,
+      1.2729461193084717
+    ]
+  },
+  "source_run": "plumbers_mass_fix_JL8WRS, seed/layout 4906, capture step 1866, stop step 2616",
+  "stop": {
+    "relative_orientation": [
+      -0.1935971208524598,
+      0.00039319987786564774,
+      0.9810809808617552,
+      0.00033042825274720935
+    ],
+    "relative_position": [
+      -0.027703917370096254,
+      -0.0012736916049185796,
+      0.22769277999183407
+    ]
+  }
+}

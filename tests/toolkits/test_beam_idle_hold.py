@@ -208,6 +208,20 @@ class BeamIdleHold(unittest.TestCase):
         # an unflagged stage. Its special parameters must survive untouched.
         path = ROOT / 'roboassemblybench/core/fabrica_canonical.py'
         source = ast.parse(path.read_text())
+        # Continuous Beam dispatches out of the generic compiler before this
+        # region. Exercise its authoritative implementation, not the old dead
+        # Beam branch that used to be copied in fabrica_canonical.py.
+        beam_source = ast.parse((ROOT / 'roboassemblybench/core/beam_physical_compiler.py').read_text())
+        beam_compile = next(n for n in beam_source.body if isinstance(n, ast.FunctionDef)
+                            and n.name == 'compile_continuous_beam_recipe')
+        beam_begin = next(i for i, n in enumerate(beam_compile.body)
+                          if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
+                          and isinstance(n.value.func, ast.Name)
+                          and n.value.func.id == '_compile_targets_and_phases')
+        beam_end = next(i for i, n in enumerate(beam_compile.body)
+                        if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name)
+                            and t.id == 'part_names' for t in n.targets))
+        beam_region = ast.Module(body=beam_compile.body[beam_begin:beam_end], type_ignores=[])
         compile_node = next(n for n in source.body if isinstance(n, ast.FunctionDef)
                             and n.name == 'compile_fabrica_canonical_recipe')
         begin = next(i for i, n in enumerate(compile_node.body)
@@ -217,7 +231,7 @@ class BeamIdleHold(unittest.TestCase):
         end = next(i for i, n in enumerate(compile_node.body)
                    if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name)
                        and t.id == 'part_names' for t in n.targets))
-        apply_node = next(n for n in source.body if isinstance(n, ast.FunctionDef)
+        apply_node = next(n for n in beam_source.body if isinstance(n, ast.FunctionDef)
                           and n.name == '_apply_continuous_beam_physics')
         scope = {}
         definition = ast.Module(body=[ast.ImportFrom(module='__future__',
@@ -246,7 +260,7 @@ class BeamIdleHold(unittest.TestCase):
                     items.append(inserted)
                 module = NS(coordinate_phases=coordinate,
                             configure_beam_velocity_solver=lambda *_args: None)
-                run_scope = {'assembly': assembly,
+                run_scope = {'assembly': assembly, 'plumbers_physics': False,
                     'spec': {'continuous_physics': continuous, 'official_bimanual_hold': True,
                              'coordinated_support_plan': True},
                     'task': {}, 'pickup_origin': [], 'pickup_orientation': [],
@@ -256,7 +270,8 @@ class BeamIdleHold(unittest.TestCase):
                     '_apply_ik_execution_policy': scope['_apply_ik_execution_policy'],
                     '_compile_targets_and_phases': lambda **_kwargs: ([], phases, {}, [], [])}
                 with patch.dict('sys.modules', {'roboassemblybench.core.beam_coordinated': module}):
-                    exec(compile(ast.fix_missing_locations(region), str(path), 'exec'), run_scope)
+                    selected_region = beam_region if continuous else region
+                    exec(compile(ast.fix_missing_locations(selected_region), str(path), 'exec'), run_scope)
                 self.assertEqual(calls, ['physics', 'coordinate'] if continuous else ['coordinate'])
                 if continuous:
                     self.assertTrue(all(p['beam_idle_hold_anchor'] is True for p in phases))
@@ -391,6 +406,216 @@ class BeamIdleHold(unittest.TestCase):
         robot.set_pose = robot.set_joint_positions = forbidden
         robot.articulation.set_joint_positions = robot.articulation.set_joint_velocities = forbidden
         self.act()
+
+
+class PlumbersIdleHold(unittest.TestCase):
+    """Run the real policy through the separate physical-plumbers switch."""
+
+    act = BeamIdleHold.act
+    target = BeamIdleHold.target
+
+    def setUp(self):
+        BeamIdleHold.setUp(self)
+        self.task = Task('fabrica_plumbers_block_ur5e_staged')
+        self.task.spec['physical_idle_hold_anchor'] = True
+        self.task.spec['physical_idle_hold_robot'] = 'left'
+
+    def test_native_hold_target_stays_fixed_despite_measured_drift(self):
+        initial = self.task.subset.q.copy()
+        for index in range(8):
+            self.task.subset.q[:] = initial + index * .01
+            self.task.step_counter += 1
+            action = self.act()
+            np.testing.assert_array_equal(self.target(action), initial)
+            np.testing.assert_array_equal(action['arm_joint_controller'][1], np.zeros(6))
+        self.assertFalse(self.policy._beam_idle_enabled(self.task))
+        self.assertTrue(self.policy._idle_hold_enabled(self.task))
+
+    def test_right_motion_does_not_change_left_idle_target(self):
+        right = Task('fabrica_plumbers_block_ur5e_staged')
+        self.task.config.robot_names.append('right')
+        self.task.robots['right'] = right.robots['left']
+        self.task.tracking['right'] = dict(right.tracking['left'], position=[.1, .65, .8])
+        self.task.spec['local_skills'] = {'right': {'name': 'active_motion', 'robot': 'right'}}
+        initial = self.task.subset.q.copy()
+        for index in range(4):
+            right_target = right.subset.q + index * .02
+            command = {'arm_joint_controller': [right_target.tolist()]}
+            self.policy._local_skill_executor.action_for = (
+                lambda *, robot_name, **kwargs: command if robot_name == 'right' else None)
+            self.task.subset.q[:] = initial + index * .01
+            self.task.step_counter += 1
+            actions = self.policy.act(self.task)
+            np.testing.assert_array_equal(self.target(actions['left']), initial)
+            np.testing.assert_array_equal(actions['left']['arm_joint_controller'][1], np.zeros(6))
+            self.assertIs(actions['right'], command)
+            self.assertEqual(set(self.policy._beam_idle_anchors), {'left'})
+
+    def test_disabled_plumbers_switch_keeps_legacy_idle_behavior(self):
+        self.task.spec['physical_idle_hold_anchor'] = False
+        for index in range(3):
+            self.task.subset.q += .01
+            expected = self.policy._normalized_joint_action(self.task.subset.q, reference=self.task.subset.q)
+            np.testing.assert_array_equal(self.target(self.act()), expected[0])
+            self.assertEqual(self.policy._beam_idle_anchors, {})
+
+    def test_plumbers_supporter_updates_before_inserting_arm_despite_config_order(self):
+        right = Task('fabrica_plumbers_block_ur5e_staged')
+        self.task.config.robot_names.append('right')
+        self.task.robots['right'] = right.robots['left']
+        self.task.tracking['right'] = dict(right.tracking['left'], position=[.1, .65, .8])
+        self.task.spec['plumbers_base_support'] = {'robot': 'right', 'inserting_robot': 'left'}
+        order = []
+        def local_action(*, robot_name, **kwargs):
+            order.append(robot_name)
+            return {'arm_joint_controller': [[0.] * 6]}
+        self.policy._local_skill_executor.action_for = local_action
+        self.policy.act(self.task)
+        self.assertEqual(order, ['right', 'left'])
+
+    def test_support_failure_cannot_advance_left_local_skill_or_fallback_planner(self):
+        right = Task('fabrica_plumbers_block_ur5e_staged')
+        self.task.config.robot_names.append('right')
+        self.task.robots['right'] = right.robots['left']
+        self.task.tracking['right'] = dict(right.tracking['left'], position=[.1, .65, .8])
+        self.task.spec['plumbers_base_support'] = {'robot': 'right', 'inserting_robot': 'left'}
+        def local_action(*, robot_name, **kwargs):
+            self.assertEqual(robot_name, 'right')
+            return {'__local_skill_failure__': True, 'reason': 'support_lost'}
+        self.policy._local_skill_executor.action_for = local_action
+        self.policy._compose_robot_action = lambda **kwargs: self.fail('Must not invoke insertion planner after support loss')
+        actions = self.policy.act(self.task)
+        self.assertTrue(self.task.failed)
+        self.assertEqual(actions, {'left': {}, 'right': {}})
+
+    def test_published_target_is_kept_across_gripper_updates_and_idle_phases(self):
+        target = self.task.subset.q + .01
+        self.task.applied = NS(joint_positions=target.copy(), joint_indices=np.arange(6))
+        np.testing.assert_array_equal(self.target(self.act()), target)
+        self.task.applied = NS(joint_positions=[.2], joint_indices=[6])
+        self.task.subset.q += .1
+        self.task.spec = {'name': 'next_idle', 'physical_idle_hold_anchor': True,
+                          'physical_idle_hold_robot': 'left'}
+        self.task.phase_specs.append(self.task.spec)
+        self.task.phase_index = 1
+        self.task.phase_entry_step = self.task.step_counter = 30
+        self.task.phase = 'next_idle'
+        np.testing.assert_array_equal(self.target(self.act()), target)
+        self.assertEqual(self.policy._beam_idle_anchors['left']['source'], 'articulation_applied_target')
+
+    def test_active_skill_releases_old_target_and_idle_recaptures_new_published_target(self):
+        self.act()
+        new_target = self.task.subset.q + .2
+        command = {'arm_joint_controller': [new_target.tolist()], 'gripper_controller': [1.]}
+        self.task.spec['local_skills'] = {'left': {'name': 'new_motion', 'robot': 'left'}}
+        self.policy._local_skill_executor.action_for = lambda **kwargs: command
+        self.assertIs(self.act(), command)
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+        self.task.applied = NS(joint_positions=new_target.copy(), joint_indices=np.arange(6))
+        self.task.spec.pop('local_skills')
+        self.task.step_counter += 1
+        self.task.subset.q += .15
+        self.policy._local_skill_executor.action_for = lambda **kwargs: None
+        np.testing.assert_array_equal(self.target(self.act()), new_target)
+
+    def test_physical_support_never_uses_idle_hold_or_beam_rearm_state(self):
+        self.act()
+        self.task._attachments['part'] = {'robot_name': 'left', 'mode': 'pure_physical_grasp'}
+        self.task.subset.q += .1
+        self.act()
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+        self.task._attachments.clear()
+        self.task.spec['local_skills'] = {'left': {'name': 'physical_hold', 'robot': 'left'}}
+        self.task.step_counter += 1
+        self.act()
+        self.assertEqual(self.policy._beam_idle_guard, {})
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+
+    def test_initial_settle_never_captures_target(self):
+        self.task.spec.update(physical_idle_hold_anchor=False, physical_idle_hold_robot=None)
+        self.task.phase = self.task.spec['name'] = 'plumbers_fixture_settle'
+        action = self.act()
+        self.assertEqual(len(action['arm_joint_controller']), 1)
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+        self.assertEqual(self.policy._beam_idle_guard, {})
+
+    def test_idle_right_arm_keeps_legacy_command_even_with_left_hold_enabled(self):
+        right = Task('fabrica_plumbers_block_ur5e_staged')
+        self.task.config.robot_names.append('right')
+        self.task.robots['right'] = right.robots['left']
+        self.task.tracking['right'] = dict(right.tracking['left'], position=[.1, .65, .8])
+        for _ in range(3):
+            right.subset.q += .01
+            actions = self.policy.act(self.task)
+            expected = self.policy._normalized_joint_action(right.subset.q, reference=right.subset.q)
+            self.assertEqual(actions['right']['arm_joint_controller'], expected)
+            self.assertEqual(set(self.policy._beam_idle_anchors), {'left'})
+        self.assertEqual(self.policy._beam_idle_guard, {})
+
+    def test_leaving_scope_releases_anchor_before_next_action(self):
+        self.act()
+        self.task.spec.update(physical_idle_hold_anchor=False, physical_idle_hold_robot=None)
+        def active_action(**kwargs):
+            self.assertEqual(self.policy._beam_idle_anchors, {})
+            return {'arm_joint_controller': [[0.] * 6]}
+        self.policy._local_skill_executor.action_for = active_action
+        self.act()
+
+    def test_step_reset_to_unflagged_initial_settle_discards_previous_anchor(self):
+        self.act()
+        self.task.step_counter = 0
+        self.task.spec.update(physical_idle_hold_anchor=False, physical_idle_hold_robot=None)
+        self.task.phase = self.task.spec['name'] = 'plumbers_fixture_settle'
+        self.act()
+        self.assertEqual(self.policy._policy_step, 1)
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+
+    def test_missing_robot_scope_fails_closed_instead_of_enabling_both_arms(self):
+        self.task.spec.pop('physical_idle_hold_robot')
+        self.assertFalse(self.policy._idle_hold_enabled(self.task))
+        self.act()
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+
+    def test_completed_motion_phase_cannot_become_idle_mid_phase(self):
+        self.act()
+        self.task.spec['local_skills'] = {'left': {'name': 'active_motion', 'robot': 'left'}}
+        self.task.is_local_skill_complete = lambda *_: True
+        self.act()
+        self.assertEqual(self.policy._beam_idle_anchors, {})
+
+    def test_clearance_motion_is_not_blocked_by_static_hold(self):
+        BeamIdleHold.test_clearance_takeover_keeps_planned_action_and_releases_anchor(self)
+
+    def test_active_target_does_not_reuse_idle_target(self):
+        BeamIdleHold.test_active_grasp_freeze_keeps_original_joint_action(self)
+
+    def test_episode_reset_and_step_restart_discard_old_anchor(self):
+        self.act()
+        self.task.subset.q += .1
+        self.task.cfg.episode_idx += 1
+        np.testing.assert_array_equal(self.target(self.act()), self.task.subset.q)
+        self.task.subset.q += .1
+        self.task.step_counter = 0
+        np.testing.assert_array_equal(self.target(self.act()), self.task.subset.q)
+
+    def test_only_explicit_plumbers_phase_flag_enables_hold(self):
+        for value in (None, False, 'true', 1):
+            with self.subTest(value=value):
+                self.task.spec['physical_idle_hold_anchor'] = value
+                self.assertFalse(self.policy._idle_hold_enabled(self.task))
+        self.task.spec['physical_idle_hold_anchor'] = True
+        for override in ('0', '1'):
+            os.environ['BEAM_IDLE_HOLD_ANCHOR'] = override
+            self.assertTrue(self.policy._idle_hold_enabled(self.task))
+        self.task.cfg.recipe = 'fabrica_car_ur5e_staged'
+        self.assertFalse(self.policy._idle_hold_enabled(self.task))
+
+    def test_target_is_copied_and_policy_never_writes_physical_state(self):
+        BeamIdleHold.test_command_lists_and_sensor_buffers_cannot_mutate_saved_anchor(self)
+        BeamIdleHold.test_policy_never_writes_robot_pose_or_joint_state(self)
+
+    def test_anchor_trace_exposes_fixed_target_and_measured_drift(self):
+        BeamIdleHold.test_trace_reports_fixed_target_and_measured_drift_at_bounded_frequency(self)
 
 
 class PublishedTargetExtraction(unittest.TestCase):

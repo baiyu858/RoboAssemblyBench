@@ -20,8 +20,9 @@ TASKS = {
     'plumbers_block': 5,
     'stool_circular': 9,
 }
-# Beam uses the retained continuous-physics contract and is checked separately.
-STAGED_TASKS = tuple(name for name in TASKS if name != 'beam')
+# Beam and plumbers have independent continuous-physics contract tests. These
+# loops assert legacy fixed-joint/fixture-lock behavior for the remaining tasks.
+STAGED_TASKS = tuple(name for name in TASKS if name not in {'beam', 'plumbers_block'})
 
 
 def _object_map(recipe):
@@ -1100,7 +1101,7 @@ def test_staged_transport_uses_layout_aware_high_clearance_paths():
 
 def test_selected_pickup_layouts_fit_fixed_board_and_ur5e_reach_envelope():
     metadata = load_fabrica_canonical_metadata()
-    for task_name in STAGED_TASKS:
+    for task_name in (*STAGED_TASKS, 'plumbers_block'):
         recipe = load_task_recipe(
             f'fabrica_{task_name}_ur5e_staged',
             scene_profile='taoyuan_grscenes_tabletop',
@@ -1152,7 +1153,7 @@ def test_selected_pickup_layouts_fit_fixed_board_and_ur5e_reach_envelope():
 
 
 def test_staged_randomization_moves_layouts_but_never_the_optical_board():
-    for task_name in STAGED_TASKS:
+    for task_name in (*STAGED_TASKS, 'plumbers_block'):
         recipe = load_task_recipe(
             f'fabrica_{task_name}_ur5e_staged',
             scene_profile='taoyuan_grscenes_tabletop',
@@ -1234,7 +1235,7 @@ def test_staged_randomization_keeps_each_layout_rigid_and_independent():
 
 
 def test_staged_randomization_respects_fixed_board_bounds_and_tcp_reach():
-    for task_name in STAGED_TASKS:
+    for task_name in (*STAGED_TASKS, 'plumbers_block'):
         recipe = load_task_recipe(
             f'fabrica_{task_name}_ur5e_staged',
             scene_profile='taoyuan_grscenes_tabletop',

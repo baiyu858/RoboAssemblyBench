@@ -178,6 +178,15 @@ class PhysicsDiagnostics(unittest.TestCase):
         self.assertEqual(view.pose_calls, 0)
         self.assertTrue(all(not body['valid'] for body in record['bodies']))
 
+    def test_force_only_contact_view_does_not_replace_cached_pose_view(self):
+        self.task._contact_probes[('/World/beam_6', '/World/table')] = NS(
+            is_physics_handle_valid=lambda: True)
+        record = self.sample()
+        body = record['bodies'][0]
+        self.assertTrue(body['valid'])
+        self.assertEqual(body['source'], 'cached_rigid_wrapper')
+        self.assertEqual(body['positions'], [[1., 2., 3.]])
+
     def test_sampling_does_not_invoke_task_observation_completion_or_setters(self):
         for name in ('get_observations', 'is_done', '_set_object_pose'):
             setattr(self.task, name, lambda *_: self.fail('Must not advance or write task state'))

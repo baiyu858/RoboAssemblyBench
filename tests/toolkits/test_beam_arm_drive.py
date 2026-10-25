@@ -244,6 +244,51 @@ class RealRobotIntegration(unittest.TestCase):
         self.assertEqual(robot.gripper_drive_diagnostics['kd_readback'], [[173.]])
         self.assertEqual(robot.gripper_drive_diagnostics['max_effort_readback'], [[25.]])
 
+    def test_unconfigured_gripper_effort_never_calls_legacy_25000_setter(self):
+        robot = self.robot()
+        robot.config.gripper_require_drive_readback = True
+        robot.articulation.set_max_efforts = lambda *a, **kw: self.fail('Unrequested effort write')
+        robot_method('_configure_drive_gains')(robot)
+        self.assertTrue(robot.gripper_drive_diagnostics['configured'])
+        self.assertEqual(robot.gripper_drive_diagnostics['max_effort_before'], [[25.]])
+        self.assertEqual(robot.gripper_drive_diagnostics['max_effort_readback'], [[25.]])
+
+    def test_explicit_gripper_effort_changes_only_finger_and_is_verified(self):
+        robot = self.robot()
+        robot.config.gripper_require_drive_readback = True
+        robot.config.gripper_drive_max_effort = 30.
+        before = robot.articulation.view.efforts.copy()
+        def set_effort(values, joint_indices):
+            self.assertEqual(joint_indices.tolist(), [6])
+            robot.articulation.view.efforts[:, joint_indices] = values
+        robot.articulation.view.set_max_efforts = set_effort
+        robot_method('_configure_drive_gains')(robot)
+        np.testing.assert_array_equal(robot.articulation.view.efforts[:, :6], before[:, :6])
+        self.assertEqual(robot.gripper_drive_diagnostics['max_effort_readback'], [[30.]])
+
+    def test_silently_ignored_gripper_override_is_fatal_in_strict_mode(self):
+        robot = self.robot()
+        robot.config.gripper_require_drive_readback = True
+        robot.config.gripper_drive_max_effort = 30.
+        robot.articulation.view.set_max_efforts = lambda *a, **kw: None
+        with self.assertRaisesRegex(RuntimeError, 'max_effort native readback'):
+            robot_method('_configure_drive_gains')(robot)
+        self.assertFalse(robot.gripper_drive_diagnostics['configured'])
+
+    def test_strict_gripper_rejects_missing_handle_ignored_gains_and_invalid_effort(self):
+        for failure in ('handle', 'gains', 'effort'):
+            with self.subTest(failure=failure):
+                robot = self.robot()
+                robot.config.gripper_require_drive_readback = True
+                if failure == 'handle':
+                    robot.articulation.view.is_physics_handle_valid = lambda: False
+                elif failure == 'gains':
+                    robot.articulation.view.ignore_gains = True
+                else:
+                    robot.articulation.view.efforts[0, 6] = float('nan')
+                with self.assertRaises(RuntimeError):
+                    robot_method('_configure_drive_gains')(robot)
+
     def test_unverified_nondefault_request_aborts_instead_of_silently_using_asset_gains(self):
         robot = self.robot()
         robot.config.arm_drive_kp, robot.config.arm_drive_kd = 20000., 1000.

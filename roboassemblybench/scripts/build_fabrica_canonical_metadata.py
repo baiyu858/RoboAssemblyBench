@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import pickle
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,11 @@ from planning.robot.workcell import get_assembly_center
 from scipy.spatial.transform import Rotation
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from roboassemblybench.core.fabrica_mass_properties import compute_part_mass_properties
+
 DEFAULT_BUNDLES_ROOT = REPO_ROOT / 'roboassemblybench/assets/Fabrica/canonical_7_bundles/task_bundles'
 DEFAULT_OUTPUT = REPO_ROOT / 'roboassemblybench/assets/Fabrica/canonical_7_bundles/canonical_tasks.json'
 FABRICA_TO_ISAAC_ROBOTIQ_ROTATION = Rotation.from_euler('z', np.pi / 2.0)
@@ -332,7 +338,9 @@ def _relative_to_repo(path: Path) -> str:
     return path.resolve().relative_to(REPO_ROOT).as_posix()
 
 
-def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
+def _build_task(
+    bundle_dir: Path, *, source_meshes_root: Path = REPO_ROOT / 'third_part/Fabrica/assets/fabrica'
+) -> tuple[str, dict[str, Any]]:
     scene_spec_path = bundle_dir / 'scene/scene_spec.json'
     metadata_dir = bundle_dir / 'metadata'
     scene_spec = json.loads(scene_spec_path.read_text(encoding='utf-8'))
@@ -440,6 +448,13 @@ def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
                 'bbox_size': _as_floats(scene_part['bbox_size_m']),
             }
         )
+        parts[-1]['mass_properties'] = compute_part_mass_properties(
+            parts[-1],
+            assembly=assembly,
+            source_meshes_root=source_meshes_root,
+            scale_to_m=float(scene_spec['official_units']['scale_cm_to_m']),
+            density_kg_per_m3=float(scene_part['density_kg_per_m3']),
+        )
 
     fixture_path = bundle_dir / f'assets/fabrica_official_fixture/{assembly}/fixture_raw_sdf512.usda'
     board_path = bundle_dir / 'assets/fabrica_official_support/optical_board_raw_sdf512.usda'
@@ -474,13 +489,15 @@ def _build_task(bundle_dir: Path) -> tuple[str, dict[str, Any]]:
     }
 
 
-def build_metadata(bundles_root: Path) -> dict[str, Any]:
+def build_metadata(
+    bundles_root: Path, *, source_meshes_root: Path = REPO_ROOT / 'third_part/Fabrica/assets/fabrica'
+) -> dict[str, Any]:
     tasks: dict[str, Any] = {}
     for bundle_dir in sorted(path for path in bundles_root.iterdir() if path.is_dir()):
         scene_spec_path = bundle_dir / 'scene/scene_spec.json'
         if not scene_spec_path.exists():
             continue
-        assembly, task = _build_task(bundle_dir)
+        assembly, task = _build_task(bundle_dir, source_meshes_root=source_meshes_root)
         if assembly in tasks:
             raise ValueError(f'Duplicate canonical Fabrica assembly {assembly!r}.')
         tasks[assembly] = task
@@ -500,9 +517,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundles-root', type=Path, default=DEFAULT_BUNDLES_ROOT)
     parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument('--source-meshes-root', type=Path, default=REPO_ROOT / 'third_part/Fabrica/assets/fabrica')
     args = parser.parse_args()
 
-    payload = build_metadata(args.bundles_root.resolve())
+    payload = build_metadata(args.bundles_root.resolve(), source_meshes_root=args.source_meshes_root.resolve())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + '\n',
