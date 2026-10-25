@@ -111,6 +111,186 @@ echo "$PYTHONPATH"
 `env_vars.sh` 里应该 source 当前 Isaac Sim 目录下的 `setup_conda_env.sh`。如果路径不对，重新运行
 `bash setup_conda.sh`，或手动修正该文件后重新打开 shell/重新激活环境。
 
+## Fabrica 七任务零件质量
+
+七个 canonical 任务的 46 个零件统一从 `assets/Fabrica/canonical_7_bundles/canonical_tasks.json`
+读取逐件 `mass_properties`。质量按官方 OBJ 的封闭实体体积乘以 bundle 中的官方密度
+`1250 kg/m³` 计算，原始厘米坐标先乘 `0.01` 转成米。圆凳 OBJ 的法线/纹理接缝仅在体积计算时
+合并重复顶点；不补洞，不使用凸包或外接盒体积，也不修改仿真资产。
+
+| 任务 | 零件编号与质量（g，展示值四舍五入） |
+| --- | --- |
+| beam | 0: 12.8723；1: 12.8723；2: 9.4695；3: 9.4695；6: 39.3188 |
+| car | 0: 17.8907；1: 366.9239；2: 437.5361；3: 17.8907；4: 17.8907；5: 17.8907 |
+| cooling_manifold | 0: 5.2643；1: 311.9919；2: 8.0075；3: 8.0074；4: 5.2643；5: 8.0075；6: 8.0075 |
+| duct | 0: 305.1790；1: 82.8637；2–7: 各约 11.2395 |
+| gamepad | 0: 2.5190；1: 10.8455；2: 11.5711；3: 176.0852；4: 6.2548；5: 2.5190 |
+| plumbers_block | 0: 141.1946；1: 20.2292；2: 294.9544；3: 74.1420；4: 20.2292 |
+| stool_circular | 0/4/6/8: 各约 9.0112；1/3/5/7: 各约 29.7105；2: 101.9735 |
+
+通用和独立 Beam 编译器都把该质量以 kg 显式传入 `UsdObjCfg.mass`，避免加载器缺省的 1 kg；
+不再将 Beam 质量人为截断到 0.25 kg。质量数据缺失或与密度、体积不一致时直接报错。
+记录包含源 OBJ 的 SHA-256；完整 metadata 构建脚本也会生成质量，避免重建时丢失。
+这些是均匀密度模型值，不是实物称重值；不因此放宽滑移容差或修改夹持力。
+修改质量会改变物理轨迹，旧数据/旧成功率不能替代新配置的仿真验证。
+
+只读复算与回归检查（需要本地 official OBJ 和 canonical bundle，不需要规划 pickle）：
+
+```bash
+python roboassemblybench/scripts/recompute_fabrica_part_masses.py --check
+python -m pytest --confcutdir=tests/toolkits tests/toolkits/test_fabrica_mass_properties.py -q
+```
+
+需要更新 metadata 时给复算脚本显式传入 `--output <metadata.json>`，默认不写文件。
+
+## plumbers_block 纯物理生成模式
+
+`fabrica_plumbers_block_ur5e_staged` 的 recipe 已启用
+`fabrica_canonical.continuous_physics: true`。这是在线物理轨迹生成，和下文官方轨迹 replay 不是同一条执行路径。
+
+- 配置：`tasks/fabrica_plumbers_block_ur5e_staged/recipe.yaml`。
+- 编译入口：`core/fabrica_canonical.py`；物理阶段转换：`core/plumbers_physical.py`。
+- 运行时：`../internutopia_extension/tasks/factory_dual_franka_assembly_task.py`。
+- 闭合、运输夹持控制：`../toolkits/factory_dual_franka_assembly/plumbers_block_ur5e_skills.py`。
+
+5 个零件分别保留其抓取接触区域。抓取要求两指对目标零件的接触力探针有效、接触相对且持续稳定；
+不创建抓取固定关节，不关闭指爪碰撞，不用夹爪开度或几何靠近代替接触力。
+接触报告在 `FactoryDualFrankaAssemblyTask.set_up_scene()` 加载完机器人和任务物体后、
+runner 创建本轮 PhysX 视图前统一准备。运行时使用 force-only `RigidContactView`，
+`prepare_contact_sensors=False`，不再临时给掌部/零件/静态夹具添加报告 API。
+这避免了开启 `BEAM_SUPPORT_CONTACT_TRACE=1` 后，运行中新增 API 导致实例化黑色掌部消失的问题。
+未预配置的测力源或过滤目标会明确报告探针无效，不自动补加 API，也不退化为几何抓取成功。
+预计抓取宽度只决定何时减速，未接触时继续低速闭合到配置的安全行程限制。
+闭合阶段要求双指分别对目标零件形成真实相向接触，各指夹持力处于 4–12 N，
+且零件位姿连续 96 步保持稳定；单指触碰、瞬时力峰值、开度到位或空夹都不能判定抓取成功。
+初始化后零件不再被 fixture lock 固定，运输不再使用运动学搬运。
+平移滑移以抓取成立时两指对目标零件的受力接触斑质心中点为参考：仅在登记抓取时计算一次，
+转换并固定在零件坐标系中，同时保存当时的 TCP 坐标。后续比较同一零件物质点相对 TCP 的变化，
+不跟随新的接触点移动、不在换阶段或解锁时重置；新的一次抓取登记才建立新参考。
+接触点数据缺失、无效、不是目标配对或缓存截断时不登记抓取；已登记参考丢失时拒绝保持，不能重采样补齐。
+`hold_position_slip_reference: grasp_point` 仅在 plumbers 物理模式启用；Beam 等未启用的模式保持原点判据。
+平移阈值仍为 3 mm，独立相对转角阈值仍为 5°，真实接触要求不变。
+纯物理搬运的旋转参考另设 `physical_rotation_speed: 0.10` rad/s（5.73°/s）、
+`physical_rotation_acceleration: 0.30` rad/s²（17.19°/s²）、
+`physical_rotation_lookahead: 0.010` rad（0.573°）。这些是 recipe 中可复现实验参数，不是已标定最优值。
+关闭旧的角度 warm-start 累积，按实际 physics dt 在 SO(3) 上限速、限加速度；
+提前为目标和预瞄边界刹车，参考状态跨搬运阶段保留，仅在接受运动命令后提交。
+首帧从上一次实际发出的关节指令的 FK 开始，不能从带 IK 残差的旧目标姿态直接起转。
+参考预瞄使用硬上限的 90%，剩余量留给 IK 残差；最终关节指令的 FK 仍须满足完整预瞄上限。
+物理模式使用有界局部 IK，角度求解容差收紧到 1e-8 rad；求解失败时只回退平移，不改写受限旋转参考，
+避免原来的 1e-3 rad IK 容差把每步小角度指令变成间歇跳变。Beam 和非物理模式不启用此分支。
+局部 IK 始终以上次发出的关节命令为参考，不改用落后的实测关节作种子，
+避免后级关节步长裁剪再次改写旋转参考。
+跟踪异常或 IK 恢复改写了受限旋转参考时拒绝推进，不通过突然重置参考或扩大阈值继续运行。
+旋转预算随限速扩大；这不修改装配成功阈值。限速对象是旋转参考，不等于实际刚体角速度或接触力矩控制。
+`rotation_command_trace.jsonl`（随 `BEAM_MOTION_TRACE_PATH` 启用）记录参考速度、加速度、预瞄，以及最终 FK
+预瞄、参考残差和差分速度/加速度；最终 FK 与受限参考的角度残差超过 5e-8 rad 时拒绝推进。
+意外中断后不补积遗漏的时间步，并记录 `restarted_after_gap`。
+`hold_trace.jsonl` 同时记录 `position_slip`（固定抓取点）和 `object_origin_position_slip`（原始模型原点），
+接触轨迹和 attachment 快照包含完整 `hold_grasp_reference`，便于核对是否始终使用同一参考。
+每次放下依次执行：实际张爪并卸载 → 退出 → 回到 park → 连续 120 个任务步的无夹持稳定检查。
+底座稳定后只重定位后续目标，不改写底座姿态或速度。最终成功必须通过最后的无夹持稳定检查。
+本次没有重新标定原有装配目标的位置/角度容差；生成器成功率不应直接当作严格装配精度。
+
+夹爪目前使用实验起点 `kp=7500`、`kd=173`、静/动摩擦 `1.0/0.8`。
+`gripper_drive_max_effort: null` 保留资产上限，启动时必须通过 native readback；不再默认写入 `25000`。
+日志包含实际增益、effort 上限和指爪碰撞形状的材质绑定信息。
+初始闭合参数在 `core/plumbers_physical.py` 的 `contact_policy` 中，仍需用 plumbers 零件实测标定；
+代码/离线测试通过不代表 5 个零件已全部完成物理装配。
+
+闭爪稳定判定可用 recipe 的 `fabrica_canonical.close_force_stability` 单独启用，其他任务默认不变。
+当前采用完整 5 个物理步的滑动均值（240 Hz 下约 21 ms）：两侧原始力和均值都达到 4 N 才进入计数，
+进入后用 0.5 N 滞回，允许夹力在 3.5–4 N 间波动；原始力低于 3.5 N 或超过 12 N 立即清零。
+这会将已进入稳定带后的最低验收力降至 3.5 N，不是声称整个窗口始终大于 4 N；参数仍需物理复测。
+真实目标双指接触丢失、探针无效、漏步/倒退或抓取丢失后会丢弃旧均值，必须重新建立完整窗口。
+96 步连续稳定计数和固定窗口内的 1 mm / 0.02 rad 位姿检查不变，同一物理步不能重复累计。
+滤波只用于判定，不改变原始力驱动控制、12 N 卸力或 40 N 上限，也不修改后续 3 mm / 5° 滑移保护。
+`close_control.jsonl` 增加 `force_stability`，记录原始/滤波夹力、进入/退出门槛、窗口样本数及清零原因。
+设置 `close_force_stability.enabled: false` 可回到原来逐步检查 4–12 N 的判定。
+
+搬运阶段另用 recipe 的 `fabrica_canonical.hold_force_control`，与上述初始闭爪判定独立。
+当前试验参数为：弱侧低于 6 N 触发补夹，补到 8 N 停止；软上限 14 N，卸力/暂停门槛 18 N，
+硬停止上限 40 N。这些是自定义仿真实验参数，不是 Isaac 或 Robotiq 的额定力上限。
+`soft_limit_action: limit_and_slow` 将轻微超限的夹力调整与机械臂暂停解耦：14–18 N 内不再补夹，
+弱侧滤波力达到 8 N、瞬时力至少 6 N 且没有持续滑移时，按 0.025 rad/s 小幅卸力；
+夹持已稳定时继续运动，速度随超限幅度逐渐降至 `soft_limit_motion_scale: 0.5`。
+弱侧需要恢复、持续滑移或达到 18 N 时仍暂停，瞬时力超过 18 N 时卸力；超过 40 N 终止。
+旧配置默认 `soft_limit_action: pause`，保留到软上限就暂停的策略；其他任务不自动启用新策略。
+不能用继续合拢去强行补偿明显的接触不对中。
+正常补力用 0.02 s 时间常数滤波，卸力和过载检查仍看原始力，不能让滤波隐藏尖峰。
+每个物理步最多更新一次，关节闭合速度 0.025 rad/s、领先量 0.001 rad、相对原始命令的
+闭合行程和累计补夹行程均限于 0.03 rad。失去目标接触、探针无效或状态缺失时直接报错。
+夹力恢复期间保持上次实际发布的机械臂关节目标，不推进 IK/旋转缓存，也不重设固定抓取参考点。
+初次放行或真正暂停后连续稳定 24 个物理步才允许移动，再用 48 步平滑恢复路径速度；
+轻微超限不清空已有稳定/恢复计数，持续不能放行超过 480 步则失败。
+固定参考点滑移在 48 步内继续增长至少 0.1 mm 时也暂停，补力目标仍为 8 N，不因滑移无限加力。
+这只是早期暂停条件，原有 3 mm / 5° 拒绝条件不变。阶段切换不重置力控制状态和抓取参考。
+控制器位于 `../toolkits/factory_dual_franka_assembly/physical_hold_force.py`。
+`loaded_force_trace.jsonl` 随 `BEAM_HOLD_TRACE_PATH` 写出原始/滤波力、控制模式、滑移增长、
+暂停步数及恢复速度比例。将 `hold_force_control.enabled` 设为 `false` 可对照原有搬运力带控制。
+先保持质量、摩擦和抓取位置不变，对比静态悬持三秒与原路径搬运，不能用离线测试代替物理验证。
+
+当前 plumbers 物理 recipe 显式启用 `fabrica_canonical.physical_idle_hold_anchor: true`。
+只对空闲的 `assembly_robot`（当前为左臂）防下垂：初始化沉降阶段不启用，右臂控制始终不变。
+编译阶段用 `physical_idle_hold_robot` 明确指定左臂，左臂有主动技能或运动目标的阶段不启用。
+进入静置时保存最后已发布的原生关节目标；没有有效目标时只采样一次实测关节角。
+静置期间持续发送同一位置目标和零目标速度，不再每步用实测角度重设目标、累积下垂。
+连续静置阶段共用该目标；离开适用阶段、主动运动、负载支撑或避让接管时清除旧目标，任务重置也会清除。
+plumbers 仅缓存/发送/清除目标，不使用 Beam 的负载丢失与重新解锁状态机；负载夹持仍由原有接触和夹力控制负责。
+这不是关节锁定：不直接写关节状态，不改增益、力矩上限或重力，实际保持误差仍需用仿真核验。
+`idle_hold_trace.jsonl` 随 `BEAM_MOTION_TRACE_PATH` 输出固定目标、实测角度和跟踪误差；
+也可用 `BEAM_IDLE_HOLD_TRACE_PATH` 单独指定文件。Beam 的启用开关保持独立，其他任务不自动启用。
+
+当前 plumbers recipe 还启用 `fabrica_canonical.physical_base_support.enabled: true`：
+底座放下、独立沉降并重定位目标后，右臂重新夹住底座 `fabrica_plumbers_block_2` 的 +X 外露低台阶。
+每次左臂取件前依次执行右臂接近、预张爪、侧向进入、真实双指夹紧、夹力就绪检查；不抬升底座。
+空载接近采用粗到精分段：先原地抬高 TCP 至底座原点上方 0.30 m，在高处转到侧夹姿态，
+横移至预接近点上方，再垂直降低到距抓取位姿 80 mm 的预接近点；最后低速侧向进入。
+长段参考速度为 0.06 m/s、转向为 0.35 rad/s，降低高度为 0.025 m/s，最后侧向进入为 0.01 m/s。
+参考从最后已发布关节指令的 FK 连续推进，关节速度/加速度受限，不再每步从实测位置重启微小步长。
+每段在指令速度归零后再切换，避免下一段重置参考速度造成瞬时加速度突变。
+粗段/降低/精接近的位置预瞄分别限制在 15/5/3 mm；超过跟踪边界直接失败，不通过改写机器人或零件状态恢复。
+该分支只允许空载机械臂，真正闭爪后仍使用原来的接触、夹力和固定抓取参考点保护。
+支撑接触区域限定在底座局部坐标 x=50–80 mm、y=-18.7342–21.2658 mm、z=0–20 mm，
+闭合轴为局部 Y。另用独立的侧夹位姿，不改变底座搬运抓取 944 或左臂插入路径。
+`grasp_center_m: [0.074, 0.0012658, 0.022]` 是倾斜指腹的参考中心，不是要求在 z=22 mm 的空气中证明接触；
+30° 倾角与 143 mm 指腹距离使指腹末段覆盖低台阶侧面。它是待物理验证的几何候选，不能据此声称已经抓稳。
+真实力接触仍按原有闭合门槛验证，抓取登记后的实际固定接触参考也必须落在低台阶区域内。
+左臂取件、搬运、插入、张爪、退出及 park 期间，右臂持续发送已登记的固定关节目标并调节夹力。
+右臂先更新本步夹持控制；夹力恢复期间左臂不推进 IK、旋转/闭合状态或阶段完成条件，
+左手已经抓住零件时仍维持自己的夹力。支撑接触失效、指令缺失或底座从固定世界参考漂移超过 3 mm / 5° 则失败。
+左臂已释放并退出后，右臂实际张爪、确认目标接触卸载、沿接近方向反向退出并 park，
+再进入原来的无夹持稳定检查。左臂释放阶段只要求左手零件释放，不能要求此时仍被右手夹住的底座也释放。
+每个插入循环均重新建立/释放支撑，最后仍须五个零件全部无夹持稳定；不创建约束、不关碰撞、不改重力或物体状态。
+`plumbers_support_trace.jsonl` 随 `BEAM_HOLD_TRACE_PATH` 输出就绪状态、底座固定参考漂移和拒绝原因。
+阶段编排位于 `core/plumbers_support.py`，运行期联锁位于 `../toolkits/factory_dual_franka_assembly/plumbers_support.py`。
+禁用 `physical_base_support.enabled` 可与原来的单臂插入流程对照；Beam 和其他任务不自动启用。
+
+保持控制与接入测试：
+
+```bash
+python -m pytest --confcutdir=tests/toolkits -q \
+  tests/toolkits/test_physical_hold_force.py \
+  tests/toolkits/test_plumbers_contact_close.py \
+  tests/toolkits/test_plumbers_physical.py \
+  tests/toolkits/test_plumbers_support.py \
+  tests/toolkits/test_beam_idle_hold.py
+```
+
+在仓库根目录运行单任务验证（输出目录请选新的，避免覆盖已有验证结果）：
+
+```bash
+conda run --no-capture-output -n internutopia311 python \
+  roboassemblybench/scripts/validate_fabrica_canonical_ur5e.py \
+  --tasks plumbers_block --seed 4906 --layout-seed 4906 \
+  --output-dir outputs/plumbers_physical_validation_01 \
+  --worker-timeout-seconds 600 --record-live-video
+```
+
+检查 `validation_summary.json`、`validation.log` 以及生成的视频。内存保护中止、接触探针无效、
+力超限、掉落或超时都不能算成功。保留默认内存保护，不要为了跑通而关闭接触检测或重新加锁。
+专项离线测试：`python -m pytest --confcutdir=tests/toolkits tests/toolkits/test_plumbers_physical.py -q`。
+
 ## 从零完整复现 plumbers_block UR5e 渲染
 
 本节给出从干净机器拉仓库到生成视频的完整流程。目标是复现：

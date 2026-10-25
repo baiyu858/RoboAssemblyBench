@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from internutopia.macros import gm
+from roboassemblybench.core.fabrica_mass_properties import part_mass_kg
 from roboassemblybench.core.paths import BENCHMARK_ROOT
 from roboassemblybench.core.scene_profiles import deep_merge
 from toolkits.factory_dual_franka_assembly.ur5e_skill_api import AssemblySkillAPI
@@ -2679,6 +2680,9 @@ def _part_object(
         'auto_collider': False,
         'rigid_body': True,
         'tracked': True,
+        # Explicit kg avoids UsdObject's 1 kg fallback. Density/volume provenance
+        # lives in canonical_tasks.json and is validated before compilation.
+        'mass': part_mass_kg(part),
         'static_friction': 0.8,
         'dynamic_friction': 0.7,
         'restitution': 0.0,
@@ -3151,6 +3155,11 @@ def _append_pick_and_attach_phases(
         'contact_box_offset': contact_box_offset,
         'contact_box_scale': contact_box_scale,
     }
+    if grasp.get('target_gripper') != 'panda':
+        # Speed cue for force-controlled closure, never evidence of a grasp.
+        # Use this selected grasp's aperture rather than Beam's 18 mm default.
+        contact_parameters['jaw_width_stroke_m'] = 0.085
+        contact_parameters['jaw_width_thickness_m'] = 0.085 * grasp_open_ratio
 
     if pickup_approach_mode == 'grasp_axis':
         approach_direction = _normalized_direction(
@@ -3950,7 +3959,7 @@ def _compile_targets_and_phases(
     assembly_orientation: list[float],
     robots: list[dict[str, Any]],
 ) -> tuple[list[dict], list[dict], list[dict], list[str], list[str]]:
-    if bool(spec.get('continuous_physics', False)):
+    if assembly == 'beam' and bool(spec.get('continuous_physics', False)):
         from roboassemblybench.core.beam_physical_compiler import _compile_targets_and_phases as compile_beam
         return compile_beam(
             assembly=assembly, task=task, spec=spec, pickup_origin=pickup_origin,
@@ -5572,7 +5581,7 @@ def _default_domain_randomization(
     translation_constraints: dict[str, list[dict[str, Any]]],
     robot_platform: str, include_fixture_support: bool = False,
 ) -> dict[str, Any]:
-    if bool(spec.get('continuous_physics', False)):
+    if assembly == 'beam' and bool(spec.get('continuous_physics', False)):
         from roboassemblybench.core.beam_physical_compiler import _default_domain_randomization as beam_domain
         return beam_domain(
             spec=spec, assembly=assembly, part_names=part_names,
@@ -5723,6 +5732,22 @@ def _canonical_translation_constraints(
                 grasp=grasp_by_part[part_id],
             )
             tcp_points_by_robot.setdefault(robot_name_by_part[part_id], []).append(_add(tcp_position, workspace_offset))
+
+        if group_name == 'assembly_base' and assembly == 'plumbers_block' and spec.get('continuous_physics'):
+            from roboassemblybench.core.plumbers_support import support_grasp_settings
+            support = support_grasp_settings(spec)
+            if support['enabled']:
+                base_target = targets_by_name[f'part_{base_part}_assembled']
+                support_position, support_orientation = _tcp_pose_for_object_pose(
+                    object_position=base_target['position'], object_orientation=base_target['orientation'],
+                    grasp={'object_in_tcp_position': support['object_in_tcp_position'],
+                           'object_in_tcp_orientation': support['object_in_tcp_orientation']})
+                support_position = _add(support_position, workspace_offset)
+                outward = _quat_rotate(support_orientation, [0., 0., -support['approach_distance_m']])
+                # The old base pickup grasp is on the opposite side. Include
+                # this new support/pregrasp in randomized-layout reach bounds.
+                tcp_points_by_robot.setdefault(robot_name_by_part[base_part], []).extend(
+                    [support_position, _add(support_position, outward)])
 
         if group_name == 'start_parts':
             for part_id, grasp in grasp_by_part.items():
@@ -6088,6 +6113,11 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(robots, list):
         raise ValueError('robots must be a list.')
     robot_platform = _recipe_robot_platform(spec=spec, robots=robots)
+    plumbers_physics = assembly == 'plumbers_block' and bool(spec.get('continuous_physics', False))
+    if bool(spec.get('continuous_physics', False)) and not plumbers_physics:
+        raise ValueError('continuous_physics is supported for UR5e plumbers_block and the dedicated Beam compiler.')
+    if plumbers_physics and robot_platform != 'ur5e':
+        raise ValueError('Continuous plumbers physics currently requires UR5e with Robotiq 2F-85.')
     _apply_robot_pose_overrides(robots=robots, spec=spec)
     _apply_robot_home_joint_overrides(robots=robots, spec=spec)
     _normalize_initial_joint_positions(robots=robots)
@@ -6113,6 +6143,10 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             )
         task['assembly_steps'] = ordered_steps
     _activate_gripper_profile(task, robot_platform=robot_platform)
+    if plumbers_physics:
+        from roboassemblybench.core.plumbers_physical import align_plumbers_base_grasps_to_pads
+        from roboassemblybench.core.plumbers_support import support_grasp_settings
+        align_plumbers_base_grasps_to_pads(task, spec)
     (
         pickup_origin,
         pickup_orientation,
@@ -6185,8 +6219,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
                 entry['angular_damping'] = max(float(entry.get('angular_damping', 0.0) or 0.0), 16.0)
                 # Sit slightly above the deck so SDF does not sink into it.
                 entry['spawn_clearance'] = max(float(entry.get('spawn_clearance', 0.0) or 0.0), 0.004)
-                # Lighter parts so finger friction can accelerate them (default mass=1kg).
-                entry['mass'] = min(float(entry.get('mass') or 1.0), 0.25)
+                # Preserve the per-part density/volume mass; no grasp-driven cap.
             elif name == 'fabrica_fixture':
                 # Bolted nest. min combine keeps this low coefficient, and the
                 # kinematic anchor stops the thin tray from being carried away.
@@ -6232,12 +6265,9 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         assembly_orientation=assembly_orientation,
         robots=robots,
     )
-    if bool(spec.get('continuous_physics', False)):
-        if assembly != 'beam' or not bool(spec.get('official_bimanual_hold', False)):
-            raise ValueError('continuous_physics currently requires Beam official_bimanual_hold.')
-        _apply_continuous_beam_physics(phases)
-        from roboassemblybench.core.beam_coordinated import configure_beam_velocity_solver
-        configure_beam_velocity_solver(generated_objects, spec.get('beam_solver_velocity_iterations', 4))
+    if plumbers_physics:
+        from roboassemblybench.core.plumbers_physical import apply_plumbers_physics
+        apply_plumbers_physics(phases, success=success, spec=spec)
     if spec.get('coordinated_support_plan'):
         from roboassemblybench.core.beam_coordinated import coordinate_phases
         coordinate_phases(phases, task, spec, targets, assembly_target_names)
@@ -6258,6 +6288,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
                     'skip_terminal_retreat requires the canonical phase graph to end in a retreat phase.'
                 )
             phases = phases[:-1]
+    if not bool(spec.get('continuous_physics', False)) or plumbers_physics:
         _apply_idle_robot_home_policy(phases, spec=spec, robots=robots)
         _apply_ik_execution_policy(phases, spec)
     part_names = [f'fabrica_{assembly}_{part["part_id"]}' for part in task['parts']]
@@ -6317,6 +6348,10 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     )
     resolved['fabrica_canonical_resolved'] = {
         'assembly': assembly,
+        'continuous_physics': plumbers_physics,
+        'physical_idle_hold_anchor': plumbers_physics and spec.get('physical_idle_hold_anchor', False),
+        'physical_base_support': support_grasp_settings(spec) if plumbers_physics else {'enabled': False},
+        'grasp_execution_mode': 'pure_physical_grasp' if plumbers_physics else 'fixed_joint',
         'robot_platform': robot_platform,
         'robot_pose_overrides': copy.deepcopy(spec.get('robot_pose_overrides', {})),
         'robot_home_joint_overrides': copy.deepcopy(spec.get('robot_home_joint_overrides', {})),

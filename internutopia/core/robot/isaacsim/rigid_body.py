@@ -54,10 +54,8 @@ class IsaacsimRigidBody(IRigidBody):
     ):
         from isaacsim.core.utils.prims import get_prim_at_path
         try:
-            from isaacsim.core.prims import SingleRigidPrim as RigidPrim
             from isaacsim.core.utils.stage import add_reference_to_stage
         except ImportError:
-            from omni.isaac.core.prims import RigidPrim
             from omni.isaac.core.utils.stage import add_reference_to_stage
 
         self._is_link = False
@@ -86,11 +84,42 @@ class IsaacsimRigidBody(IRigidBody):
             'angular_velocity': angular_velocity,
         }
 
-        self._rigid_prim = RigidPrim(**self._param)
+        self._rigid_prim = self._create_rigid_prim(**self._param)
         super().__init__()
         self._rigid_prim_view = self._rigid_prim._rigid_prim_view
         self.name = self._rigid_prim.name
         self.status = {}
+
+    @staticmethod
+    def _create_rigid_prim(**params):
+        """Wrap a body without changing its configured sleep policy.
+
+        SingleRigidPrim prepares contact reports by default, even for a pose
+        lookup. In Isaac Sim 5.1 this authors sleepThreshold=0. Preserve the
+        prior opinion (including an intentional zero), or restore the schema
+        default when there was no opinion. Force-tracking probes are created
+        separately and retain their contact-report preparation.
+        """
+        from isaacsim.core.utils.prims import get_prim_at_path
+        try:
+            from isaacsim.core.prims import SingleRigidPrim as RigidPrim
+        except ImportError:
+            from omni.isaac.core.prims import RigidPrim
+
+        prim = get_prim_at_path(params['prim_path'])
+        sleep_attr = prim.GetAttribute('physxRigidBody:sleepThreshold')
+        authored = bool(sleep_attr and sleep_attr.HasAuthoredValueOpinion())
+        threshold = sleep_attr.Get() if authored else None
+        rigid_prim = RigidPrim(**params)
+        if authored:
+            rigid_prim.set_sleep_threshold(float(threshold))
+        else:
+            # Remove only the zero authored by the wrapper, preserving USD's
+            # default rather than choosing a new threshold for the caller.
+            sleep_attr = prim.GetAttribute('physxRigidBody:sleepThreshold')
+            if sleep_attr:
+                sleep_attr.Clear()
+        return rigid_prim
 
     def set_linear_velocity(self, velocity: np.ndarray):
         """See `IRigidBody.set_linear_velocity` for documentation."""
@@ -127,12 +156,8 @@ class IsaacsimRigidBody(IRigidBody):
         self.status = get_rigidbody_status(self._rigid_prim)
 
     def restore_status(self):
-        try:
-            from isaacsim.core.prims import SingleRigidPrim as RigidPrim
-        except ImportError:
-            from omni.isaac.core.prims import RigidPrim
-
-        self._rigid_prim = RigidPrim(**self._param)
+        self._rigid_prim = self._create_rigid_prim(**self._param)
+        self._rigid_prim_view = self._rigid_prim._rigid_prim_view
         if not self.status:
             self.save_status()
             return

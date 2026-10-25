@@ -217,7 +217,7 @@ class DualFrankaAssemblyDemoPolicy:
     def _ensure_task_context(self, task):
         task_signature = self._task_signature_for(task)
         task_step = getattr(task, 'step_counter', None)
-        step_restarted = (self._beam_idle_enabled(task) and task_step is not None
+        step_restarted = ((self._beam_idle_anchors or self._idle_hold_enabled(task)) and task_step is not None
                           and self._last_task_step is not None and task_step < self._last_task_step)
         if task_signature != self._task_signature or step_restarted:
             for robot_name in list(self._beam_idle_anchors):
@@ -246,6 +246,29 @@ class DualFrankaAssemblyDemoPolicy:
             return False
         phase = phases[index]
         return isinstance(phase, dict) and phase.get('beam_idle_hold_anchor') is True
+
+    def _idle_hold_enabled(self, task, robot_name=None):
+        """Preserve Beam's switch; plumbers names exactly one idle arm per phase.
+
+        A Beam-only environment override must not enable or disable another
+        recipe. Read only the compiled phase, never refresh task observations.
+        """
+        if self._beam_idle_enabled(task):
+            return True
+        cfg = getattr(task, 'cfg', getattr(task, 'config', None))
+        recipe = getattr(cfg, 'recipe', '')
+        if not isinstance(recipe, str) or not recipe.startswith('fabrica_plumbers_block_ur5e_'):
+            return False
+        phases = getattr(task, 'phase_specs', ())
+        index = getattr(task, 'phase_index', None)
+        if not isinstance(phases, (list, tuple)) or not isinstance(index, int) or not 0 <= index < len(phases):
+            return False
+        phase = phases[index]
+        if not isinstance(phase, dict) or phase.get('physical_idle_hold_anchor') is not True:
+            return False
+        idle_robot = phase.get('physical_idle_hold_robot')
+        return bool(isinstance(idle_robot, str) and idle_robot
+                    and (robot_name is None or robot_name == idle_robot))
 
     def _beam_robot_loaded(self, task, robot_name, tracked_objects):
         if self._attached_object_names(tracked_objects, robot_name):
@@ -279,11 +302,16 @@ class DualFrankaAssemblyDemoPolicy:
                     guard['blocked'] = False
 
     def _beam_idle_eligible(self, task, robot_name, phase_spec, tracked_robots, tracked_objects):
-        if not self._beam_idle_enabled(task) or getattr(task, 'failed', False) or getattr(task, 'success', False):
+        if not self._idle_hold_enabled(task, robot_name) or getattr(task, 'failed', False) or getattr(task, 'success', False):
             return False
         if self._beam_robot_loaded(task, robot_name, tracked_objects):
             return False
-        if self._beam_idle_guard.get(robot_name, {}).get('blocked'):
+        if self._beam_idle_enabled(task) and self._beam_idle_guard.get(robot_name, {}).get('blocked'):
+            return False
+        if (not self._beam_idle_enabled(task)
+                and self._phase_local_skill_spec_for_robot(phase_spec, robot_name) is not None):
+            # A motion/support phase owns the arm for its whole duration,
+            # including the tick on which its skill reports completion.
             return False
         if self._robot_has_active_phase_work(task=task, phase_spec=phase_spec,
                 robot_name=robot_name, tracked_robots=tracked_robots):
@@ -357,7 +385,12 @@ class DualFrankaAssemblyDemoPolicy:
             measured, _ = self._native_arm_measurement(task, robot_name)
             self._trace_beam_idle(task, robot_name, 'anchor_command', anchor, measured=measured)
             anchor['last_log_step'] = self._policy_step
-        return [anchor['target'].copy().tolist()]
+        action = [anchor['target'].copy().tolist()]
+        if not self._beam_idle_enabled(task):
+            # Physical plumbers also clears any velocity target left by active
+            # control. Preserve Beam's existing position-only command exactly.
+            action.append(np.zeros_like(anchor['target']).tolist())
+        return action
 
     def _trace_beam_idle(self, task, robot_name, event, anchor, *, measured=None, reason=None):
         trace = os.environ.get('BEAM_IDLE_HOLD_TRACE_PATH')
@@ -2788,8 +2821,24 @@ class DualFrankaAssemblyDemoPolicy:
         tracked_robots = task.get_tracked_robot_states(phase_spec=phase_spec)
         tracked_objects = task.get_tracked_object_states()
         actions = {}
-        for robot_name in task.config.robot_names:
+        robot_names = list(task.config.robot_names)
+        support = phase_spec.get('plumbers_base_support')
+        if support:
+            # Publish/update support force first. Left-arm skill preflight then
+            # sees this tick's support state, not the previous tick's readiness.
+            supporter = support['robot']
+            robot_names = [supporter, *[name for name in robot_names if name != supporter]]
+        for robot_name in robot_names:
+            if support and getattr(task, 'failed', False):
+                # A failed support action must not let the later left-arm
+                # action advance IK caches or publish another insertion step.
+                actions[robot_name] = OrderedDict()
+                continue
+            if not self._idle_hold_enabled(task, robot_name):
+                self._clear_beam_idle_anchor(task, robot_name, 'outside_idle_hold_scope')
             if self._beam_idle_enabled(task):
+                # Beam's load-loss/rearm state machine is not needed for the
+                # explicitly scoped, empty-arm plumbers anti-droop hold.
                 self._beam_idle_load_guard(task, robot_name, phase_spec, tracked_objects)
             action = self._local_skill_executor.action_for(
                 task=task,

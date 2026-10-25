@@ -125,6 +125,7 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
                 'gripper_drive_kp',
                 'gripper_drive_kd',
                 'gripper_drive_max_effort',
+                'gripper_require_drive_readback',
                 'gripper_pad_static_friction',
                 'gripper_pad_dynamic_friction',
                 'hand_link_name',

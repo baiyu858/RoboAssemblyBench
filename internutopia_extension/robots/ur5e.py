@@ -994,37 +994,55 @@ class UR5eRobot(BaseRobot):
             log.warn(f'Arm drive configuration/readback failed: {self.arm_drive_diagnostics}')
         if os.environ.get('BEAM_CONTACT_TRACE_PATH') or self.arm_drive_diagnostics['strict_request']:
             print(f'[arm-drive-readback] robot={self.config.name} {self.arm_drive_diagnostics}', flush=True)
+        strict_gripper = bool(getattr(self.config, 'gripper_require_drive_readback', False))
+        self.gripper_drive_diagnostics.update(
+            kp_requested=self.config.gripper_drive_kp, kd_requested=self.config.gripper_drive_kd,
+            max_effort_requested=self.config.gripper_drive_max_effort, strict_request=strict_gripper,
+        )
         try:
             gripper_dof_name = self._resolved_articulation_dof_name(self.config.gripper_dof_name or "finger_joint")
             if gripper_dof_name is None:
-                return
+                raise ValueError('Gripper DOF could not be resolved')
             gripper_index = np.asarray([self.articulation.get_dof_index(gripper_dof_name)], dtype=np.int64)
+            requested_effort = self.config.gripper_drive_max_effort
+            if requested_effort is not None and (not np.isfinite(requested_effort) or requested_effort <= 0):
+                raise ValueError('gripper_drive_max_effort must be finite and positive, or null to preserve the asset')
+            view = self.articulation.unwrap()._articulation_view
+            if strict_gripper and not view.is_physics_handle_valid():
+                raise ValueError('Gripper native physics handle is not valid')
+            before_effort = np.asarray(view.get_max_efforts(joint_indices=gripper_index), dtype=float).copy()
+            self.gripper_drive_diagnostics.update(joint=gripper_dof_name, max_effort_before=before_effort.tolist())
             self.articulation.set_gains(
                 kps=np.asarray([self.config.gripper_drive_kp], dtype=float),
                 kds=np.asarray([self.config.gripper_drive_kd], dtype=float),
                 joint_indices=gripper_index,
             )
-            set_max_efforts = getattr(self.articulation, "set_max_efforts", None)
-            if callable(set_max_efforts):
-                set_max_efforts(
-                    np.asarray([25000.0], dtype=float),
-                    joint_indices=gripper_index,
-                )
-            view = self.articulation.unwrap()._articulation_view
-            if self.config.gripper_drive_max_effort is not None:
-                view.set_max_efforts(np.asarray([[self.config.gripper_drive_max_effort]], dtype=float), joint_indices=gripper_index)
+            # A missing override means preserve the asset, not an implicit 25000.
+            if requested_effort is not None:
+                view.set_max_efforts(np.asarray([[requested_effort]], dtype=float), joint_indices=gripper_index)
             kps, kds = view.get_gains(joint_indices=gripper_index)
-            self.gripper_drive_diagnostics = {
-                'configured': True, 'joint': gripper_dof_name,
-                'kp_requested': self.config.gripper_drive_kp, 'kd_requested': self.config.gripper_drive_kd,
+            kps, kds = np.asarray(kps).copy(), np.asarray(kds).copy()
+            effort = np.asarray(view.get_max_efforts(joint_indices=gripper_index), dtype=float)
+            self.gripper_drive_diagnostics.update({
                 'kp_readback': np.asarray(kps).tolist(), 'kd_readback': np.asarray(kds).tolist(),
-                'max_effort_readback': np.asarray(view.get_max_efforts(joint_indices=gripper_index)).tolist(),
-                'legacy_effort_setter_available': callable(set_max_efforts),
-            }
+                'max_effort_readback': effort.tolist(),
+                'legacy_effort_setter_available': callable(getattr(self.articulation, 'set_max_efforts', None)),
+            })
+            for name, actual, requested in (
+                ('kp', kps, self.config.gripper_drive_kp), ('kd', kds, self.config.gripper_drive_kd),
+                ('max_effort', effort, before_effort if requested_effort is None else requested_effort),
+            ):
+                actual = np.asarray(actual, dtype=float)
+                if (actual.size != 1 or not np.all(np.isfinite(actual)) or not np.all(actual > 0)
+                        or not np.allclose(actual, requested, rtol=1e-5, atol=1e-6)):
+                    raise ValueError(f'{name} native readback does not match request: {actual} vs {requested}')
+            self.gripper_drive_diagnostics['configured'] = True
         except Exception as exc:
             self.gripper_drive_diagnostics['error'] = f'{type(exc).__name__}: {exc}'
             log.warn(f'Gripper drive configuration/readback failed: {self.gripper_drive_diagnostics}')
-        if os.environ.get('BEAM_CONTACT_TRACE_PATH'):
+            if strict_gripper:
+                raise RuntimeError(f'Gripper drive native verification failed: {self.gripper_drive_diagnostics}') from exc
+        if os.environ.get('BEAM_CONTACT_TRACE_PATH') or strict_gripper:
             print(f'[gripper-drive-readback] robot={self.config.name} {self.gripper_drive_diagnostics}', flush=True)
 
     def get_gripper_diagnostics(self) -> dict:
@@ -1160,7 +1178,7 @@ class UR5eRobot(BaseRobot):
                     self.gripper_contact_material_diagnostics['bound_finger_paths'].append(str(rigid_body.unwrap().prim_path))
                 except Exception as exc:
                     self.gripper_contact_material_diagnostics['binding_errors'].append(f'{link_name}: {exc}')
-        if os.environ.get('BEAM_CONTACT_TRACE_PATH'):
+        if os.environ.get('BEAM_CONTACT_TRACE_PATH') or getattr(self.config, 'gripper_require_drive_readback', False):
             print(f'[gripper-material-readback] robot={self.config.name} {self.gripper_contact_material_diagnostics}', flush=True)
 
     @staticmethod

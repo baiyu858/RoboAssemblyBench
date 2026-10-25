@@ -89,6 +89,7 @@ class UR5eRobotCfg(RobotCfg):
     gripper_drive_kd: float = 8.0e3
     # None preserves the asset's effort limit; explicit values use the native view.
     gripper_drive_max_effort: Optional[float] = None
+    gripper_require_drive_readback: bool = False
     # None keeps the legacy material for existing recipes. Beam opts in to a
     # bounded friction trial and records the material actually authored.
     gripper_pad_static_friction: Optional[float] = None
