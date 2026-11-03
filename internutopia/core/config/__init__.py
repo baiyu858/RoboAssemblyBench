@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 from internutopia.core.config.distribution import DistributionCfg
 from internutopia.core.config.object import ObjectCfg
@@ -22,6 +22,8 @@ class SimConfig(BaseModel):
     rendering_dt: Optional[float | str] = 1 / 60
     rendering_interval: Optional[int] = None
     use_fabric: Optional[bool] = False
+    enable_stabilization: Optional[StrictBool] = None
+    enable_external_forces_every_iteration: Optional[StrictBool] = None
     headless: Optional[bool] = True
     webrtc: Optional[bool] = False
     native: Annotated[Optional[bool], Field(deprecated='Deprecated for isaacsim ≥ 4.5.0')] = False

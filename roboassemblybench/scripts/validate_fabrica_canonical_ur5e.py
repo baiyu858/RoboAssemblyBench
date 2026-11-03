@@ -22,6 +22,11 @@ DEFAULT_TASKS = (
     'gamepad',
     'stool_circular',
 )
+FULL_TRACE_VARIABLES = (
+    'BEAM_CONTACT_TRACE_PATH', 'BEAM_CLOSE_CONTROL_TRACE_PATH', 'BEAM_CLOSE_GATE_TRACE_PATH',
+    'BEAM_HOLD_TRACE_PATH', 'BEAM_MOTION_TRACE_PATH', 'BEAM_IDLE_HOLD_TRACE_PATH',
+    'BEAM_SUPPORT_CONTACT_TRACE', 'BEAM_PHYSICS_DIAGNOSTICS',
+)
 
 
 def _write_json_atomic(path: Path, payload: Any) -> None:
@@ -43,7 +48,8 @@ def _recipe_request(task: str) -> str:
     task = str(task).strip()
     if task.startswith('fabrica_'):
         return task
-    return f'fabrica_{task}_ur5e_staged'
+    base, separator, profile = task.partition('@')
+    return f'fabrica_{base}_ur5e_staged' + (f'@{profile}' if separator else '')
 
 
 def _conda_executable() -> str:
@@ -80,6 +86,11 @@ def _worker_command(args, recipes: list[str], results_path: Path) -> list[str]:
         '-n',
         args.conda_env,
         'env',
+    ]
+    if not getattr(args, 'full_debug_traces', False):
+        for name in FULL_TRACE_VARIABLES:
+            command.extend(['-u', name])
+    command.extend([
         'PYTHONNOUSERSITE=1',
         'PYTHONUNBUFFERED=1',
         f'OMP_NUM_THREADS={int(args.num_threads)}',
@@ -112,7 +123,7 @@ def _worker_command(args, recipes: list[str], results_path: Path) -> list[str]:
         str(int(args.stage_precheck_stride)),
         '--stage-precheck-waypoints',
         str(int(args.stage_precheck_waypoints)),
-    ]
+    ])
     if getattr(args, 'domain_randomization', False):
         command.append('--domain-randomization')
     if args.record_live_video:
@@ -123,6 +134,8 @@ def _worker_command(args, recipes: list[str], results_path: Path) -> list[str]:
                 str(int(args.live_video_fps)),
                 '--live-video-frame-stride',
                 str(int(args.live_video_frame_stride)),
+                '--live-video-encoder',
+                getattr(args, 'live_video_encoder', 'stream'),
             ]
         )
     else:
@@ -328,8 +341,11 @@ def main() -> int:
     parser.add_argument('--num-threads', type=int, default=4)
     parser.add_argument('--rendering-interval', type=int, default=2399)
     parser.add_argument('--record-live-video', action='store_true')
-    parser.add_argument('--live-video-fps', type=int, default=30)
-    parser.add_argument('--live-video-frame-stride', type=int, default=8)
+    parser.add_argument('--live-video-fps', type=int, default=15)
+    parser.add_argument('--live-video-frame-stride', type=int, default=16)
+    parser.add_argument('--live-video-encoder', choices=('stream', 'png'), default='stream')
+    parser.add_argument('--full-debug-traces', action='store_true',
+                        help='Retain explicitly configured full debug trace environment variables; off by default.')
     parser.add_argument('--minimum-start-memory-gib', type=float, default=2.5)
     parser.add_argument('--abort-available-memory-gib', type=float, default=1.5)
     parser.add_argument('--low-memory-grace-polls', type=int, default=2)

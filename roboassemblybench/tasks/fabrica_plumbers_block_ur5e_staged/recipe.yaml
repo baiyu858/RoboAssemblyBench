@@ -30,6 +30,7 @@ scene_lights:
 robots:
   - name: franka_left
     preserve_continuous_arm_joints: true
+    gripper_min_openness: 0.0
     gripper_drive_kp: 7500.0
     gripper_drive_kd: 173.0
     gripper_drive_max_effort: null  # Retain and verify the authored asset limit.
@@ -38,6 +39,7 @@ robots:
     gripper_pad_dynamic_friction: 0.8
   - name: franka_right
     preserve_continuous_arm_joints: true
+    gripper_min_openness: 0.0
     gripper_drive_kp: 7500.0
     gripper_drive_kd: 173.0
     gripper_drive_max_effort: null
@@ -106,7 +108,9 @@ fabrica_canonical:
     unload_rate: 0.025
     max_command_lead: 0.001
     max_seek: 0.03
-    max_closing_travel: 0.03
+    # Record cumulative reclosure for diagnostics; do not stop normal repeated regulation.
+    # Absolute seek, per-step rate, lead, force, slip and timeout limits remain active.
+    max_closing_travel: null
     filter_tau: 0.02
     stable_steps: 24
     resume_steps: 48
@@ -126,3 +130,230 @@ qualification:
   required_seeds: [4906, 485, 34, 12]
 collection:
   layout_seeds: [4906, 485, 34, 12]
+
+# Select with task@profile. task_name also preserves the old task identifier.
+# The default above is the original forward physical-planning baseline.
+profiles:
+  fast_empty:
+    task_name: fabrica_plumbers_block_ur5e_staged_fast_empty
+    fabrica_canonical:
+      physical_base_support:
+        coarse_transfer_speed_m_s: 0.10
+  fast_rotation:
+    task_name: fabrica_plumbers_block_ur5e_staged_fast_rotation
+    fabrica_canonical:
+      physical_rotation_speed: 0.15
+      physical_rotation_acceleration: 0.45
+      # Match the forward baseline's updated rotation budget for a speed-only comparison.
+      physical_motion_min_timeout_steps: 16145
+  reverse_part0:
+    task_name: fabrica_plumbers_block_ur5e_staged_reverse_part0
+    prompt: Assemble plumbers_block with part_0 entering the base from the opposite local-Y side using continuous physical grasping.
+    fabrica_canonical:
+      physical_part0_reverse_insertion: true
+      physical_part0_reverse_weak_side_close: true
+      move_grasp_id_overrides:
+        '0': 1000856
+  rl:
+    extends_profile: reverse_part0
+    task_name: fabrica_plumbers_block_ur5e_staged_rl
+    prompt: Assemble plumbers_block with physical UR5e grasps, right-hand cap/base seam support, and residual RL precision insertion stages.
+    robots:
+      - name: franka_right
+        # Experimental normal contact compliance, applied per contact point.
+        # Grasp and object motion guards remain active.
+        gripper_pad_contact_stiffness: 5000.0
+        gripper_pad_contact_damping: 15.0
+    # Set before native scene initialization. The combination reduces passive
+    # fit drift during sustained physical base support at the existing 240 Hz.
+    physics_scene:
+      enable_external_forces_every_iteration: true
+      enable_stabilization: true
+    fabrica_canonical:
+      physical_terminal_home:
+        enabled: true
+        joint_tolerance: 0.025
+        max_joint_step: 0.001  # 0.24 rad/s at 240 Hz, after empty-hand clearance.
+      hold_force_control:
+        # At incipient slip, recover the existing weak-side target inside
+        # its low/target hysteresis band; retain all ceilings and pose guards.
+        slip_preload: true
+      # White part only: reduce the carrying recovery band, not the initial
+      # 4 N closure gate or the base/pin support force settings.
+      physical_move_hold_force_control:
+        '0': {low: 4.0, target: 5.0}
+      physical_contact_recovery:
+        '1': {steps: 24, maximum_surface_gap_m: 0.0005}
+        '4': {steps: 24, maximum_surface_gap_m: 0.0005}
+      physical_junction_support:
+        enabled: true
+        grasp_center_m: [0.045, 0.0012658, 0.072]
+        approach_tilt_degrees: 30.0
+        pad_center_m: 0.143
+        # Combined cap + base load per finger. Keep the original hard guard.
+        hold_force_control:
+          enabled: true
+          low: 8.0
+          target: 10.0
+          soft_limit: 16.0
+          unload: 20.0
+          hard_limit: 40.0
+          joint_rate: 0.005
+          unload_rate: 0.010
+          max_command_lead: 0.01
+      # Pin tip z=35 mm, cap top z=91.15 mm: 61 mm entry travel leaves
+      # about 4.85 mm clearance before contact. RL starts after this hover.
+      physical_insertion_entry_offsets_m:
+        '1': 0.061
+        '4': 0.061
+      # CAD circle centre (24.75 mm radius, local Y axis). Check actual
+      # mating displacement independently of allowed twist about this centre.
+      physical_success_reference_points_m:
+        '0': [0.0, 0.0, 0.0519084]
+        '1': [-0.04, 0.0012658, 0.035]
+        '4': [0.04, 0.0012658, 0.035]
+      physical_move_pad_centers_m:
+        '1': 0.163
+        '3': 0.143
+        '4': 0.163
+      # Move along the tilted part's long axis to its exposed end. Both
+      # grasp transforms and all pickup/carry targets use the same offset.
+      physical_move_grasp_center_offsets_m:
+        '3': [0.020, 0.0, 0.0]
+      physical_move_close_force_min_n:
+        '1': 6.0
+        '3': 6.0  # Match the existing carrying controller's 6 N weak-side floor.
+        '4': 6.0
+      physical_move_close_balance_target_n:
+        '1': 8.0
+        '3': 8.0  # Center the grasp away from both 6/12 N band boundaries.
+        '4': 8.0
+      physical_insertion_release_tolerances:
+        '1':
+          position_m: 0.001118033988749895
+          axial_m: 0.001
+          lateral_m: 0.0005
+          orientation_rad: 0.08726646259971647  # Released pin: 5 degrees; RL held alignment remains 1 degree.
+          stable_steps: 48
+        '3':
+          position_m: 0.0015
+          axial_m: 0.001
+          lateral_m: 0.00075
+          orientation_rad: 0.05235987755982989
+          stable_steps: 48
+        '4':
+          position_m: 0.001118033988749895
+          axial_m: 0.001
+          lateral_m: 0.0005
+          orientation_rad: 0.08726646259971647  # Match the first released pin: 5 degrees.
+          stable_steps: 48
+      move_grasp_id_overrides:
+        '3': 317
+      physical_pickup_fixture_clearance:
+        '1':
+          fixture: fabrica_fixture
+          margin_m: 0.0015
+          joint_step: 0.0025
+          preload_joint_travel: 0.01
+        '3':
+          fixture: fabrica_fixture
+          margin_m: 0.0015
+          joint_step: 0.005
+          preload_joint_travel: 0.01
+        '4':
+          fixture: fabrica_fixture
+          margin_m: 0.0015
+          joint_step: 0.0025
+          preload_joint_travel: 0.01
+      physical_base_support:
+        # Retain support between insertions. After part_3 the junction compiler
+        # replaces the low-flange hold with the physical cap/base seam grasp.
+        hold_between_insertions: true
+      precision_insertion:
+        '1':
+          controller: residual_rl
+          backend: native_contact_insertion
+          checkpoint: checkpoints/plumbers_block/part1_physical_rl/policy.pt
+          checkpoint_sha256: a9618a5654aa36c003c58e955e54190e4fa5aa088dbd3a167f773525437dc457
+          released_rotation_tolerance: 0.08726646259971647  # Released shaft tilt: 5 degrees.
+          released_axial_rotation:
+            axis: [0.0, 0.0, 1.0]  # Shaft axis in part_1 local coordinates.
+            twist_tolerance_rad: 0.2617993877991494  # Released axial spin: 15 degrees.
+          torque_soft_limit: 1.2  # Physical-wrist contact moment, N m; raw hard limit remains 2.
+          entry_waypoint: 1
+          controller_config:
+            position_lead: 0.001
+            translation_step: 0.00008
+            rotation_step: 0.00034906585039886593  # 0.02 degrees per policy decision.
+          binding:
+            contact_objects: [fabrica_plumbers_block_3, fabrica_plumbers_block_2]
+            control_point_in_object: [-0.04, 0.0012658, 0.035]
+            allow_seated_load_transfer: true
+          qualification_config:
+            align_decisions: 20
+            lead_in_decisions: 500  # 20 mm at 0.5 * 0.08 mm per decision.
+            probe_axis: [1.0, 0.0, 0.0]
+            probe_contact_N: 1.0
+            retreat_decisions: 550  # 22 mm backoff clears the 20 mm qualification lead-in.
+        '4':
+          controller: residual_rl
+          backend: native_contact_insertion
+          checkpoint: checkpoints/plumbers_block/part4_physical_rl/policy.pt
+          checkpoint_sha256: dadaaf8c9a261172c85b2f264b9f83c2502afcdbb765f7c4ab2834f62f0cd440
+          released_rotation_tolerance: 0.08726646259971647  # Released shaft tilt: 5 degrees.
+          released_axial_rotation:
+            axis: [0.0, 0.0, 1.0]  # Shaft axis in part_4 local coordinates.
+            twist_tolerance_rad: 0.2617993877991494  # Released axial spin: 15 degrees.
+          torque_soft_limit: 1.2
+          torque_hard_limit: 2.2  # Experimental execution stop; checkpoint controller and soft taper unchanged.
+          # Constrain the shaft along both live bores, not only its tip.
+          axis_alignment:
+            shaft_origin_m: [0.04, 0.0012658, 0.035]
+            shaft_axis: [0.0, 0.0, 1.0]
+            radial_clearance_m: 0.00025
+            margin_m: 0.00008
+            linear_speed: 0.002
+            angular_speed: 0.04
+            sections:
+              - {object: fabrica_plumbers_block_3, center_m: [0.04, 0.0012658, 0.080], axis: [0.0, 0.0, 1.0]}
+              - {object: fabrica_plumbers_block_3, center_m: [0.04, 0.0012658, 0.065], axis: [0.0, 0.0, 1.0]}
+              - {object: fabrica_plumbers_block_2, center_m: [0.04, 0.0012658, 0.065], axis: [0.0, 0.0, 1.0]}
+              - {object: fabrica_plumbers_block_2, center_m: [0.04, 0.0012658, 0.035], axis: [0.0, 0.0, 1.0]}
+          entry_waypoint: 1
+          controller_config:
+            position_lead: 0.001
+            translation_step: 0.00008
+            rotation_step: 0.00034906585039886593  # 0.02 degrees per policy decision.
+          binding:
+            contact_objects: [fabrica_plumbers_block_3, fabrica_plumbers_block_2]
+            control_point_in_object: [0.04, 0.0012658, 0.035]
+            allow_seated_load_transfer: true
+          qualification_config:
+            align_decisions: 20
+            lead_in_decisions: 500  # 20 mm at 0.5 * 0.08 mm per decision.
+            probe_axis: [1.0, 0.0, 0.0]
+            probe_contact_N: 1.0
+            retreat_decisions: 550
+        '0':
+          controller: residual_rl  # planned restores the reverse insertion path.
+          backend: native_contact_insertion
+          checkpoint: checkpoints/plumbers_block/part0_physical_rl/policy.pt
+          checkpoint_sha256: cb50cfd29b6999866c1c2ec0792010fafdb7cee76c6207594bab8b7b9cf838f9
+          entry_waypoint: 1
+          timeout_steps: 6000
+          # Circular fit can settle/twist after release. Keep held alignment at
+          # 1 degree (checkpoint config), but verify released orientation at 3.
+          released_rotation_tolerance: 0.05235987755982989  # radians = 3 degrees
+          # Existing empty-arm withdrawal fix; task data, not RL core logic.
+          retreat_control:
+            free_space_trajectory: true
+            free_space_stage: approach
+            free_space_linear_speed: 0.01
+            free_space_angular_speed: 0.08
+            free_space_joint_speed: 0.25
+            free_space_joint_acceleration: 0.6
+            free_space_position_lookahead: 0.003
+            free_space_orientation_lookahead: 0.02
+            free_space_joint_lookahead: 0.06
+    metadata:
+      precision_policy_status: pilot_not_release_validated

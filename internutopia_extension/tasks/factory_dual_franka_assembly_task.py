@@ -15,6 +15,7 @@ from internutopia_extension.configs.tasks.factory_dual_franka_assembly_task impo
     FactoryDualFrankaAssemblyTaskCfg,
 )
 from toolkits.factory_dual_franka_assembly.planner_primitives import (
+    axis_rotation_error,
     compose_pose,
     euler_xyz_to_quat,
     normalize_quat,
@@ -33,6 +34,7 @@ from toolkits.factory_dual_franka_assembly.contact_reports import (
     create_prepared_contact_view,
     prepare_contact_reports,
 )
+from toolkits.factory_dual_franka_assembly.manipulation_stabilization import apply_phase_thresholds
 
 
 from toolkits.factory_dual_franka_assembly.beam_support_state import BeamSupportState
@@ -160,7 +162,11 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         self._locked_collision_states = {}
         self._object_pose_history = {}
         self._object_collision_enabled = {}
+        self._object_stabilization_thresholds = {}
+        self._stabilization_policy_history = []
         self._contact_probes = {}
+        self._native_closure_geometry = {}
+        self._native_closure_clearance_reports = {}
         self._contact_sensors = {}
         self._prepared_contact_report_paths = set()
         self._handoff_history = []
@@ -770,6 +776,8 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         self._ensure_static_environment_locked()
         if not phase_spec:
             return
+
+        apply_phase_thresholds(self, phase_spec)
 
         for object_entry in self._as_list(phase_spec.get('unlock')):
             object_name = self._extract_object_name(object_entry)
@@ -1538,7 +1546,17 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         from isaacsim.core.utils.prims import get_prim_at_path
 
         scene_object = self.objects[object_name]
-        rigid_body = self._scene.get(scene_object.name)
+        if (self._is_static_environment_object(object_name)
+                and not bool(getattr(scene_object.config, 'rigid_body', False))):
+            from toolkits.factory_dual_franka_assembly.static_object_pose import StaticObjectPose
+
+            # scene.get() constructs a SingleRigidPrim, even for an XForm.
+            # That promotes a static board to a body and makes PhysX replace
+            # its triangle collision with a convex hull. Reuse its existing
+            # pose wrapper instead; a read must not change collision physics.
+            rigid_body = StaticObjectPose(self._scene.unwrap().get_object(scene_object.name))
+        else:
+            rigid_body = self._scene.get(scene_object.name)
         self._resolved_objects[object_name] = rigid_body
         self._object_prims[object_name] = get_prim_at_path(rigid_body.unwrap().prim_path)
         return rigid_body
@@ -2227,7 +2245,9 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         # visibly rather than silently adding APIs to a running body.
         probe = create_prepared_contact_view(
             prim, filter_prim, name=probe_name,
-            disable_stablization=not bool((self.get_current_phase_spec() or {}).get('beam_coordinated')),
+            # Scene stabilization is immutable after scene creation. A force
+            # reader must preserve it; phase policy controls individual bodies.
+            disable_stablization=False,
         )
         self._contact_probes[key] = probe
         return probe
@@ -6107,7 +6127,10 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             if attach_state.get('kinematic_peel_carry'):
                 # Peel assist: keep the symbolic grasp while we servo the part.
                 continue
-            if self._physical_hold_valid(object_name, attach_state, validation_stage='state_sync'):
+            valid = self._physical_hold_valid(object_name, attach_state, validation_stage='state_sync')
+            from toolkits.factory_dual_franka_assembly.contact_recovery import retain_contact_recovery
+            recovering = retain_contact_recovery(self, object_name, attach_state)
+            if valid or recovering:
                 continue
             if object_name in pending_detach_objects and any(
                     self._extract_object_name(e) == object_name and
@@ -6222,6 +6245,9 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 target_orientation=target_orientation,
                 position_tolerance=position_tolerance,
                 orientation_tolerance=orientation_tolerance,
+                position_reference_point=object_target.get('position_reference_point'),
+                orientation_axis=object_target.get('orientation_axis'),
+                twist_tolerance=object_target.get('twist_tolerance'),
             ):
                 return False
         return True
@@ -6426,13 +6452,15 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 return False
         return True
 
-    def _physical_settle_ready(self, advance: dict) -> bool:
-        """Require an unloaded, low-velocity pose window without changing bodies.
+    def _physical_settle_ready(self, advance: dict, *, support_object: str | None = None) -> bool:
+        """Verify released bodies without writing their physical state.
 
-        Unlike the legacy static check, a pose-history override cannot excuse
-        high measured velocity. Duplicate calls in one task step do not count.
+        Unloaded verification requires low raw world velocity. Under an
+        explicitly validated support grasp, check a fixed relative-pose window
+        instead; the supporting arm prevents sleep and can produce contact
+        velocity chatter. Duplicate calls in one task step do not count.
         """
-        token = (self.phase_index, self.phase_entry_step)
+        token = (self.phase_index, self.phase_entry_step, support_object)
         state = getattr(self, '_physical_settle_state', None)
         if state is None or state['token'] != token:
             state = self._physical_settle_state = {'token': token, 'step': None, 'count': 0, 'poses': {}}
@@ -6449,7 +6477,9 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             reason = 'no_objects'
         for entry in objects:
             name = self._extract_object_name(entry)
-            if (name is None or name in self._attachments or name in self._locked_targets
+            held_support = (name == support_object and isinstance(entry, dict)
+                            and entry.get('require_released') is False)
+            if (name is None or (name in self._attachments and not held_support) or name in self._locked_targets
                     or not self._object_collision_enabled.get(name, True)):
                 reason = f'{name}:not_free_dynamic_with_collision'
                 break
@@ -6457,8 +6487,9 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 velocity = self._object_velocity_metrics(name)
                 speeds = (velocity.get('linear_speed'), velocity.get('angular_speed'))
                 if (not velocity.get('valid') or any(v is None or not np.isfinite(v) for v in speeds)
-                        or speeds[0] > float(advance.get('linear_velocity_threshold', 0.01))
-                        or speeds[1] > float(advance.get('angular_velocity_threshold', 0.1))):
+                        or (support_object is None and (
+                            speeds[0] > float(advance.get('linear_velocity_threshold', 0.01))
+                            or speeds[1] > float(advance.get('angular_velocity_threshold', 0.1))))):
                     reason = f'{name}:velocity'
                     break
                 position, orientation = self._resolve_object(name).get_pose()
@@ -6469,6 +6500,13 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 if isinstance(entry, dict) and (entry.get('target') or entry.get('target_name') or entry.get('target_pose')):
                     if not self._object_targets_reached([entry], tolerance=0.03, orientation_tolerance=None):
                         reason = f'{name}:target'
+                        break
+                if support_object is not None:
+                    support_position, support_orientation = self._resolve_object(support_object).get_pose()
+                    position, orientation = relative_pose(
+                        support_position, support_orientation, position, orientation)
+                    if not np.all(np.isfinite(position)) or not np.all(np.isfinite(orientation)):
+                        reason = f'{name}:invalid_relative_pose'
                         break
                 poses[name] = (position, orientation)
                 if name in state['poses']:
@@ -6494,6 +6532,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         self._physical_settle_diagnostics = {
             'phase': self.phase, 'step': step, 'stable_steps': state['count'],
             'required_stable_steps': required, 'reason': reason,
+            'mode': 'supported_relative_pose' if support_object is not None else 'unloaded_velocity_and_pose',
         }
         return state['count'] >= required
 
@@ -6516,6 +6555,16 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             from toolkits.factory_dual_franka_assembly.plumbers_support import base_support_status
             support = phase_spec.get('plumbers_base_support')
             return bool(support and base_support_status(self, support)['ready'])
+        if advance_type == 'plumbers_supported_settle':
+            from toolkits.factory_dual_franka_assembly.plumbers_support import base_support_status
+            support = phase_spec.get('plumbers_base_support')
+            if not support or not base_support_status(self, support)['ready']:
+                self._physical_settle_state = None
+                self._physical_settle_diagnostics = dict(phase=self.phase, step=int(self.step_counter),
+                    stable_steps=0, required_stable_steps=int(advance.get('stable_steps', 120)),
+                    reason='support_not_ready')
+                return False
+            return self._physical_settle_ready(advance, support_object=support['object'])
         if advance_type == 'physical_settle':
             return self._physical_settle_ready(advance)
         if advance_type == 'gripper_open':
@@ -6721,6 +6770,9 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 target_orientation=target_orientation,
                 position_tolerance=position_tolerance,
                 orientation_tolerance=orientation_tolerance,
+                position_reference_point=success_criterion.get('position_reference_point'),
+                orientation_axis=success_criterion.get('orientation_axis'),
+                twist_tolerance=success_criterion.get('twist_tolerance'),
             ):
                 return False
             if bool(success_criterion.get('require_released', success_criterion.get('require_not_grasped', False))):
@@ -6773,6 +6825,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 current_orientation=object_orientation,
                 target_position=target_position,
                 target_orientation=target_orientation,
+                position_reference_point=success_criterion.get('position_reference_point'),
             )
             pose_passed = pose_within_tolerance(
                 current_position=object_position,
@@ -6781,7 +6834,18 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                 target_orientation=target_orientation,
                 position_tolerance=position_tolerance,
                 orientation_tolerance=orientation_tolerance,
+                position_reference_point=success_criterion.get('position_reference_point'),
+                orientation_axis=success_criterion.get('orientation_axis'),
+                twist_tolerance=success_criterion.get('twist_tolerance'),
             )
+            axial_diagnostics = {}
+            if success_criterion.get('orientation_axis') is not None:
+                swing_error, twist_error = axis_rotation_error(
+                    object_orientation, target_orientation, success_criterion['orientation_axis'])
+                axial_diagnostics = dict(
+                    orientation_tolerance_mode='swing_twist', orientation_axis=success_criterion['orientation_axis'],
+                    swing_error=swing_error, swing_tolerance=orientation_tolerance,
+                    twist_error=twist_error, twist_tolerance=success_criterion['twist_tolerance'])
             released_passed = True
             if bool(success_criterion.get('require_released', success_criterion.get('require_not_grasped', False))):
                 released_passed = object_name not in self._attachments
@@ -6817,9 +6881,13 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                     'object_position': np.asarray(object_position).tolist(),
                     'target_position': np.asarray(target_position).tolist(),
                     'position_error': position_error,
+                    'root_position_error': (None if target_position is None else
+                                            float(np.linalg.norm(np.asarray(object_position) - target_position))),
+                    'position_reference_point': success_criterion.get('position_reference_point'),
                     'position_tolerance': position_tolerance,
                     'orientation_error': orientation_error,
                     'orientation_tolerance': orientation_tolerance,
+                    **axial_diagnostics,
                     'pose_passed': pose_passed,
                     'released_passed': released_passed,
                     'attached_passed': attached_passed,
@@ -7152,6 +7220,8 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         for object_name in list(self._attachment_joints.keys()):
             self._remove_attachment_joint(object_name)
         self._contact_probes.clear()
+        self._native_closure_geometry.clear()
+        self._native_closure_clearance_reports.clear()
         super().cleanup()
 
     def is_done(self) -> bool:
@@ -7201,6 +7271,10 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
             'tracked_robots': self.get_tracked_robot_states(),
             'success_diagnostics': self._success_diagnostics(),
             'physical_settle': copy.deepcopy(getattr(self, '_physical_settle_diagnostics', None)),
+            'object_stabilization_thresholds': copy.deepcopy(getattr(self, '_object_stabilization_thresholds', {})),
+            'stabilization_policy_history': copy.deepcopy(getattr(self, '_stabilization_policy_history', [])),
+            'contact_recoveries': copy.deepcopy(getattr(self, '_physical_contact_recovery_history', [])),
+            'native_closure_clearance': copy.deepcopy(getattr(self, '_native_closure_clearance_reports', {})),
             'timeout_count': self.phase_timeout_count,
             'recovery_count': self.phase_recovery_count,
             'handoff_history': self._handoff_history,

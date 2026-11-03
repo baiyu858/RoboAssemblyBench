@@ -243,6 +243,82 @@ plumbers 仅缓存/发送/清除目标，不使用 Beam 的负载丢失与重新
 
 当前 plumbers recipe 还启用 `fabrica_canonical.physical_base_support.enabled: true`：
 底座放下、独立沉降并重定位目标后，右臂重新夹住底座 `fabrica_plumbers_block_2` 的 +X 外露低台阶。
+
+运行开销优化：`validate_fabrica_canonical_ur5e.py --record-live-video` 默认每 16 个物理步
+渲染/采样一次，在 240 Hz 物理频率下输出 15 fps，三个视角仍保留。不是跳过物理步，240 Hz 接触和安全检查不降频。
+Live video 和视觉检查器同时启用时，渲染周期取各采样周期的最大公约数，保证图像新鲜；
+显式渲染覆盖必须整除所有图像采样周期。Raw Cartesian 数据集仍严格要求渲染周期等于数据集采样周期，
+其他图像消费者的采样周期须为其整倍数，不兼容时明确报错，不改变现有数据时序契约。
+Live video 单独使用时，`rendering_interval=15` 即每 16 步渲染。
+默认视频使用 FFmpeg 后台流式编码，每路只排队 2 帧，队列满时背压而非丢帧，不再同步生成数千张 PNG 再读回编码。
+使用 fragmented MP4 保留中断前已写好的片段；编码错误会报错。`--live-video-encoder png` 可回退旧路径，
+通用生成入口的 `--keep-video-frames` 可显式额外留 PNG。流式预览使用 veryfast/CRF 23，不改变 LeRobot 数据集的编码设置。
+验证器默认移除继承的全量 BEAM 调试环境变量，`--full-debug-traces` 才保留调用者明确配置的输出。
+这只关闭额外采样和日志，不关闭力传感、真实目标接触、夹持检查或 3 mm / 5° 保护。
+`rollout_performance.json` 每 240 步更新汇总：policy、预检、env.step、记录耗时；缓存的接触、夹力、滑移和
+已有观测的 controller-FK 跟踪误差；不创建额外探针或为统计重复读取物理状态。计时是 CPU wall time，不是独立 GPU profiler。
+
+当前物理流程只维护 `tasks/fabrica_plumbers_block_ur5e_staged/recipe.yaml` 一个文件；其中 `profiles`
+集中配置 RL、反向入口和提速实验，旧的四个变体文件夹已合并。
+运行时选择 `fabrica_plumbers_block_ur5e_staged@rl`、`@reverse_part0`、`@fast_empty` 或 `@fast_rotation`
+（每个 `@` 前均需写完整主任务名）；省略 `@profile` 使用原正向物理规划基线。旧长名称仍能加载，
+默认任务目录不重复列出这些兼容别名。
+
+提速对照任务为 `fabrica_plumbers_block_ur5e_staged@fast_empty`（仅空载高位长距离横移 0.06→0.10 m/s）及
+`fabrica_plumbers_block_ur5e_staged@fast_rotation`（仅负载旋转 0.10→0.15 rad/s、角加速度 0.30→0.45 rad/s²）。
+两种提速 profile 保持接触/夹力/位姿/滑移/预瞄阈值，旋转对照保留当前基线 16145 步最低运动预算，避免提前超时影响比较。
+提速配置仍需原生接触、跟踪及滑移验证，不能凭参数提高就宣称运动更快或装配成功。
+
+`fabrica_plumbers_block_ur5e_staged@rl` 使用合并文件的 `profiles.rl`，继承反向插入配置。
+其中 `fabrica_canonical.precision_insertion` 为 part_0、part_1、part_4 声明独立控制器、权重、SHA-256 和入口；
+part_0 编译时保留 `insert_00`，将 `insert_01..09` 替换为一个双臂协调的 RL 阶段，后续松爪、退出、
+卸载稳定核验保留。常规验证入口使用 `--tasks fabrica_plumbers_block_ur5e_staged@rl` 即可，
+无需通过训练脚本注入阶段；完整命令见 [运行命令](../docs/need_cmd.md)。
+当前三个权重均为试训版本，局部插入有通过记录，完整连续装配仍未通过；本机安装在 Git 忽略的
+`checkpoints/plumbers_block/part{0,1,4}_physical_rl/policy.pt`。换机需分别安装文件；文件缺失或 SHA-256
+不匹配会在启动场景前报错，不会静默退回规划。格式/版本由策略加载器校验。
+通用插入库位于 `core/rl/`，物体、执行臂、支撑臂、目标和阶段均由 binding 配置，支持多个插入段。
+当前示例为三个插入件绑定不同的试训权重，紫色 part_3 仍使用物理伺服。Isaac/UR5e 操作隔离在后端中。
+将该条目的 `controller` 改为 `planned` 可恢复继承的规划插入；详细配置见
+[核心库说明](core/rl/README.md)、[当前修复与验证范围](../docs/plumbers_block_physical_rl_fixes.md)
+及 [plumbers 历史实验记录](../docs/plumbers_part0_physical_rl.md)。
+
+`fabrica_plumbers_block_ur5e_staged@reverse_part0` 是第一块零件反向插入对照。
+`physical_part0_reverse_insertion: true` 在抓姿/全路径 IK 筛选之前镜像 part_0 的局部 Y 路径，
+使入口从 -Y 改到 +Y，向 -Y 插入；最终装配位姿和成功条件与基线一致。
+实验抓姿 1000856 由原候选 856 按零件的 X/Y 半转对称性生成。
+part_0 初始刚体朝向同时使用该对称等价姿态，原始位移只补偿约 0.12 微米的网格对称中心偏移；
+初始世界网格几何和取件 TCP 位姿保持与基线一致（测试验证）。这是初始化时的姿态选择，运行中保持自由刚体和真实接触。
+装配端的夹持点位于底座 +Y 端外露的零件段，手掌留在后方；右臂低台阶支撑和其余零件流程保留。
+`fabrica_canonical_resolved.part0_reverse_insertion` 及抓姿的 `reverse_entry_derivation` 记录来源，
+源抓姿的碰撞统计仅属于源抓姿；采样净空和 IK 通过并不能证明原生夹爪全路径无碰撞。
+该对照最初通过 `physical_part0_reverse_weak_side_close: true` 为 part_0 的初次夹紧开启弱侧补夹：
+弱侧低于 4 N、强侧未超过 12 N 时继续按原速缓慢闭合；强侧超过 12 N 优先卸力，40 N 保护保持原样。
+这修复了旧规则在 3.64/8.29 N 时停止闭合、却又无法通过双侧 4 N 成功门槛的死区。
+96 步确认、真实目标接触、抓取姿态窗口与后续 3 mm / 5° 滑移保护保持原样。
+当前 plumbers 物理编译已统一对初始底座及移动件闭合启用弱侧预紧，其他任务未默认改变。
+因此当前反向配置同时包含入口方向调整和该零件的弱侧补夹修复，不是仅改变方向的单因素实验。
+本轮 `outputs/plumbers_reverse_part0_20261026_124303/` 以单零件范围检查点运行：
+在 `assemble_00_part_0_unloaded_settle` 正常推进后保存 `part0_checkpoint.json`，再由运行包装器结束录像。
+检查点单独记录 part_0 是否通过原有位姿、释放和稳定检测，不将未执行的后续装配标记为成功。
+常规 recipe 本身保留后续零件阶段，不会因这个输出目录中的包装器而提前结束。
+该轮 seed/layout 4906 的原生结果为失败：第 28047 步在 `assemble_00_part_0_insert_03` 停止，
+原因是右臂 `ur5e_hold_part_end` 的 `loaded_force_recovery_timeout`，未触及单零件完成检查点。
+终止控制记录中右臂夹力约 17.40/7.49 N，强侧超过 14 N 软上限、弱侧未到 8 N 恢复目标，
+补夹恢复未完成而持续暂停 480 步。白块平移滑移约 1.538 mm、转角 3.356°，底座约 1.571 mm/4.201°；
+3 mm/5° 保护未触发，内存保护未中止该轮。与原方向在第 24760 步运输转姿失败相比，
+该方案完成了转姿和入口对准，但尚未完成插入、释放和稳定验证，不能记为装配成功。
+
+原生开关对照已发现扩展接触诊断会影响底座抓取结果：仅恢复旧渲染周期不能消除关闭诊断后的夹力恢复超时。
+当时的正反插入对照均保留 `BEAM_CONTACT_TRACE_PATH` 和 `BEAM_SUPPORT_CONTACT_TRACE=1`，
+并显式使用 `--full-debug-traces`。复现这些历史记录时需保留相同设置；当前接触报告已在物理初始化前准备，
+常规运行默认关闭全量日志，最新验证范围以修复说明为准。
+
+物理步长 `dt` 是每次求解推进的仿真时间，不是程序每步花费的现实时间。目前 `dt=1/240 s≈4.17 ms`，
+即一秒仿真有 240 次求解；每 16 步渲染只改变显示/录像频率。小零件摩擦抓取和插入先保留 240 Hz。
+120 Hz（8.33 ms）可作为另一个独立精度/性能实验，但要核对所有按步计数的稳定窗口、超时、传感和控制离散化，
+并重做接触/滑移/插入验证，不能直接认定等价；当前生成入口的 `rendering_fps` 还会同时改变物理 dt，不能把它当纯录像参数。
+例如要保留 0.4 s 检查，240 Hz 的 96 步对应 120 Hz 的 48 步；本次没有更改物理步长。
 每次左臂取件前依次执行右臂接近、预张爪、侧向进入、真实双指夹紧、夹力就绪检查；不抬升底座。
 空载接近采用粗到精分段：先原地抬高 TCP 至底座原点上方 0.30 m，在高处转到侧夹姿态，
 横移至预接近点上方，再垂直降低到距抓取位姿 80 mm 的预接近点；最后低速侧向进入。

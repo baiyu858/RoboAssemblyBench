@@ -815,6 +815,12 @@ class UR5eRobot(BaseRobot):
             scale=self._robot_scale,
         )
         self.last_action = []
+        self._compliant_pad_material_prepared = False
+        if config.gripper_pad_contact_stiffness is not None or config.gripper_pad_contact_damping is not None:
+            # Contact model selection belongs before PhysX parses the scene.
+            # Do not create/rebind a compliant material on a live articulation.
+            self._apply_gripper_contact_material()
+            self._compliant_pad_material_prepared = True
 
     def get_robot_scale(self):
         return self._robot_scale
@@ -828,7 +834,8 @@ class UR5eRobot(BaseRobot):
         self._sync_resolved_gripper_dof_name_to_config()
         self._apply_initial_joint_positions()
         self._configure_drive_gains()
-        self._apply_gripper_contact_material()
+        if not self._compliant_pad_material_prepared:
+            self._apply_gripper_contact_material()
 
     def _robot_rigid_body_by_suffix(self, suffix: str):
         suffix = f"/{suffix}"
@@ -1122,6 +1129,15 @@ class UR5eRobot(BaseRobot):
 
     def _apply_gripper_contact_material(self):
         static, dynamic = self._gripper_contact_friction()
+        stiffness = getattr(self.config, 'gripper_pad_contact_stiffness', None)
+        damping = getattr(self.config, 'gripper_pad_contact_damping', None)
+        if (stiffness is None) != (damping is None):
+            raise ValueError('Compliant pad contact requires stiffness and damping together')
+        if stiffness is not None and (not np.isfinite(stiffness) or stiffness <= 0
+                                      or not np.isfinite(damping) or damping < 0):
+            raise ValueError('Compliant pad contact requires finite positive stiffness and nonnegative damping')
+        if stiffness is not None and getattr(self.config, 'gripper_pad_static_friction', None) is None:
+            raise ValueError('Compliant pad contact requires an explicitly bound pad material')
         self.gripper_contact_material_diagnostics = {
             'requested_static_friction': static, 'requested_dynamic_friction': dynamic,
             'bound_finger_paths': [], 'binding_errors': [], 'combine_mode': 'max'}
@@ -1131,6 +1147,8 @@ class UR5eRobot(BaseRobot):
             try:
                 from omni.isaac.core.materials import PhysicsMaterial
             except Exception:
+                if stiffness is not None:
+                    raise
                 return
 
         try:
@@ -1153,19 +1171,34 @@ class UR5eRobot(BaseRobot):
                     # Keep the combine rule fixed during the coefficient trial.
                     physx_material = PhysxSchema.PhysxMaterialAPI.Apply(material_prim)
                     physx_material.CreateFrictionCombineModeAttr().Set("max")
+                    if stiffness is not None:
+                        physx_material.CreateCompliantContactStiffnessAttr().Set(stiffness)
+                        physx_material.CreateCompliantContactDampingAttr().Set(damping)
+                        self.gripper_contact_material_diagnostics.update(
+                            contact_stiffness_readback=physx_material.GetCompliantContactStiffnessAttr().Get(),
+                            contact_damping_readback=physx_material.GetCompliantContactDampingAttr().Get())
+                        if (not np.isclose(self.gripper_contact_material_diagnostics['contact_stiffness_readback'], stiffness)
+                                or not np.isclose(self.gripper_contact_material_diagnostics['contact_damping_readback'], damping)):
+                            raise RuntimeError('Compliant pad material readback differs from its configuration')
                     self.gripper_contact_material_diagnostics.update(
                         material_path=material_path,
                         static_friction_readback=material_prim.GetAttribute('physics:staticFriction').Get(),
                         dynamic_friction_readback=material_prim.GetAttribute('physics:dynamicFriction').Get())
             except Exception:
-                pass
+                if stiffness is not None:
+                    raise
         except Exception:
+            if stiffness is not None:
+                raise
             return
 
         if getattr(self.config, 'gripper_pad_static_friction', None) is not None:
             # Opt-in only: do not newly activate the legacy 80/70 material on
             # other recipes as a side effect of fixing the Beam binding path.
             self._bind_explicit_gripper_material(stage, material_prim)
+            if stiffness is not None and (self.gripper_contact_material_diagnostics['binding_errors']
+                                          or not self.gripper_contact_material_diagnostics['bound_finger_paths']):
+                raise RuntimeError('Compliant pad material was not bound to the finger colliders')
         else:
             for link_name in (self.config.left_finger_link_name, self.config.right_finger_link_name):
                 if not link_name:

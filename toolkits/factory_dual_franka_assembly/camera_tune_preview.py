@@ -278,7 +278,7 @@ def _print_snapshot(task, *, dump_json_path: Path | None = None):
 
 def main():
     parser = argparse.ArgumentParser(description='Open a live UI preview for tuning dual-arm assembly cameras.')
-    parser.add_argument('--recipe', default='screw_fastening', choices=list_task_recipes())
+    parser.add_argument('--recipe', default='screw_fastening', choices=list_task_recipes(include_aliases=True))
     parser.add_argument('--scene-profile', default=DEFAULT_SCENE_PROFILE, choices=list_scene_profiles())
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--headless', action='store_true')

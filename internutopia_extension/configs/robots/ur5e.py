@@ -81,6 +81,9 @@ class UR5eRobotCfg(RobotCfg):
     gripper_open_position: float = 0.0
     gripper_closed_position: float = 0.80
     gripper_close_openness: float = 0.08
+    # Separate physical travel from the nominal "close" preset. None retains
+    # the historical preset-based limit for existing robot configurations.
+    gripper_min_openness: Optional[float] = None
     # Defaults preserve every existing recipe. Beam may explicitly opt into a
     # different pair; nondefault gains require verified native readbacks.
     arm_drive_kp: float = 8.0e4
@@ -94,6 +97,10 @@ class UR5eRobotCfg(RobotCfg):
     # bounded friction trial and records the material actually authored.
     gripper_pad_static_friction: Optional[float] = None
     gripper_pad_dynamic_friction: Optional[float] = None
+    # Opt-in PhysX spring/damper contact; SI N/m and N s/m. None keeps
+    # rigid contact. Both fields must be supplied together before scene start.
+    gripper_pad_contact_stiffness: Optional[float] = None
+    gripper_pad_contact_damping: Optional[float] = None
     hand_link_name: Optional[str] = 'wrist_3_link'
     left_finger_link_name: Optional[str] = 'left_inner_finger'
     right_finger_link_name: Optional[str] = 'right_inner_finger'

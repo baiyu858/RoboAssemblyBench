@@ -55,7 +55,7 @@ def _kit_app_is_running(simulation_app) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description='Open a task scene in Isaac Sim UI without running robot actions.')
-    parser.add_argument('--recipe', default='peg_insertion', choices=list_task_recipes())
+    parser.add_argument('--recipe', default='peg_insertion', choices=list_task_recipes(include_aliases=True))
     parser.add_argument('--scene-profile', default=DEFAULT_SCENE_PROFILE, choices=list_scene_profiles())
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument(

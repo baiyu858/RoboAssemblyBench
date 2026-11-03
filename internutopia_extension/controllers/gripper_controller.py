@@ -49,7 +49,11 @@ class GripperController(BaseController):
         requested_openness = float(openness)
         opened_positions = np.asarray(self._gripper.joint_opened_positions, dtype=float)
         closed_positions = np.asarray(self._gripper.joint_closed_positions, dtype=float)
-        min_openness = float(getattr(self._robot_config, 'gripper_close_openness', 0.0) or 0.0)
+        physical_minimum = getattr(self._robot_config, 'gripper_min_openness', None)
+        min_openness = float((getattr(self._robot_config, 'gripper_close_openness', 0.0) or 0.0)
+                             if physical_minimum is None else physical_minimum)
+        if not np.isfinite(min_openness) or not 0.0 <= min_openness < 1.0:
+            raise ValueError('gripper_min_openness must be finite and in [0, 1)')
         openness = float(np.clip(openness, max(min_openness, 0.0), 1.0))
         joint_positions = closed_positions + openness * (opened_positions - closed_positions)
         joint_indices = getattr(self._gripper, 'active_joint_indices', None)

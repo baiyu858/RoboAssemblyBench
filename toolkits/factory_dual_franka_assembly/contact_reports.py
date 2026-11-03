@@ -60,8 +60,35 @@ def require_contact_report(prim) -> None:
     )
 
 
-def create_prepared_contact_view(prim, filter_prim, *, name, disable_stablization=False):
+def contact_filter_paths(root):
+    """Resolve enclosing objects to actual PhysX contact actor paths.
+
+    A static mesh is its own contact actor; an enclosing Xform is not an
+    aggregate filter. Dynamic shapes instead report their rigid-body owner.
+    """
+    from pxr import Usd, UsdPhysics
+
+    paths = set()
+    for prim in Usd.PrimRange(root, Usd.TraverseInstanceProxies()):
+        if (not prim.HasAPI(UsdPhysics.CollisionAPI)
+                or UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Get() is False):
+            continue
+        owner = prim
+        while owner and owner.IsValid():
+            if (owner.HasAPI(UsdPhysics.RigidBodyAPI)
+                    and UsdPhysics.RigidBodyAPI(owner).GetRigidBodyEnabledAttr().Get() is not False):
+                break
+            owner = owner.GetParent()
+        paths.add(str(owner.GetPath()) if owner and owner.IsValid() else str(prim.GetPath()))
+    if not paths:
+        raise RuntimeError(f'Contact filter has no enabled collision actors: {root.GetPath()}')
+    return sorted(paths)
+
+
+def create_prepared_contact_view(prim, filter_prim, *, name, disable_stablization=False, max_contact_count=64):
     """Create a force-only view without authoring contact/rigid-body schemas."""
+    if type(max_contact_count) is not int or max_contact_count < 1:
+        raise ValueError('max_contact_count must be a positive integer')
     require_contact_report(prim)
     require_contact_report(filter_prim)
     try:
@@ -74,15 +101,18 @@ def create_prepared_contact_view(prim, filter_prim, *, name, disable_stablizatio
     simulation_view = SimulationManager.get_physics_sim_view()
     if simulation_view is None:
         raise RuntimeError('Contact force view requested before physics initialization')
+    filters = contact_filter_paths(filter_prim)
+    # The containing root was prepared above. Static instance-proxy colliders
+    # cannot carry newly authored APIs, but are still valid exact-path filters.
     probe = RigidContactView(
         prim_paths_expr=str(prim.GetPath()),
-        filter_paths_expr=[str(filter_prim.GetPath())],
+        filter_paths_expr=filters,
         name=name,
         prepare_contact_sensors=False,
         # Preserve the task's existing stabilization choice, not the native
         # contact view's default (which disables stabilization).
         disable_stablization=disable_stablization,
-        max_contact_count=64,
+        max_contact_count=max_contact_count,
     )
     probe.initialize(physics_sim_view=simulation_view)
     if not probe.is_physics_handle_valid():

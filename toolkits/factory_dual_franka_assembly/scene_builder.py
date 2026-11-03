@@ -120,6 +120,7 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
                 'gripper_open_position',
                 'gripper_closed_position',
                 'gripper_close_openness',
+                'gripper_min_openness',
                 'arm_drive_kp',
                 'arm_drive_kd',
                 'gripper_drive_kp',
@@ -128,6 +129,8 @@ def _build_robot_cfgs(recipe_spec: dict) -> tuple[list, tuple[str, ...]]:
                 'gripper_require_drive_readback',
                 'gripper_pad_static_friction',
                 'gripper_pad_dynamic_friction',
+                'gripper_pad_contact_stiffness',
+                'gripper_pad_contact_damping',
                 'hand_link_name',
                 'left_finger_link_name',
                 'right_finger_link_name',
@@ -493,9 +496,12 @@ def _scale_phase_control_timing(value, *, count_scale: float, motion_scale: floa
 
 
 def _apply_control_frequency(recipe_spec: dict, *, control_fps: int) -> dict:
+    from roboassemblybench.core.rl.recipe import require_precision_frequency
+
     control_fps = int(control_fps)
     if control_fps <= 0:
         raise ValueError('control_fps must be positive.')
+    require_precision_frequency(recipe_spec, control_fps)
     resolved = copy.deepcopy(recipe_spec)
     if control_fps == REFERENCE_CONTROL_FPS:
         resolved['control_timing'] = {
@@ -537,8 +543,12 @@ def build_dual_franka_assembly_episode(
     randomization_profile: str | None = None,
     policy_evaluation_mode: bool = False,
     control_fps: int = REFERENCE_CONTROL_FPS,
+    recipe_overrides: dict | None = None,
 ) -> FactoryDualFrankaAssemblyTaskCfg:
-    recipe_spec = load_task_recipe(spec_path or recipe, scene_profile=scene_profile)
+    from roboassemblybench.core.rl.recipe import preflight_precision_policies
+
+    recipe_spec = load_task_recipe(spec_path or recipe, scene_profile=scene_profile, overrides=recipe_overrides)
+    preflight_precision_policies(recipe_spec)
     resolved_layout_seed = int(seed if layout_seed is None else layout_seed)
     recipe_spec, domain_randomization = apply_domain_randomization(
         recipe_spec,
@@ -631,6 +641,7 @@ def build_dual_franka_assembly_episode(
         task_metadata=copy.deepcopy(recipe_spec.get('task_metadata', {})),
         scene_profile_metadata=copy.deepcopy(recipe_spec.get('scene_profile_metadata', {})),
         scene_lights=copy.deepcopy(recipe_spec.get('scene_lights', [])),
+        physics_scene=copy.deepcopy(recipe_spec.get('physics_scene', {})),
         asset_references=copy.deepcopy(recipe_spec.get('asset_references', [])),
         source_benchmark=str(
             recipe_spec.get('source_benchmark', recipe_spec.get('benchmark_family', 'factory_dual_franka_assembly'))

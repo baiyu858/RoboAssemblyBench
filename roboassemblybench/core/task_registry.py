@@ -11,6 +11,7 @@ import yaml
 
 from internutopia.macros import gm
 from roboassemblybench.core.paths import BENCHMARK_ROOT, SHARED_TASK_DIR, TASKS_DIR
+from roboassemblybench.core.recipe_profiles import apply_recipe_profile, recipe_catalog, split_recipe_profile
 from roboassemblybench.core.scene_profiles import (
     DEFAULT_SCENE_PROFILE,
     deep_merge,
@@ -58,12 +59,19 @@ def task_recipe_fingerprint(payload: dict) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def list_task_recipes() -> list[str]:
-    return sorted(
-        path.name
-        for path in TASKS_DIR.iterdir()
-        if path.is_dir() and not path.name.startswith('_') and (path / TASK_SPEC_BASENAME).exists()
-    )
+def _recipe_catalog():
+    files = []
+    for folder in sorted(TASKS_DIR.iterdir()):
+        path = folder / TASK_SPEC_BASENAME
+        if folder.is_dir() and not folder.name.startswith('_') and path.is_file():
+            stat = path.stat()
+            files.append((str(path), stat.st_mtime_ns, stat.st_size))
+    return recipe_catalog(tuple(files))
+
+
+def list_task_recipes(*, include_aliases: bool = False) -> list[str]:
+    names, aliases = _recipe_catalog()
+    return sorted(set(names) | set(aliases)) if include_aliases else list(names)
 
 
 def list_task_annotations() -> list[str]:
@@ -99,7 +107,7 @@ def _resolve_folder_entry(path: Path, *, basename: str) -> Path:
     return path.resolve()
 
 
-def resolve_task_spec_path(recipe_or_path: str) -> Path:
+def _resolve_task_spec_path(recipe_or_path: str) -> Path:
     candidate = Path(recipe_or_path)
     if candidate.exists():
         resolved = _resolve_folder_entry(candidate, basename=TASK_SPEC_BASENAME)
@@ -113,6 +121,26 @@ def resolve_task_spec_path(recipe_or_path: str) -> Path:
             return candidate.resolve()
 
     raise FileNotFoundError(f'Cannot find RoboAssemblyBench task spec for {recipe_or_path!r}.')
+
+
+def _resolve_recipe_reference(recipe_or_path):
+    reference = str(recipe_or_path)
+    if Path(reference).exists():
+        return _resolve_task_spec_path(reference), None
+    aliases = _recipe_catalog()[1]
+    old_path = Path(reference)
+    # Old episodes also save an absolute spec_path inside the removed variant
+    # folder. Resolve only paths in this task root, not arbitrary outside files.
+    if old_path.name == TASK_SPEC_BASENAME and old_path.parent.parent.resolve() == TASKS_DIR.resolve():
+        reference = old_path.parent.name if old_path.parent.name in aliases else reference
+    elif old_path.parent.resolve() == TASKS_DIR.resolve() and old_path.name in aliases:
+        reference = old_path.name
+    base, profile = split_recipe_profile(reference, aliases)
+    return _resolve_task_spec_path(base), profile
+
+
+def resolve_task_spec_path(recipe_or_path: str) -> Path:
+    return _resolve_recipe_reference(recipe_or_path)[0]
 
 
 def resolve_task_annotation_path(recipe_or_path: str) -> Path:
@@ -167,8 +195,13 @@ def _load_yaml_with_extends(path: Path, *, basename: str, stack: tuple[Path, ...
     if extends_ref is None:
         return payload
 
+    parent_profile = None
+    if basename == TASK_SPEC_BASENAME:
+        extends_ref, parent_profile = split_recipe_profile(extends_ref, _recipe_catalog()[1])
     parent_path = _resolve_extends_path(extends_ref=extends_ref, current_path=resolved_path, basename=basename)
     parent_payload = _load_yaml_with_extends(parent_path, basename=basename, stack=(*stack, resolved_path))
+    if parent_profile is not None:
+        parent_payload = apply_recipe_profile(parent_payload, parent_profile)
     return deep_merge(parent_payload, payload)
 
 
@@ -348,9 +381,11 @@ def _collect_asset_references(payload: dict, metadata: dict) -> list[dict]:
     return _dedupe_asset_references(references)
 
 
-def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None) -> dict:
-    path = resolve_task_spec_path(recipe_or_path)
-    payload = _load_yaml_with_extends(path, basename=TASK_SPEC_BASENAME)
+def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None, *, overrides: dict | None = None) -> dict:
+    path, profile = _resolve_recipe_reference(recipe_or_path)
+    payload = apply_recipe_profile(_load_yaml_with_extends(path, basename=TASK_SPEC_BASENAME), profile)
+    if overrides:
+        payload = deep_merge(payload, overrides)
     payload = _replace_placeholders(payload)
 
     task_metadata = copy.deepcopy(payload.get('metadata', {}))
@@ -382,10 +417,19 @@ def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None) -> d
 
         payload = compile_fabrica_canonical_recipe(payload)
 
+    elif payload.get('precision_insertion'):
+        from roboassemblybench.core.rl.recipe import compile_precision_insertions, precision_insertion_settings
+        payload = compile_precision_insertions(payload, precision_insertion_settings(payload))
+
+    if payload.get('precision_insertion_resolved'):
+        task_metadata['precision_insertion'] = copy.deepcopy(payload['precision_insertion_resolved'])
+
     merged_metadata = deep_merge(scene_profile_metadata, task_metadata)
     merged_metadata = deep_merge(merged_metadata, annotation_metadata)
     payload['metadata'] = merged_metadata
     payload['task_metadata'] = task_metadata
+    if overrides:
+        payload['task_metadata']['recipe_overrides'] = copy.deepcopy(overrides)
     payload['scene_profile_metadata'] = scene_profile_metadata
     payload['annotation_name'] = annotation_payload.get('annotation_name', '')
     payload['annotation_path'] = annotation_payload.get('annotation_path')
@@ -402,6 +446,13 @@ def load_task_recipe(recipe_or_path: str, scene_profile: str | None = None) -> d
     payload['scene_profile_path'] = scene_profile_payload.get('scene_profile_path')
     payload['spec_path'] = str(path)
     payload['task_dir'] = str(path.parent)
+    if profile is not None:
+        payload['recipe_profile'] = profile
+        payload['recipe_selector'] = f'{path.parent.name}@{profile}'
+        # Episode replay passes spec_path back into load_task_recipe. Retain
+        # the profile there as well, or replay would load the base controller.
+        payload['spec_path'] = f'{path}@{profile}'
+        payload['spec_file_path'] = str(path)
     payload.setdefault('benchmark_family', 'robo_assembly_bench')
     payload.setdefault('default_scene_profile', DEFAULT_SCENE_PROFILE)
     payload.setdefault('source_benchmark', payload.get('benchmark_family', 'robo_assembly_bench'))

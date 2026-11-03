@@ -42,6 +42,8 @@ from toolkits.factory_dual_franka_assembly.task_specs import (
     list_task_recipes,
     load_task_recipe,
 )
+from toolkits.factory_dual_franka_assembly.render_schedule import render_interval
+from toolkits.factory_dual_franka_assembly.rollout_performance import RolloutPerformance
 
 RUNTIME_CAMERA_WARMUP_RENDER_STEPS = 8
 
@@ -196,15 +198,19 @@ class LiveRolloutVideoRecorder:
         fps: int,
         frame_stride: int,
         keep_frames: bool = False,
+        encoder_backend: str = 'stream',
     ):
         self.output_dir = output_dir.resolve()
         self.episode_idx = int(episode_idx)
         self.keep_frames = keep_frames
+        if encoder_backend not in ('stream', 'png'):
+            raise ValueError('Video encoder backend must be stream or png.')
+        self.encoder_backend = encoder_backend
+        self._stream_writers = {}
         self.frame_stride = max(int(frame_stride), 1)
         self.requested_fps = max(float(fps), 1.0)
         self.fps = self.requested_fps
         self.frames_root_dir = self.output_dir / f'episode_{self.episode_idx:04d}_live_frames'
-        self.frames_root_dir.mkdir(parents=True, exist_ok=True)
 
         from toolkits.factory_dual_franka_assembly.export_lerobot import (
             RunningImageStats,
@@ -283,19 +289,29 @@ class LiveRolloutVideoRecorder:
             if frame_rgb is None:
                 continue
 
-            frame_dir = self._frame_dirs.get(camera_video_key)
-            if frame_dir is None:
+            if camera_video_key not in self._image_stats:
                 frame_dir = self.frames_root_dir / camera_video_key.replace('.', '_')
-                frame_dir.mkdir(parents=True, exist_ok=True)
-                self._frame_dirs[camera_video_key] = frame_dir
+                if self.keep_frames or self.encoder_backend == 'png':
+                    frame_dir.mkdir(parents=True, exist_ok=True)
+                    self._frame_dirs[camera_video_key] = frame_dir
                 self._image_stats[camera_video_key] = self._running_image_stats_cls()
                 self._written_png_counts[camera_video_key] = 0
                 self._frame_shapes[camera_video_key] = (int(frame_rgb.shape[1]), int(frame_rgb.shape[0]))
+                if self.encoder_backend == 'stream':
+                    from toolkits.factory_dual_franka_assembly.streaming_video import StreamingVideoWriter
+                    video_path = (self.output_dir / f'episode_{self.episode_idx:04d}_live_videos'
+                                  / f'{camera_video_key.replace(".", "_")}.mp4')
+                    self._stream_writers[camera_video_key] = StreamingVideoWriter(
+                        video_path, width=frame_rgb.shape[1], height=frame_rgb.shape[0], fps=self.fps)
 
             self._image_stats[camera_video_key].update(frame_rgb)
             frame_index = self._written_png_counts[camera_video_key]
-            frame_path = frame_dir / f'frame_{frame_index:05d}.png'
-            cv2.imwrite(str(frame_path), cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
+            if self.encoder_backend == 'stream':
+                self._stream_writers[camera_video_key].write(frame_rgb)
+            if camera_video_key in self._frame_dirs:
+                frame_path = self._frame_dirs[camera_video_key] / f'frame_{frame_index:05d}.png'
+                if not cv2.imwrite(str(frame_path), cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)):
+                    raise RuntimeError(f'Failed to save video frame: {frame_path}')
             self._written_png_counts[camera_video_key] += 1
             captured_any = True
 
@@ -311,13 +327,24 @@ class LiveRolloutVideoRecorder:
         summaries = {}
         video_root_dir = self.output_dir / f'episode_{self.episode_idx:04d}_live_videos'
         video_root_dir.mkdir(parents=True, exist_ok=True)
-        for camera_video_key, frame_dir in list(self._frame_dirs.items()):
+        first_error = None
+        stream_summaries = {}
+        for key, writer in self._stream_writers.items():
+            try:
+                stream_summaries[key] = writer.close()
+            except Exception as exc:
+                first_error = first_error or exc
+        if first_error is not None:
+            raise RuntimeError('One or more live video encoders failed') from first_error
+        for camera_video_key in self._frame_shapes:
+            frame_dir = self._frame_dirs.get(camera_video_key)
             width, height = self._frame_shapes.get(camera_video_key, (0, 0))
             video_path = video_root_dir / f'{camera_video_key.replace(".", "_")}.mp4'
-            encode_summary = _encode_mp4_from_pngs(frame_dir, video_path, self.fps)
+            encode_summary = (stream_summaries[camera_video_key] if self.encoder_backend == 'stream'
+                              else _encode_mp4_from_pngs(frame_dir, video_path, self.fps))
             videos[camera_video_key] = str(video_path)
             summaries[camera_video_key] = {
-                'frames_dir': str(frame_dir),
+                'frames_dir': None if frame_dir is None else str(frame_dir),
                 'video_path': str(video_path),
                 'fps': float(self.fps),
                 'requested_fps': float(self.requested_fps),
@@ -327,8 +354,9 @@ class LiveRolloutVideoRecorder:
                 'renderer': 'live_rollout_frame_capture',
                 'frame_count': int(self._written_png_counts.get(camera_video_key, 0)),
                 'image_stats': encode_summary.get('image_stats', self._image_stats[camera_video_key].to_dict()),
+                'encoding': encode_summary,
             }
-            if not self.keep_frames:
+            if not self.keep_frames and frame_dir is not None:
                 shutil.rmtree(frame_dir, ignore_errors=True)
         if not self.keep_frames:
             try:
@@ -341,7 +369,7 @@ class LiveRolloutVideoRecorder:
             'video_mode': 'live_rollout_mp4',
             'frames': {key: str(path) for key, path in self._frame_dirs.items()},
             'frame_summaries': summaries,
-            'frame_mode': 'live_rollout_frames',
+            'frame_mode': 'live_rollout_frames' if self._frame_dirs else 'not_saved_streaming_video',
         }
 
 
@@ -367,6 +395,9 @@ def _build_env(
     rendering_fps: int | None = None,
     rendering_interval: int | None = None,
 ):
+    from internutopia.core.util.physics_scene import shared_physics_scene_settings
+
+    scene_settings = shared_physics_scene_settings(task_configs)
     simulation_fps = 240 if rendering_fps is None else max(int(rendering_fps), 1)
     rendering_dt = 1 / simulation_fps
     if rendering_interval is not None and int(rendering_interval) < 0:
@@ -380,6 +411,7 @@ def _build_env(
             headless=headless,
             native=False,
             webrtc=False,
+            **scene_settings,
         ),
         env_num=1,
         metrics_save_path='none',
@@ -412,6 +444,7 @@ def _run_task_sequence(
     live_video_fps: int = 30,
     live_video_frame_stride: int = 8,
     keep_video_frames: bool = False,
+    live_video_encoder: str = 'stream',
     runtime_robochecker: bool = False,
     runtime_feedback_path: Path | None = None,
     runtime_observation_dir: Path | None = None,
@@ -449,15 +482,12 @@ def _run_task_sequence(
         or (record_lerobot_raw and not record_trajectory_only)
         or (runtime_robochecker and runtime_capture_rgb)
     )
-    rollout_rendering_interval = (
-        dataset_rendering_interval
-        if record_lerobot_raw and not record_trajectory_only
-        else (None if requires_runtime_rendering else simulation_fps - 1)
-    )
-    if rendering_interval_override is not None:
-        if requires_runtime_rendering:
-            raise ValueError('A rendering interval override cannot be used while runtime image capture is enabled.')
-        rollout_rendering_interval = max(int(rendering_interval_override), 0)
+    rollout_rendering_interval = render_interval(
+        simulation_fps=simulation_fps,
+        live_stride=live_video_frame_stride if record_live_video else None,
+        dataset_stride=dataset_frame_stride if record_lerobot_raw and not record_trajectory_only else None,
+        checker_stride=runtime_rgb_frame_stride if runtime_robochecker and runtime_capture_rgb else None,
+        override=rendering_interval_override)
     env = _build_env(
         task_configs=task_configs,
         headless=headless,
@@ -494,6 +524,8 @@ def _run_task_sequence(
     )
     last_task = None
     rollout_started_at = time.monotonic()
+    performance = RolloutPerformance(output_dir, physics_fps=simulation_fps,
+                                     rendering_interval=rollout_rendering_interval)
     rollout_loop_entered = False
     initial_tasks = getattr(env.runner, 'current_tasks', {})
     if initial_tasks:
@@ -557,6 +589,7 @@ def _run_task_sequence(
                     fps=live_video_fps,
                     frame_stride=live_video_frame_stride,
                     keep_frames=keep_video_frames,
+                    encoder_backend=live_video_encoder,
                 )
             if record_lerobot_raw and dataset_recorder is None:
                 dataset_recorder = CompactCartesianEpisodeRecorder(
@@ -575,12 +608,17 @@ def _run_task_sequence(
                 )
 
             step_started_at = time.monotonic()
+            phase_before_step = f'{episode_idx}:{task.phase}'
             env_actions = policy.act(task)
+            policy_done_at = time.monotonic()
             precheck_hook.observe_before_step(task, env_actions)
+            precheck_done_at = time.monotonic()
             if dataset_recorder is not None:
                 dataset_recorder.record(task=task, obs=obs_list[0], actions=env_actions)
             obs_list, _, terminated, _, _ = env.step([env_actions])
+            env_done_at = time.monotonic()
             constraint_hook.observe(task)
+            safety_done_at = time.monotonic()
             # Runner cleanup can remove a successful task before VecEnv exposes
             # its terminal flag.  Promote the runner's finished metrics to a
             # normal termination so recorders are finalized as successful.
@@ -646,6 +684,12 @@ def _run_task_sequence(
                     terminated = list(terminated)
                     terminated[0] = True
 
+            performance.record(phase=phase_before_step, task=task, observations=obs_list[0], timings={
+                'policy': policy_done_at - step_started_at,
+                'precheck': precheck_done_at - policy_done_at,
+                'env_step_and_dataset': env_done_at - precheck_done_at,
+                'constraint_monitor': safety_done_at - env_done_at,
+                'recording_and_other': time.monotonic() - safety_done_at})
             if terminated[0]:
                 metrics = _attach_policy_diagnostics(
                     finished_metrics[-1] if runner_completed else task.calculate_metrics(),
@@ -725,12 +769,14 @@ def _run_task_sequence(
                 pass
         constraint_monitor_metrics = constraint_hook.finalize() if recorder is not None else None
         live_video_output = None
+        video_finalization_error = None
         raw_dataset_output = None
         if video_recorder is not None:
             try:
                 live_video_output = video_recorder.finalize()
-            except Exception:
-                pass
+            except Exception as error:
+                video_finalization_error = error
+                print(f'[demo-debug] live video finalization failed: {error}', flush=True)
         if dataset_recorder is not None and last_task is not None:
             try:
                 interrupted_metrics = _attach_policy_diagnostics(last_task.calculate_metrics(), policy)
@@ -789,7 +835,10 @@ def _run_task_sequence(
                     _write_json(results_output_path, [metrics])
             except Exception:
                 pass
+        performance.flush(finalized=exc_value is None)
         env.close()
+        if video_finalization_error is not None and exc_value is None:
+            raise RuntimeError('Live video finalization failed') from video_finalization_error
 
     return results
 
@@ -1107,6 +1156,7 @@ def _worker_mode(args, *, headless: bool):
             live_video_fps=max(int(args.live_video_fps), 1),
             live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
             keep_video_frames=bool(args.keep_video_frames),
+            live_video_encoder=args.live_video_encoder,
             runtime_robochecker=bool(args.runtime_robochecker),
             runtime_feedback_path=None
             if args.runtime_feedback_path is None
@@ -1174,6 +1224,7 @@ def _worker_mode(args, *, headless: bool):
         live_video_fps=max(int(args.live_video_fps), 1),
         live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
         keep_video_frames=bool(args.keep_video_frames),
+        live_video_encoder=args.live_video_encoder,
         runtime_robochecker=bool(args.runtime_robochecker),
         runtime_feedback_path=None
         if args.runtime_feedback_path is None
@@ -1227,6 +1278,7 @@ def _invoke_worker(
     live_video_fps: int = 30,
     live_video_frame_stride: int = 8,
     keep_video_frames: bool = False,
+    live_video_encoder: str = 'stream',
     runtime_robochecker: bool = False,
     runtime_feedback_path: Path | None = None,
     runtime_observation_dir: Path | None = None,
@@ -1273,6 +1325,7 @@ def _invoke_worker(
         command.append('--record-live-video')
         command.extend(['--live-video-fps', str(int(live_video_fps))])
         command.extend(['--live-video-frame-stride', str(int(live_video_frame_stride))])
+        command.extend(['--live-video-encoder', live_video_encoder])
     if keep_video_frames:
         command.append('--keep-video-frames')
     if skip_episode_steps:
@@ -1335,6 +1388,7 @@ def _results_from_worker(
     live_video_fps: int = 30,
     live_video_frame_stride: int = 8,
     keep_video_frames: bool = False,
+    live_video_encoder: str = 'stream',
     runtime_robochecker: bool = False,
     runtime_feedback_path: Path | None = None,
     runtime_observation_dir: Path | None = None,
@@ -1380,6 +1434,7 @@ def _results_from_worker(
         live_video_fps=live_video_fps,
         live_video_frame_stride=live_video_frame_stride,
         keep_video_frames=keep_video_frames,
+        live_video_encoder=live_video_encoder,
         runtime_robochecker=runtime_robochecker,
         runtime_feedback_path=runtime_feedback_path,
         runtime_observation_dir=runtime_observation_dir,
@@ -1479,6 +1534,7 @@ def main():
     parser.add_argument('--record-live-video', action='store_true')
     parser.add_argument('--live-video-fps', type=int, default=30)
     parser.add_argument('--live-video-frame-stride', type=int, default=8)
+    parser.add_argument('--live-video-encoder', choices=('stream', 'png'), default='stream')
     parser.add_argument('--keep-video-frames', action='store_true')
     parser.add_argument('--record-lerobot-raw', action='store_true')
     parser.add_argument(
@@ -1639,6 +1695,7 @@ def main():
                 live_video_fps=max(int(args.live_video_fps), 1),
                 live_video_frame_stride=max(int(args.live_video_frame_stride), 1),
                 keep_video_frames=bool(args.keep_video_frames),
+                live_video_encoder=args.live_video_encoder,
                 runtime_robochecker=bool(args.runtime_robochecker),
                 runtime_feedback_path=None
                 if args.runtime_feedback_path is None

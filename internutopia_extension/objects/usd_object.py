@@ -183,7 +183,7 @@ class UsdObject(BaseObject):
                         getattr(UsdPhysics.Tokens, 'convexHull', 'convexHull')
                     )
 
-        def apply_collision_approximation(prim, approximation: str) -> None:
+        def apply_collision_approximation(prim, approximation: str, *, existing_colliders_only=False) -> None:
             if prim is None or not prim.IsValid() or not approximation:
                 return
             token = str(approximation).strip()
@@ -198,7 +198,10 @@ class UsdObject(BaseObject):
             def walk(current_prim) -> None:
                 if current_prim is None or not current_prim.IsValid():
                     return
-                if current_prim.IsA(UsdGeom.Mesh):
+                if (current_prim.IsA(UsdGeom.Mesh)
+                        and (not existing_colliders_only or (
+                            current_prim.HasAPI(UsdPhysics.CollisionAPI)
+                            and UsdPhysics.CollisionAPI(current_prim).GetCollisionEnabledAttr().Get() is not False))):
                     try:
                         from pxr import PhysxSchema
 
@@ -215,6 +218,18 @@ class UsdObject(BaseObject):
                             mesh_collision_api.CreateApproximationAttr().Set(token_attr)
                         else:
                             approx_attr.Set(token_attr)
+                        if existing_colliders_only and token_lower not in {'sdf', 'sdfmesh'}:
+                            # A referenced SDF API can override the mesh token.
+                            # Remove it in this scene layer before physics starts;
+                            # keep the source asset, vertices and holes unchanged.
+                            sdf_type = PhysxSchema.PhysxSDFMeshCollisionAPI
+                            if current_prim.HasAPI(sdf_type):
+                                current_prim.RemoveAPI(sdf_type)
+                                if current_prim.HasAPI(sdf_type):
+                                    raise RuntimeError('Could not remove referenced SDF collision API')
+                                for attr in current_prim.GetAttributes():
+                                    if attr.GetName().startswith('physxSDFMeshCollision:'):
+                                        attr.Block()
                         if token_lower in {'sdf', 'sdfmesh'}:
                             for remove_name in (
                                 'PhysxTriangleMeshCollisionAPI',
@@ -231,8 +246,11 @@ class UsdObject(BaseObject):
                                         pass
                             sdf_api = PhysxSchema.PhysxSDFMeshCollisionAPI.Apply(current_prim)
                             sdf_api.CreateSdfResolutionAttr().Set(int(sdf_resolution))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        if existing_colliders_only:
+                            raise RuntimeError(
+                                f'Cannot configure static collider {current_prim.GetPath()} as {token}'
+                            ) from exc
                 for child in current_prim.GetChildren():
                     walk(child)
 
@@ -375,6 +393,7 @@ class UsdObject(BaseObject):
                 size: Optional[float] = None,
                 collider: Optional[bool] = False,
                 auto_collider: Optional[bool] = True,
+                collision_approximation: Optional[str] = None,
                 static_friction: Optional[float] = None,
                 dynamic_friction: Optional[float] = None,
                 restitution: Optional[float] = None,
@@ -390,6 +409,8 @@ class UsdObject(BaseObject):
                     set_nested_colliders(prim, dynamic_body=False)
                 elif not collider:
                     set_nested_collision_enabled(prim, False)
+                if collider and collision_approximation:
+                    apply_collision_approximation(prim, collision_approximation, existing_colliders_only=True)
                 self.size = size
                 self.color = color
                 # Complex referenced USD assets should stay as XForms when they
@@ -461,6 +482,7 @@ class UsdObject(BaseObject):
                     scale=self._config.scale,
                     collider=self._config.collider,
                     auto_collider=self._config.auto_collider,
+                    collision_approximation=getattr(self._config, 'collision_approximation', None),
                     static_friction=self._config.static_friction,
                     dynamic_friction=self._config.dynamic_friction,
                     restitution=self._config.restitution,

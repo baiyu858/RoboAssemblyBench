@@ -49,14 +49,47 @@ def quat_angle_error(lhs: Sequence[float], rhs: Sequence[float]) -> float:
     return float(2.0 * math.acos(scalar))
 
 
+def axis_rotation_error(current_orientation, target_orientation, local_axis) -> Tuple[float, float]:
+    """Return unsigned swing and twist about an object-local axis, in radians.
+
+    Decompose target^-1 * current = swing * twist. This is independent of the
+    world frame and quaternion sign; swing measures shaft tilt, not axial spin.
+    """
+    axis = np.asarray(local_axis, dtype=float)
+    if (axis.shape != (3,) or not np.all(np.isfinite(axis))
+            or not np.isfinite(np.linalg.norm(axis)) or np.linalg.norm(axis) < 1e-12):
+        raise ValueError('Orientation axis must be a finite nonzero local three-vector')
+    axis = axis / np.linalg.norm(axis)
+    for orientation in (current_orientation, target_orientation):
+        q = np.asarray(orientation, dtype=float)
+        if q.shape != (4,) or not np.all(np.isfinite(q)) or np.linalg.norm(q) < 1e-12:
+            raise ValueError('Axis rotation requires two finite nonzero quaternions')
+    relative = normalize_quat(quat_multiply(quat_conjugate(target_orientation), normalize_quat(current_orientation)))
+    projection = float(np.dot(relative[1:], axis))
+    twist_norm = math.hypot(float(relative[0]), projection)
+    swing = 2.0 * math.acos(float(np.clip(twist_norm, 0., 1.)))
+    # At 180 degrees of swing, twist is indeterminate: reject conservatively.
+    twist = math.pi if twist_norm < 1e-12 else 2.0 * math.atan2(abs(projection), abs(float(relative[0])))
+    return swing, twist
+
+
 def pose_error(
     current_position: Sequence[float],
     current_orientation: Sequence[float] | None,
     target_position: Sequence[float],
     target_orientation: Sequence[float] | None,
+    position_reference_point: Sequence[float] | None = None,
 ) -> Tuple[float, float | None]:
     current_position = np.asarray(current_position, dtype=float)
     target_position = np.asarray(target_position, dtype=float)
+    if position_reference_point is not None:
+        point = np.asarray(position_reference_point, dtype=float)
+        if point.shape != (3,) or not np.all(np.isfinite(point)):
+            raise ValueError('Position reference point must be a finite local three-vector')
+        if current_orientation is None or target_orientation is None:
+            raise ValueError('A local position reference point requires both orientations')
+        current_position = current_position + quat_rotate(current_orientation, point)
+        target_position = target_position + quat_rotate(target_orientation, point)
     position_error = float(np.linalg.norm(current_position - target_position))
     if current_orientation is None or target_orientation is None:
         return position_error, None
@@ -71,13 +104,26 @@ def pose_within_tolerance(
     target_orientation: Sequence[float] | None,
     position_tolerance: float,
     orientation_tolerance: float | None = None,
+    position_reference_point: Sequence[float] | None = None,
+    *,
+    orientation_axis: Sequence[float] | None = None,
+    twist_tolerance: float | None = None,
 ) -> bool:
     position_error, orientation_error = pose_error(
         current_position=current_position,
         current_orientation=current_orientation,
         target_position=target_position,
         target_orientation=target_orientation,
+        position_reference_point=position_reference_point,
     )
+    if orientation_axis is not None or twist_tolerance is not None:
+        if (orientation_axis is None or twist_tolerance is None or orientation_tolerance is None
+                or isinstance(twist_tolerance, bool) or not math.isfinite(float(twist_tolerance))
+                or not 0 < float(twist_tolerance) <= math.pi):
+            raise ValueError('Axis rotation needs an orientation axis, swing tolerance and twist tolerance in (0, pi]')
+        swing, twist = axis_rotation_error(current_orientation, target_orientation, orientation_axis)
+        return bool(np.isfinite(position_error) and position_error <= float(position_tolerance)
+                    and swing <= float(orientation_tolerance) and twist <= float(twist_tolerance))
     if position_error > float(position_tolerance):
         return False
     if orientation_tolerance is None or orientation_error is None:

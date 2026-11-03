@@ -95,6 +95,8 @@ def _candidate_roots(task=None) -> list[Path]:
 def resolve_checkpoint_path(spec: dict, task=None) -> str | None:
     default_checkpoint = DEFAULT_FACTORY_INSERT_CHECKPOINT
     backend = str(spec.get('backend', '')).lower()
+    if backend in {'native_contact_insertion', 'ur5e_part0_physical'}:
+        default_checkpoint = None
     if backend in {'fabrica_fixplug', 'fabrica_fixplug_isaacgym', 'fabrica_isaacgym_fixplug'}:
         default_checkpoint = DEFAULT_FABRICA_FIXPLUG_PLUMBERS_BLOCK_CHECKPOINT
     checkpoint = (
@@ -119,7 +121,15 @@ def resolve_checkpoint_path(spec: dict, task=None) -> str | None:
 
 def probe_factory_insert_rl_backend(spec: dict, task=None) -> dict[str, Any]:
     backend = str(spec.get('backend', 'isaaclab_factory'))
-    if backend in {'fabrica_fixplug', 'fabrica_fixplug_isaacgym', 'fabrica_isaacgym_fixplug'}:
+    default_checkpoint = DEFAULT_FACTORY_INSERT_CHECKPOINT
+    if backend in {'native_contact_insertion', 'ur5e_part0_physical'}:
+        default_checkpoint = None
+        dependencies = ('torch',)
+        default_adapter = 'roboassemblybench.core.rl.integration:InsertionPolicyAdapter'
+        default_observation_space = 55
+        default_action_space = 6
+    elif backend in {'fabrica_fixplug', 'fabrica_fixplug_isaacgym', 'fabrica_isaacgym_fixplug'}:
+        default_checkpoint = DEFAULT_FABRICA_FIXPLUG_PLUMBERS_BLOCK_CHECKPOINT
         dependencies = ('torch',)
         default_adapter = (
             'toolkits.factory_dual_franka_assembly.factory_insert_adapter:FabricaFixPlugPolicyAdapter'
@@ -211,7 +221,7 @@ class LocalSkillExecutor:
                 tracked_objects=tracked_objects,
                 default_adapter=default_adapter,
             )
-        elif skill_name in {'factory_insert_rl', 'fabrica_fixplug_rl', 'fabrica_insert_rl', 'insert_rl', 'insert'}:
+        elif skill_name in {'contact_insert_rl', 'factory_insert_rl', 'fabrica_fixplug_rl', 'fabrica_insert_rl', 'insert_rl', 'insert'}:
             result = self._factory_insert_rl_action(
                 task=task,
                 robot_name=robot_name,
@@ -409,7 +419,9 @@ class LocalSkillExecutor:
         if attached_to == robot_name or grasped_by == robot_name:
             return None
 
-        attachment_state = getattr(task, '_attachments', {}).get(held_object)
+        lookup = getattr(task, '_attachment_for', None)
+        attachment_state = (lookup(held_object, robot_name) if callable(lookup)
+                            else getattr(task, '_attachments', {}).get(held_object))
         if isinstance(attachment_state, dict) and attachment_state.get('robot_name') == robot_name:
             return None
 

@@ -169,6 +169,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         self._prealign_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._phase_locks: dict[tuple[Any, ...], dict[str, np.ndarray]] = {}
         self._close_gate_state: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._supported_release_actions: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._preshape_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._grasp_slip_state: dict[tuple[Any, ...], dict[str, Any]] = {}
         self._completion_state: dict[tuple[Any, ...], dict[str, Any]] = {}
@@ -215,6 +216,14 @@ class UR5eAssemblyAtomicSkillAdapter:
             skill_name,
         )
 
+        setup_guard = phase_spec.get('physical_setup_pose_guard')
+        if setup_guard and robot_name == setup_guard['robot']:
+            from toolkits.factory_dual_franka_assembly.compound_grasp import setup_pose_failure
+            setup_failure = setup_pose_failure(task, setup_guard)
+            if setup_failure:
+                return self._failure_or_hold(task, robot_name, {**spec, 'require_success': True},
+                    setup_failure['reason'], diagnostics=setup_failure)
+
         support = phase_spec.get('plumbers_base_support')
         if support and robot_name == support['inserting_robot']:
             from toolkits.factory_dual_franka_assembly.plumbers_support import base_support_status
@@ -222,6 +231,11 @@ class UR5eAssemblyAtomicSkillAdapter:
             if support_status.get('failure'):
                 return self._failure_or_hold(task, robot_name, {**spec, 'require_success': True},
                     support_status['failure'], diagnostics={'support': support_status})
+            if skill_name == 'ur5e_release_supported_part' and phase_key in self._supported_release_actions:
+                # Opening intentionally destroys the inserting hand's grasp.
+                # Keep its arm fixed and finish opening during a soft support
+                # force recovery; the phase gate still blocks withdrawal.
+                return copy.deepcopy(self._supported_release_actions[phase_key])
             if not support_status['ready']:
                 # Do not solve IK, advance the close/completion state, or move
                 # the insertion reference while the right jaw recovers force.
@@ -242,6 +256,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         if skill_name == 'ur5e_release_supported_part':
             action = self._hold_joint_action(task=task, robot_name=robot_name)
             action[_GRIPPER_CONTROLLER] = [1.0]
+            self._supported_release_actions[phase_key] = copy.deepcopy(action)
             return action
 
         if (spec.get('trace_pregrasp') and os.environ.get('BEAM_CONTACT_TRACE_PATH')
@@ -292,6 +307,9 @@ class UR5eAssemblyAtomicSkillAdapter:
                     tracked_objects=tracked_objects,
                 )
                 if not gate_ready:
+                    if gate_detail.get('fixture_clearance', {}).get('passed') is False:
+                        return self._failure_or_hold(task, robot_name, spec,
+                            'close_fixture_clearance_failed', diagnostics=gate_detail)
                     gate_state = self._close_gate_state.get(phase_key, {})
                     if gate_state.get('close_arm_frozen') or (
                         spec.get('close_force_regulation') and gate_state.get('contact_control_active')
@@ -366,6 +384,8 @@ class UR5eAssemblyAtomicSkillAdapter:
                                 'control': close_detail.get('control'), 'recenter': close_detail['recenter'],
                                 'motion_detail': close_detail.get('motion_detail'),
                                 'force_stability': close_detail.get('force_stability'),
+                                'additional_contacts': (close_detail.get('contact_detail') or {}).get('additional_contacts'),
+                                'primary_strict_contact': (close_detail.get('contact_detail') or {}).get('strict_contact_ready'),
                                 'timing': 'observation at step; command for next physics interval',
                             }) + '\n')
                     if close_detail.get('control_error'):
@@ -3761,6 +3781,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             detail = {'step': int(task.step_counter), 'phase': task.phase, 'robot': robot_name,
                 'dt': dt, 'tracking_scale': scale, 'tracking_utilization': utilization,
                 'path_fraction': ratio, 'at_goal': at_goal, 'published': bool(safe),
+                'goal_distance_m': distance, 'goal_orientation_error_rad': angle,
                 'joint_velocity': velocity.tolist(), 'joint_acceleration': ((velocity-previous_velocity)/dt).tolist(),
                 'position_lead': p_lead, 'orientation_lead': r_lead, 'joint_lead': joint_lead}
             with open(os.path.join(os.path.dirname(trace), 'smooth_drive_trace.jsonl'), 'a', encoding='utf-8') as f:
@@ -3768,7 +3789,8 @@ class UR5eAssemblyAtomicSkillAdapter:
         if not safe:
             # Do not hide an infeasible braking/tracking combination by silently
             # clipping the final command or relaxing the physical gate.
-            return self._failure_or_hold(task, robot_name, spec, 'grasp_smooth_tracking_boundary')
+            return self._failure_or_hold(task, robot_name, spec, 'grasp_smooth_tracking_boundary',
+                diagnostics=dict(position_lead=p_lead, orientation_lead=r_lead, joint_lead=joint_lead))
         self._debug_joint_step(task=task, robot_name=robot_name, skill_name=spec['name'], spec=spec,
             current_pose=current_pose, target_pose=target_pose, command_target_pose=command_pose,
             ik_target_pose=ik_pose, current_q=current_q, reference_q=reference_q,
@@ -4062,7 +4084,9 @@ class UR5eAssemblyAtomicSkillAdapter:
         state = saved.setdefault('loaded_force_state', {})
         if state.get('step') == int(task.step_counter):
             return state['last_control']
-        if not task._physical_hold_valid(saved['object'], attachment, validation_stage='force_maintenance'):
+        valid = task._physical_hold_valid(saved['object'], attachment, validation_stage='force_maintenance')
+        recovering = bool(attachment.get('contact_recovery'))
+        if not valid and not recovering:
             return {'failure': 'held_object_not_grasped'}
         sample = attachment.get('last_hold_validation') or {}
         if (sample.get('step') != int(task.step_counter)
@@ -4073,7 +4097,8 @@ class UR5eAssemblyAtomicSkillAdapter:
         metrics = attachment.get('current_contact_metrics')
         if metrics is None or attachment.get('current_contact_step') != int(task.step_counter):
             metrics = task._gripper_contact_metrics(saved['object'], robot_name, attach_spec=attach_spec)
-        fingers = [metrics.get(side) or {} for side in ('left_finger', 'right_finger')]
+        from toolkits.factory_dual_franka_assembly.compound_grasp import compound_grasp_sample
+        fingers, compound = compound_grasp_sample(task, robot_name, attachment, metrics)
         measured = self._current_gripper_q(task=task, robot_name=robot_name)
         open_q, closed_q = self._gripper_open_closed_q(task=task, robot_name=robot_name)
         if measured is None or open_q is None or closed_q is None:
@@ -4086,10 +4111,11 @@ class UR5eAssemblyAtomicSkillAdapter:
                 forces=[f.get('force') for f in fingers],
                 probes_valid=all(f.get('force_probe_valid') for f in fingers),
                 gripper_q=float(measured), open_q=float(open_q), closed_q=float(closed_q),
-                min_openness=float(getattr(task.robots[robot_name].config, 'gripper_close_openness', .08)),
+                min_openness=self._contact_min_openness(attach_spec, task.robots[robot_name].config),
                 step=int(task.step_counter), dt=float(task._contact_physics_dt()),
                 position_slip=float(sample['position_slip']),
-                contact_threshold=float(attach_spec.get('contact_force_threshold', .1)))
+                contact_threshold=float(attach_spec.get('contact_force_threshold', .1)),
+                allow_contact_recovery=recovering)
         except (ValueError, TypeError, KeyError) as exc:
             return {'failure': 'loaded_force_control_invalid', 'error': str(exc)}
         trace = os.environ.get('BEAM_HOLD_TRACE_PATH')
@@ -4099,6 +4125,11 @@ class UR5eAssemblyAtomicSkillAdapter:
                 handle.write(json.dumps({'step': int(task.step_counter), 'phase': task.phase,
                     'robot': robot_name, 'gripper_q': measured, 'previous_command_closure': previous,
                     'controller': 'weak_side', 'control': control}) + '\n')
+        if compound.get('failure'):
+            control.update(failure=compound['failure'], motion_ready=False, motion_scale=0.)
+        elif not compound['ready']:
+            control.update(motion_ready=False, motion_scale=0., compound_contact_recovery=True)
+        control['additional_contacts'] = compound['bodies']
         if not control['failure']:
             saved['gripper_openness'] = control['command_openness']
             self._remember_gripper_hold_openness(task=task, robot_name=robot_name,
@@ -4143,8 +4174,8 @@ class UR5eAssemblyAtomicSkillAdapter:
                         attach_spec, config)
                 control = self._contact_close_control(state=state, spec=control_spec, metrics=metrics,
                     gripper_q=measured, open_q=open_q, closed_q=closed_q,
-                    requested_openness=saved['gripper_openness'], min_openness=float(getattr(
-                        task.robots[robot_name].config, 'gripper_close_openness', .08)))
+                    requested_openness=saved['gripper_openness'],
+                    min_openness=self._contact_min_openness(attach_spec, task.robots[robot_name].config))
                 state['step'] = int(task.step_counter)
                 state['last_control'] = control
                 trace = os.environ.get('BEAM_HOLD_TRACE_PATH')
@@ -4908,7 +4939,20 @@ class UR5eAssemblyAtomicSkillAdapter:
         }
 
     def _target_object_pose(self, *, task, spec: dict) -> dict | None:
-        if spec.get('target_object_position') is not None:
+        if spec.get('target_object_reference_object') is not None:
+            # Sample the receiving body once at phase entry. Never chase its
+            # displaced pose or write the moving part's transform at runtime.
+            cache = getattr(task, '_physical_reference_targets', None)
+            if cache is None:
+                cache = task._physical_reference_targets = {}
+            name = str(spec['target_object_reference_object'])
+            key = f'{task.phase}:{task.phase_entry_step}:{name}'
+            if key not in cache:
+                p, q = task._resolve_object(name).get_pose()
+                cache[key] = dict(position=np.asarray(p).copy(), orientation=normalize_quat(q).copy())
+            position = np.asarray(cache[key]['position']).copy()
+            orientation = np.asarray(cache[key]['orientation']).copy()
+        elif spec.get('target_object_position') is not None:
             position = np.asarray(spec['target_object_position'], dtype=float)
             orientation = self._target_object_orientation_from_spec(task=task, spec=spec)
         else:
@@ -5237,6 +5281,13 @@ class UR5eAssemblyAtomicSkillAdapter:
             detail = {'reason': 'close_gate_target_pose_unavailable'}
             self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
             return False, action, detail
+        if gate_spec.get('fixture_closure_clearance') and 'fixture_clearance_nominal' not in state:
+            from roboassemblybench.core.grasp_clearance import native_closure_report
+            state['fixture_clearance_nominal'] = native_closure_report(
+                task, robot_name, gate_spec, self._ik_target_pose(target_pose=target_pose, spec=gate_spec))
+        if state.get('fixture_clearance_nominal', {}).get('passed') is False:
+            return False, self._hold_joint_action(task=task, robot_name=robot_name), {
+                'reason': 'nominal_grasp_hits_fixture', 'fixture_clearance': state['fixture_clearance_nominal']}
         current_pose = self._current_tcp_pose(
             current_pose=self._current_robot_pose(
                 task=task,
@@ -5258,7 +5309,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             )
             state['close_contact_observation'] = (int(task.step_counter), observation)
             recenter_stop = self._stop_recenter_on_bilateral(
-                state=state, spec=spec, metrics=observation[1].get('contact_metrics') or {},
+                state=state, spec=spec, metrics=observation[1].get('control_contact_metrics', observation[1].get('contact_metrics')) or {},
                 current_position=current_pose['position'],
             )
         regulated_contact = bool(spec.get('close_force_regulation', False) and state.get('contact_control_active'))
@@ -5646,6 +5697,13 @@ class UR5eAssemblyAtomicSkillAdapter:
         self._debug_close_gate_step(task=task, robot_name=robot_name, detail=detail)
         if gate_ready:
             if 'close_started_step' not in state:
+                if gate_spec.get('fixture_closure_clearance'):
+                    from roboassemblybench.core.grasp_clearance import native_closure_report
+                    state['fixture_clearance_measured'] = native_closure_report(
+                        task, robot_name, gate_spec, self._ik_target_pose(target_pose=current_pose, spec=gate_spec))
+                    if not state['fixture_clearance_measured']['passed']:
+                        detail['fixture_clearance'] = state['fixture_clearance_measured']
+                        return False, self._hold_joint_action(task=task, robot_name=robot_name), detail
                 state['close_started_step'] = int(getattr(task, 'phase_step_counter', 0))
                 if bool(gate_spec.get('close_gate_freeze_at_start')):
                     state['close_arm_frozen'] = True
@@ -7070,6 +7128,9 @@ class UR5eAssemblyAtomicSkillAdapter:
         skill_name: str,
         spec: dict,
     ) -> OrderedDict:
+        if spec.get('requires_empty_arm') and any(
+                a.get('robot_name') == robot_name for _, a in task._all_physical_grasps()):
+            return self._failure_or_hold(task, robot_name, spec, 'joint_home_requires_empty_arm')
         current_q = self._current_arm_q(task, robot_name)
         if current_q is None:
             return self._failure_or_hold(task, robot_name, spec, 'current_joint_state_unavailable')
@@ -7568,6 +7629,13 @@ class UR5eAssemblyAtomicSkillAdapter:
         return bool(linear_abort or angular_abort)
 
     @staticmethod
+    def _contact_min_openness(spec, config):
+        value = spec.get('physical_gripper_min_openness', getattr(config, 'gripper_close_openness', .08))
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not np.isfinite(value) or not 0 <= value < 1:
+            raise ValueError('physical_gripper_min_openness must be in [0, 1)')
+        return float(value)
+
+    @staticmethod
     def _contact_close_control(*, state: dict, spec: dict, metrics: dict,
                                gripper_q: float, open_q: float, closed_q: float,
                                requested_openness: float, min_openness: float) -> dict:
@@ -7598,6 +7666,9 @@ class UR5eAssemblyAtomicSkillAdapter:
         force_high = float(spec.get('close_force_high', 12.0))
         force_limit = float(spec.get('close_force_limit', 40.0))
         rate = float(spec.get('close_force_joint_rate', 0.025))
+        weak_side_preload = spec.get('close_force_weak_side_preload', False)
+        if not isinstance(weak_side_preload, bool):
+            raise ValueError('close_force_weak_side_preload must be an explicit boolean.')
         if not valid:
             command = min(previous, measured)
             mode = 'invalid_probe_hold'
@@ -7607,7 +7678,7 @@ class UR5eAssemblyAtomicSkillAdapter:
                 unload_rate = float(spec.get('close_force_unload_rate', 0.06)) if peak > force_limit else rate
                 command = min(previous, measured) - unload_rate * dt
                 mode = 'force_limit_unload' if peak > force_limit else 'unload'
-            elif peak < force_low:
+            elif (min(forces) if weak_side_preload else peak) < force_low:
                 command = min(previous, measured + float(spec.get('close_force_max_command_lead', 0.001))) + rate * dt
                 mode = 'gentle_seek' if not any(loaded) else 'preload'
             else:
@@ -7633,6 +7704,7 @@ class UR5eAssemblyAtomicSkillAdapter:
         openness = float(np.clip(1.0 - command / span, min_openness, 1.0))
         state['hold_gripper_openness'] = openness
         return {'mode': mode, 'probe_valid': bool(valid), 'forces': forces,
+                'preload_basis': 'weak_side' if weak_side_preload else 'peak',
                 'first_contact': bool(first_contact), 'contact_control_active': bool(state.get('contact_control_active')),
                 'physics_dt': dt, 'force_limit': force_limit,
                 'force_within_limit': bool(valid and peak <= force_limit),
@@ -7855,7 +7927,7 @@ class UR5eAssemblyAtomicSkillAdapter:
             return result
 
         contact_detail = close_detail.get('contact_detail') or {}
-        metrics = contact_detail.get('contact_metrics') or {}
+        metrics = contact_detail.get('control_contact_metrics', contact_detail.get('contact_metrics')) or {}
         if bool(spec.get('close_force_regulation', False)):
             return UR5eAssemblyAtomicSkillAdapter._update_force_recenter(state=state, metrics=metrics, spec=spec)
         left = metrics.get('left_finger') or {}
@@ -8100,12 +8172,12 @@ class UR5eAssemblyAtomicSkillAdapter:
         if bool(spec.get('close_force_regulation', False)):
             if any(value is None for value in (gripper_q, open_q, closed_q)):
                 return False, {'control_error': 'gripper_state_unavailable', 'contact_detail': contact_detail}
-            metrics = contact_detail.get('contact_metrics') or {}
+            metrics = contact_detail.get('control_contact_metrics', contact_detail.get('contact_metrics')) or {}
             config = getattr(task.robots.get(robot_name), 'config', None)
             control = self._contact_close_control(
                 state=state, spec=spec, metrics=metrics, gripper_q=float(gripper_q),
                 open_q=float(open_q), closed_q=float(closed_q), requested_openness=gripper_openness,
-                min_openness=float(getattr(config, 'gripper_close_openness', 0.0) or 0.0),
+                min_openness=self._contact_min_openness(spec, config),
             )
             candidate = bool(contact_ready and control['force_within_limit'] and
                              min(control['forces']) >= float(spec.get('close_force_min_stable', 1.0)))
@@ -8591,11 +8663,19 @@ class UR5eAssemblyAtomicSkillAdapter:
             contact_ready = strict_ready
         else:
             contact_ready = bool(metrics.get('contact_ready') or strict_ready)
+        control_metrics = metrics
+        compound = None
+        if spec.get('additional_grasp_contacts'):
+            from toolkits.factory_dual_franka_assembly.compound_grasp import compound_close_metrics
+            control_metrics, compound = compound_close_metrics(task, robot_name, spec, metrics)
+            contact_ready = bool(contact_ready and compound['ready'])
         return contact_ready, {
             'object': object_name,
             'contact_ready': contact_ready,
             'strict_contact_ready': strict_ready,
             'contact_metrics': metrics,
+            'control_contact_metrics': control_metrics,
+            'additional_contacts': compound,
         }
 
     def _failure_or_hold(

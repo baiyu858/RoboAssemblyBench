@@ -6057,11 +6057,16 @@ def _apply_ik_execution_policy(phases: list[dict[str, Any]], spec: dict[str, Any
 
 
 def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
+    from roboassemblybench.core.rl.recipe import (
+        compile_precision_insertions, precision_insertion_settings,
+    )
+    precision = precision_insertion_settings(payload['fabrica_canonical']) if isinstance(
+        payload.get('fabrica_canonical'), dict) else {}
     beam_spec = payload.get('fabrica_canonical') or {}
     if (isinstance(beam_spec, dict) and beam_spec.get('assembly') == 'beam'
             and bool(beam_spec.get('continuous_physics', False))):
         from roboassemblybench.core.beam_physical_compiler import compile_continuous_beam_recipe
-        return compile_continuous_beam_recipe(payload)
+        return compile_precision_insertions(compile_continuous_beam_recipe(payload), precision)
     spec = payload.get('fabrica_canonical')
     if spec is None:
         return payload
@@ -6143,10 +6148,17 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             )
         task['assembly_steps'] = ordered_steps
     _activate_gripper_profile(task, robot_platform=robot_platform)
+    from roboassemblybench.core.plumbers_reverse_insertion import apply_part0_reverse_insertion
+    reverse_part0 = apply_part0_reverse_insertion(task, spec)
     if plumbers_physics:
-        from roboassemblybench.core.plumbers_physical import align_plumbers_base_grasps_to_pads
+        from roboassemblybench.core.plumbers_physical import (
+            align_plumbers_base_grasps_to_pads, align_plumbers_move_grasps_to_pads,
+            raise_plumbers_insertion_entries,
+        )
         from roboassemblybench.core.plumbers_support import support_grasp_settings
         align_plumbers_base_grasps_to_pads(task, spec)
+        align_plumbers_move_grasps_to_pads(task, spec)
+        raise_plumbers_insertion_entries(task, spec)
     (
         pickup_origin,
         pickup_orientation,
@@ -6177,13 +6189,18 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
                                 for step in task['assembly_steps']}
         grasp_selection['coordinated_override'] = 'native_mesh_audit_2026_09_30'
 
+    board_object = _static_asset_object(
+        name='optical_board',
+        usd_path=task['optical_board']['usd_path'],
+        position=board_origin,
+        friction=0.5,
+    )
+    if plumbers_physics:
+        # Static triangle collision preserves the perforated plate geometry and
+        # avoids the passive base rocking measured with the authored SDF board.
+        board_object['collision_approximation'] = 'none'
     generated_objects = [
-        _static_asset_object(
-            name='optical_board',
-            usd_path=task['optical_board']['usd_path'],
-            position=board_origin,
-            friction=0.5,
-        ),
+        board_object,
         _static_asset_object(
             name='fabrica_fixture',
             usd_path=task['fixture']['usd_path'],
@@ -6268,6 +6285,9 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     if plumbers_physics:
         from roboassemblybench.core.plumbers_physical import apply_plumbers_physics
         apply_plumbers_physics(phases, success=success, spec=spec)
+        if reverse_part0 is not None and reverse_part0['weak_side_close']:
+            close = next(p for p in phases if p['name'] == 'assemble_00_part_0_close_and_attach')
+            close['local_skill']['close_force_weak_side_preload'] = True
     if spec.get('coordinated_support_plan'):
         from roboassemblybench.core.beam_coordinated import coordinate_phases
         coordinate_phases(phases, task, spec, targets, assembly_target_names)
@@ -6291,6 +6311,9 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     if not bool(spec.get('continuous_physics', False)) or plumbers_physics:
         _apply_idle_robot_home_policy(phases, spec=spec, robots=robots)
         _apply_ik_execution_policy(phases, spec)
+    if plumbers_physics:
+        from roboassemblybench.core.plumbers_support import add_terminal_joint_home
+        add_terminal_joint_home(phases, spec=spec, robots=robots)
     part_names = [f'fabrica_{assembly}_{part["part_id"]}' for part in task['parts']]
     translation_constraints = _canonical_translation_constraints(
         assembly=assembly,
@@ -6593,4 +6616,6 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         'pickup_layout_selection': grasp_selection,
         'optical_board_position_randomized': False,
     }
-    return resolved
+    if reverse_part0 is not None:
+        resolved['fabrica_canonical_resolved']['part0_reverse_insertion'] = reverse_part0
+    return compile_precision_insertions(resolved, precision)

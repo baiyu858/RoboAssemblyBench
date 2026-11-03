@@ -513,6 +513,18 @@ class SimulatorRunner:
             stage_units_in_meters=1.0,
             sim_params={'use_fabric': use_fabric},
         )
+        # Scene flags must be authored before the first physics reset. Applying
+        # them later, while preparing contact probes, misses native scene creation.
+        from internutopia.core.util.physics_scene import apply_physics_scene_settings
+
+        requested_scene_settings = {name: getattr(self.config.simulator, name, None) for name in (
+            'enable_stabilization', 'enable_external_forces_every_iteration')
+            if getattr(self.config.simulator, name, None) is not None}
+        self.physics_scene_settings = (apply_physics_scene_settings(
+            self._world.get_physics_context(), self._world.stage, requested_scene_settings)
+            if requested_scene_settings else {})
+        if self.physics_scene_settings:
+            log.info('Physics scene settings: %s', json.dumps(self.physics_scene_settings, sort_keys=True))
         # Explicit, isolated Beam experiment; defaults leave every scene unchanged.
         requested_solver = os.environ.get('BEAM_PHYSICS_SOLVER_TYPE')
         if requested_solver is not None:
