@@ -84,6 +84,8 @@ fabrica_canonical:
 
 这是配置片段，需与实际 assembly/物体名及训练权重对应。当前 plumbers `@rl` recipe 为 `'0'`、`'1'`、`'4'` 配置各自的试训权重；完整连续装配尚未通过。其他任务如果仍使用 fixed joint、物体锁定或运动学搬运，必须先建立真实物理抓取环境，本库不会把它们自动转换成已验证的物理任务。
 
+完整流程的 RL 技能可通过 `completion_stable_steps` 指定执行时的连续就位确认窗口；`InsertionController` 接受同名参数，未指定时使用权重配置的 `seated_stable_steps`。该覆盖只改变何时确认局部就位，不修改模型输入、动作、几何/受力门槛或 `controller_config`，原有权重配置一致性和摘要校验保留。当前 plumbers `@rl` 的 `physical_wait_step_limit: 30` 会在最终阶段图中生成这个执行字段，训练默认值仍为 96 步。
+
 非 Fabrica 的 recipe 在根级声明 `continuous_physics: true`、`precision_insertion`，每个条目的 `binding` 给出完整的 `InsertionTask` 字段。阶段 key 可以是 `pin_slot` 等任意名称。编译器检查引用存在、替换范围连续、不重叠，并保留释放和卸载稳定验证。多个阶段收紧成功门槛时，不会放宽先前阶段的精度。
 
 每段可用 `controller_config` 覆盖 `InsertionConfig` 参数。频率与控制器参数写入权重；同一物理场景中的策略须使用同一物理频率。`retreat_control` 是可选的任务后处理配置，具体退出速度不硬编码在 RL 核心中。
@@ -94,7 +96,11 @@ fabrica_canonical:
 
 当前 plumbers 的 `fabrica_canonical.hold_force_control.max_closing_travel` 设置为 `null`，关闭跨往复调节的累计正向补夹预算；`closing_travel` 仍作为诊断值累加，不再据此停止。`max_seek` 限制相对抓取成立位置的闭合端点，`max_command_lead` 限制相对实测关节的指令领先量，两者以及夹力、滑移、探针和恢复超时保护均保留。其他配置未显式设置该项时仍沿用原有累计预算。`loaded_force_travel_limit` 的具体来源由 `travel_limit_reason` 区分为累计预算、抓取位置相对闭合范围或机械闭合端点。旧入口快照保留旧抓取配置；对照复验需明确更新其抓取配置，不能只改 recipe 后假定旧快照内的限制也改变。
 
-`released_rotation_tolerance`（rad，范围 `(0, pi]`）可单独设置松爪后的角度公差，默认沿用 `controller_config.seated_rotation_tolerance`。它同时作用于卸载稳定阶段和最终成功判定，不改变训练/夹持对齐参数、位置精度、速度阈值或稳定窗口；已有更严格的任务公差仍保留。例如圆弧配合的 plumbers `part_0` 采用松爪后 3°，夹持对齐仍为 1°。
+`released_rotation_tolerance`（rad，范围 `(0, pi]`）可单独设置松爪后的角度公差，默认沿用 `controller_config.seated_rotation_tolerance`。它用于收紧释放后的检查及最终成功判定，已有更严格的任务公差仍保留。
+
+需要明确覆盖释放后的验收公差时，使用 `released_pose_tolerances: {position_m: 0.015, orientation_rad: 0.8726646259971648}`。这是 plumbers 白件当前的 15 mm / 50° 设置，作用于该物件首次释放后的稳定检查、后续各装配阶段的稳定检查及最终成功判定；覆盖原来的位置/转角门槛，固定 CAD 参考点、释放要求、速度和稳定窗口保留。夹持就位仍由 `controller_config` 决定，白件仍为轴向 1 mm、横向 0.5 mm、转角 1°。其他物件和 3 mm / 5° 抓取滑移保护不受影响。配置 `released_axial_rotation` 的物件仍分别检查轴线倾斜和自身轴自转，`orientation_rad` 对应轴线倾斜。
+
+可选 `released_friction: {static_friction: 1.0, dynamic_friction: 0.8}` 在插入 binding 的 `settle_phase` 入口生效，即完成释放、撤离后改变被插物的原生碰撞材料。当前白件初始材料仍为 0.8/0.7，抓取、运输和插入期间保持基线；释放后设为 1.0/0.8，与未改变的绿件 0.8/0.7 通过 average 合并得到有效静/动摩擦 0.9/0.75。原生属性设置后核对读回值，保留恢复系数，不在运行时添加 USD API；实际读回记录在 `friction_policy_history`。`build_flow_env()` 恢复后续快照时，会在物理初始化前恢复当前 recipe 累积的摩擦配置。
 
 任务可在相邻插入之间保留支撑抓取。plumbers 的 `physical_base_support.hold_between_insertions` 将中间检查编译为 `*_supported_settle`，只检查已释放的装配件，并逐步检查支撑抓取；最终卸载检查仍要求所有零件释放。插入 binding 的 `settle_phase` 自动匹配实际检查阶段。`--mode resume --recipe ... --through-stage <stage>` 可从入口快照运行到后续阶段的稳定检查；结果记录 `support_retained` 和局部范围，不能作为完整装配成功率。
 
@@ -153,5 +159,7 @@ conda run --no-capture-output -n internutopia311 \
 ## 释放后的轴线倾斜与轴向自转
 
 `precision_insertion.<stage>.released_axial_rotation` 可配置物件局部轴 `axis` 和自转公差 `twist_tolerance_rad`。启用时，对目标与当前姿态的相对四元数做 swing/twist 分解：`released_rotation_tolerance` 约束轴线倾斜，自转由 `twist_tolerance_rad` 单独约束。未配置时仍检查原有总转角。
+
+当释放后的目标姿态只需约束轴倾斜时，将 `twist_tolerance_rad` 设为 `3.141592653589793`（π）。自转误差取最短等效角 `[0, π]`，因此该设置接受任意轴向自转；仍保留 `axis` 和倾斜公差。当前 plumbers `@rl` 两根销使用此设置，释放稳定窗口与抓取过程的角度保护独立保留。
 
 该选项只作用于该次插入之后的释放稳定检查和最终成功判定，不改变夹持就位控制、抓取滑移保护、权重或固定位置参考点。诊断保留总转角 `orientation_error`，并增加 `orientation_tolerance_mode: swing_twist`、`swing_error/swing_tolerance` 和 `twist_error/twist_tolerance`，单位均为弧度。

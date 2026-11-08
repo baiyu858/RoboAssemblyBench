@@ -9,7 +9,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from roboassemblybench.core.paths import BENCHMARK_ROOT
-from .control import InsertionConfig, validate_torque_soft_limit, validate_torque_hard_limit
+
+from .control import (
+    InsertionConfig,
+    validate_torque_hard_limit,
+    validate_torque_soft_limit,
+)
 from .legacy import BACKEND as LEGACY_BACKEND
 from .task import InsertionTask
 
@@ -21,10 +26,25 @@ def precision_insertion_settings(spec):
     if not isinstance(entries, dict):
         raise ValueError('precision_insertion must be a mapping keyed by insertion stage/part id')
     active = {}
-    allowed = {'controller', 'backend', 'checkpoint', 'checkpoint_sha256', 'entry_waypoint',
-               'timeout_steps', 'binding', 'controller_config', 'retreat_control',
-               'released_rotation_tolerance', 'released_axial_rotation', 'qualification_config',
-               'torque_soft_limit', 'torque_hard_limit', 'axis_alignment'}
+    allowed = {
+        'controller',
+        'backend',
+        'checkpoint',
+        'checkpoint_sha256',
+        'entry_waypoint',
+        'timeout_steps',
+        'binding',
+        'controller_config',
+        'retreat_control',
+        'released_rotation_tolerance',
+        'released_pose_tolerances',
+        'released_friction',
+        'released_axial_rotation',
+        'qualification_config',
+        'torque_soft_limit',
+        'torque_hard_limit',
+        'axis_alignment',
+    }
     for key, entry in entries.items():
         label = f'precision_insertion[{key!r}]'
         if not isinstance(entry, dict) or set(entry) - allowed:
@@ -59,35 +79,66 @@ def precision_insertion_settings(spec):
         config = asdict(InsertionConfig(**config))
         torque_soft = validate_torque_soft_limit(entry.get('torque_soft_limit'), InsertionConfig(**config))
         from .axis_alignment import alignment_settings
+
         alignment = alignment_settings(entry.get('axis_alignment'))
         torque_hard = entry.get('torque_hard_limit')
         validate_torque_hard_limit(torque_hard, InsertionConfig(**config), torque_soft)
         from .validate import QualificationConfig
+
         qualification = asdict(QualificationConfig(**entry.get('qualification_config', {})))
         released_rotation = entry.get('released_rotation_tolerance', config['seated_rotation_tolerance'])
-        if (isinstance(released_rotation, bool) or not isinstance(released_rotation, (int, float))
-                or not math.isfinite(released_rotation) or not 0 < released_rotation <= math.pi):
+        if (
+            isinstance(released_rotation, bool)
+            or not isinstance(released_rotation, (int, float))
+            or not math.isfinite(released_rotation)
+            or not 0 < released_rotation <= math.pi
+        ):
             raise ValueError(f'{label}.released_rotation_tolerance must be in (0, pi] radians')
+        released_pose = _released_pose_tolerances(entry.get('released_pose_tolerances'))
+        from toolkits.factory_dual_franka_assembly.object_friction import (
+            friction_settings,
+        )
+
+        released_friction = entry.get('released_friction')
+        if released_friction is not None:
+            released_friction = friction_settings(released_friction)
         released_axial = entry.get('released_axial_rotation')
         if released_axial is not None:
             if not isinstance(released_axial, dict) or set(released_axial) != {'axis', 'twist_tolerance_rad'}:
                 raise ValueError(f'{label}.released_axial_rotation requires axis and twist_tolerance_rad')
             spin = released_axial['twist_tolerance_rad']
-            if (isinstance(spin, bool) or not isinstance(spin, (int, float))
-                    or not math.isfinite(spin) or not 0 < spin <= math.pi):
+            if (
+                isinstance(spin, bool)
+                or not isinstance(spin, (int, float))
+                or not math.isfinite(spin)
+                or not 0 < spin <= math.pi
+            ):
                 raise ValueError(f'{label}.released_axial_rotation.twist_tolerance_rad must be in (0, pi]')
-            from toolkits.factory_dual_franka_assembly.planner_primitives import axis_rotation_error
-            axis_rotation_error([1., 0., 0., 0.], [1., 0., 0., 0.], released_axial['axis'])
+            from toolkits.factory_dual_franka_assembly.planner_primitives import (
+                axis_rotation_error,
+            )
+
+            axis_rotation_error([1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0], released_axial['axis'])
         if not isinstance(entry.get('binding', {}), dict) or not isinstance(entry.get('retreat_control', {}), dict):
             raise ValueError('binding and retreat_control must be mappings')
-        active[str(key)] = dict(backend=BACKEND, checkpoint=str(path.resolve()),
-                                checkpoint_sha256=digest.lower() if digest else None, entry_waypoint=waypoint,
-                                timeout_steps=timeout, binding=copy.deepcopy(entry.get('binding', {})),
-                                controller_config=config, retreat_control=copy.deepcopy(entry.get('retreat_control', {})),
-                                torque_soft_limit=torque_soft,
-                                torque_hard_limit=torque_hard, axis_alignment=alignment,
-                                released_axial_rotation=copy.deepcopy(released_axial),
-                                released_rotation_tolerance=float(released_rotation), qualification_config=qualification)
+        active[str(key)] = dict(
+            backend=BACKEND,
+            checkpoint=str(path.resolve()),
+            checkpoint_sha256=digest.lower() if digest else None,
+            entry_waypoint=waypoint,
+            timeout_steps=timeout,
+            binding=copy.deepcopy(entry.get('binding', {})),
+            controller_config=config,
+            retreat_control=copy.deepcopy(entry.get('retreat_control', {})),
+            torque_soft_limit=torque_soft,
+            torque_hard_limit=torque_hard,
+            axis_alignment=alignment,
+            released_axial_rotation=copy.deepcopy(released_axial),
+            released_pose_tolerances=released_pose or None,
+            released_friction=released_friction,
+            released_rotation_tolerance=float(released_rotation),
+            qualification_config=qualification,
+        )
     return active
 
 
@@ -97,12 +148,20 @@ def infer_binding(payload, stage_id, entry_waypoint=1, overrides=None):
     Custom benchmarks supply an explicit binding, including replace_phases.
     """
     explicit = overrides or {}
-    complete = {'task_family', 'moving_object', 'socket_object', 'insertion_robot',
-                'entry_target', 'goal_target', 'replace_phases'} <= set(explicit)
+    complete = {
+        'task_family',
+        'moving_object',
+        'socket_object',
+        'insertion_robot',
+        'entry_target',
+        'goal_target',
+        'replace_phases',
+    } <= set(explicit)
     if complete:
         values = {}
     else:
         from .backends.fabrica import binding_defaults
+
         values = binding_defaults(payload, stage_id, entry_waypoint)
     values.update(overrides or {})
     values.setdefault('stage_id', str(stage_id))
@@ -110,8 +169,11 @@ def infer_binding(payload, stage_id, entry_waypoint=1, overrides=None):
     targets = {t['name'] for t in payload.get('targets', [])}
     objects = {o['name'] for o in payload.get('objects', [])}
     robots = {r['name'] for r in payload.get('robots', [])}
-    if (not {binding.entry_target, binding.goal_target} <= targets
-            or not set(binding.objects) <= objects or not {r for r, _ in binding.participants} <= robots):
+    if (
+        not {binding.entry_target, binding.goal_target} <= targets
+        or not set(binding.objects) <= objects
+        or not {r for r, _ in binding.participants} <= robots
+    ):
         raise ValueError(f'{stage_id}: binding references missing objects, robots or targets')
     return binding
 
@@ -121,6 +183,59 @@ def _tighten(entry, limits):
         previous = entry.get(key)
         entry[key] = value if previous is None else min(float(previous), value)
     entry.update(require_released=True, require_static=True)
+
+
+def _released_pose_tolerances(value):
+    """Explicit released-pose overrides; held seating never reads these."""
+    if value is None:
+        return {}
+    allowed = {'position_m', 'orientation_rad'}
+    if not isinstance(value, dict) or not value or set(value) - allowed:
+        raise ValueError('released_pose_tolerances must contain position_m and/or orientation_rad')
+    for key, limit in value.items():
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, (int, float))
+            or not math.isfinite(limit)
+            or limit <= 0
+            or (key == 'orientation_rad' and limit > math.pi)
+        ):
+            raise ValueError(f'Invalid released_pose_tolerances.{key}')
+    return {key: float(limit) for key, limit in value.items()}
+
+
+def apply_released_pose_tolerances(phases, success, binding, settings):
+    """Override this part's released checks, including subsequent insertions.
+
+    Phase gates hold copies of the success criteria. Updating only the first
+    settle or final success would leave later checks at the old tolerance.
+    """
+    tolerances = _released_pose_tolerances(settings.get('released_pose_tolerances'))
+    if not tolerances:
+        return
+    names = [p['name'] for p in phases]
+    start = names.index(binding.settle_phase)
+    entries = list(success)
+    for phase in phases[start:]:
+        advance = phase.get('advance', {})
+        if advance.get('type') in ('physical_settle', 'plumbers_supported_settle'):
+            entries.extend(advance.get('objects', []))
+    keys = {'position_m': 'position_tolerance', 'orientation_rad': 'orientation_tolerance'}
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get('object') == binding.moving_object:
+            entry.update({keys[key]: value for key, value in tolerances.items()})
+
+
+def apply_released_friction(phases, binding, settings):
+    material = settings.get('released_friction')
+    if material is not None:
+        from toolkits.factory_dual_franka_assembly.object_friction import (
+            KEY,
+            friction_settings,
+        )
+
+        settle = next(p for p in phases if p['name'] == binding.settle_phase)
+        settle.setdefault(KEY, {})[binding.moving_object] = friction_settings(material)
 
 
 def replace_insertion(phases, success, binding, settings):
@@ -136,7 +251,7 @@ def replace_insertion(phases, success, binding, settings):
     if binding.settle_phase not in names:
         raise ValueError('Insertion must retain a post-insertion stability verification phase')
     first, last = min(indices), max(indices)
-    for item in phases[first:last + 1]:
+    for item in phases[first : last + 1]:
         if any(item.get(key) for key in ('attach', 'detach', 'lock', 'fixture_lock', 'freeze_current_pose')):
             raise ValueError('RL window must follow grasp creation and precede release/locking interactions')
     phase = phases[first]
@@ -145,24 +260,47 @@ def replace_insertion(phases, success, binding, settings):
     phase.pop('skill', None)
     config = InsertionConfig(**settings.get('controller_config', {}))
     validate_torque_hard_limit(settings.get('torque_hard_limit'), config, settings.get('torque_soft_limit'))
-    common = dict(name='contact_insert_rl', backend=BACKEND, checkpoint=settings['checkpoint'],
-                  checkpoint_sha256=settings.get('checkpoint_sha256'), binding=binding.to_dict(),
-                  controller_config=asdict(config), require_success=True, fallback='fail',
-                  torque_soft_limit=validate_torque_soft_limit(settings.get('torque_soft_limit'), config),
-                  torque_hard_limit=settings.get('torque_hard_limit'), axis_alignment=copy.deepcopy(settings.get('axis_alignment')),
-                  requires_held_object=True, continuous_physics=True, observation_space=55, action_space=6)
+    common = dict(
+        name='contact_insert_rl',
+        backend=BACKEND,
+        checkpoint=settings['checkpoint'],
+        checkpoint_sha256=settings.get('checkpoint_sha256'),
+        binding=binding.to_dict(),
+        controller_config=asdict(config),
+        require_success=True,
+        fallback='fail',
+        torque_soft_limit=validate_torque_soft_limit(settings.get('torque_soft_limit'), config),
+        torque_hard_limit=settings.get('torque_hard_limit'),
+        axis_alignment=copy.deepcopy(settings.get('axis_alignment')),
+        requires_held_object=True,
+        continuous_physics=True,
+        observation_space=55,
+        action_space=6,
+    )
     phase['local_skills'] = {r: dict(common, robot=r, held_object=o, object=o) for r, o in binding.participants}
-    conditions = [dict(type='local_skill_complete', robot=r, skill='contact_insert_rl') for r, _ in binding.participants]
+    conditions = [
+        dict(type='local_skill_complete', robot=r, skill='contact_insert_rl') for r, _ in binding.participants
+    ]
     conditions.extend(copy.deepcopy(binding.readiness_conditions))
     phase['advance'] = dict(type='all_of', conditions=conditions)
     phase.setdefault('gripper_commands', {}).update({r: 'contact_hold' for r, _ in binding.participants})
-    phases = phases[:first] + [phase] + phases[last + 1:]
-    limits = {name: dict(position_tolerance=config.base_position_limit,
-              orientation_tolerance=config.base_rotation_limit, linear_velocity_threshold=.01, angular_velocity_threshold=.1)
-              for name in (binding.socket_object, binding.support_object) if name}
-    limits[binding.moving_object] = dict(position_tolerance=math.hypot(config.seated_axial_tolerance, config.seated_lateral_tolerance),
-                                         orientation_tolerance=settings.get('released_rotation_tolerance', config.seated_rotation_tolerance),
-                                         linear_velocity_threshold=.01, angular_velocity_threshold=.1)
+    phases = phases[:first] + [phase] + phases[last + 1 :]
+    limits = {
+        name: dict(
+            position_tolerance=config.base_position_limit,
+            orientation_tolerance=config.base_rotation_limit,
+            linear_velocity_threshold=0.01,
+            angular_velocity_threshold=0.1,
+        )
+        for name in (binding.socket_object, binding.support_object)
+        if name
+    }
+    limits[binding.moving_object] = dict(
+        position_tolerance=math.hypot(config.seated_axial_tolerance, config.seated_lateral_tolerance),
+        orientation_tolerance=settings.get('released_rotation_tolerance', config.seated_rotation_tolerance),
+        linear_velocity_threshold=0.01,
+        angular_velocity_threshold=0.1,
+    )
     for entry in success:
         if entry.get('object') in limits:
             _tighten(entry, limits[entry['object']])
@@ -170,26 +308,33 @@ def replace_insertion(phases, success, binding, settings):
         if item['name'] == binding.settle_phase:
             for entry in item.get('advance', {}).get('objects', []):
                 if isinstance(entry, dict) and entry.get('object') in limits:
-                    retained_support = (item.get('physical_supported_verification')
-                                        and entry.get('object') == binding.support_object
-                                        and entry.get('require_released') is False)
+                    retained_support = (
+                        item.get('physical_supported_verification')
+                        and entry.get('object') == binding.support_object
+                        and entry.get('require_released') is False
+                    )
                     _tighten(entry, limits[entry['object']])
                     if retained_support:
                         entry['require_released'] = False
         if item['name'] == binding.support_retreat_phase and settings.get('retreat_control'):
-            item['local_skill'].update(settings['retreat_control'], object=binding.support_object, requires_held_object=False)
+            item['local_skill'].update(
+                settings['retreat_control'], object=binding.support_object, requires_held_object=False
+            )
     axial = settings.get('released_axial_rotation')
     if axial is not None:
         # Only released-object checks after this insertion use swing/twist.
         # Held seating, earlier setup checks and all other parts keep their gates.
         released_entries = list(success)
-        for item in phases[first + 1:]:
+        for item in phases[first + 1 :]:
             if item.get('advance', {}).get('type') in ('physical_settle', 'plumbers_supported_settle'):
                 released_entries.extend(item['advance'].get('objects', []))
         for entry in released_entries:
             if isinstance(entry, dict) and entry.get('object') == binding.moving_object:
-                entry.update(orientation_axis=copy.deepcopy(axial['axis']),
-                             twist_tolerance=float(axial['twist_tolerance_rad']))
+                entry.update(
+                    orientation_axis=copy.deepcopy(axial['axis']), twist_tolerance=float(axial['twist_tolerance_rad'])
+                )
+    apply_released_pose_tolerances(phases, success, binding, settings)
+    apply_released_friction(phases, binding, settings)
     return phases, success
 
 
@@ -207,13 +352,24 @@ def compile_precision_insertions(payload, settings):
     resolved = {}
     for key, setting in settings.items():
         binding = bindings[key]
-        payload['phases'], payload['success'] = replace_insertion(payload['phases'], payload['success'], binding, setting)
+        payload['phases'], payload['success'] = replace_insertion(
+            payload['phases'], payload['success'], binding, setting
+        )
         config = InsertionConfig(**setting['controller_config'])
-        resolved[key] = dict(setting, binding=binding.to_dict(), controller='residual_rl', phase=binding.rl_phase,
-                             physics_hz=config.physics_hz, decimation=config.decimation, controller_version=config.version,
-                             held_seating_is_benchmark_success=False, release_and_unloaded_verification_preserved=True,
-                             intermediate_support_retained=next(p for p in payload['phases']
-                                                                if p['name'] == binding.settle_phase).get('physical_supported_verification', False))
+        resolved[key] = dict(
+            setting,
+            binding=binding.to_dict(),
+            controller='residual_rl',
+            phase=binding.rl_phase,
+            physics_hz=config.physics_hz,
+            decimation=config.decimation,
+            controller_version=config.version,
+            held_seating_is_benchmark_success=False,
+            release_and_unloaded_verification_preserved=True,
+            intermediate_support_retained=next(p for p in payload['phases'] if p['name'] == binding.settle_phase).get(
+                'physical_supported_verification', False
+            ),
+        )
     payload['precision_insertion_resolved'] = resolved
     if 'fabrica_canonical_resolved' in payload:
         payload['fabrica_canonical_resolved']['precision_insertion'] = copy.deepcopy(resolved)
@@ -225,7 +381,10 @@ def preflight_precision_policies(recipe_spec):
         path = Path(setting['checkpoint'])
         if not path.is_file():
             raise FileNotFoundError(f'Insertion {stage} checkpoint missing: {path}')
-        if setting.get('checkpoint_sha256') and hashlib.sha256(path.read_bytes()).hexdigest() != setting['checkpoint_sha256']:
+        if (
+            setting.get('checkpoint_sha256')
+            and hashlib.sha256(path.read_bytes()).hexdigest() != setting['checkpoint_sha256']
+        ):
             raise ValueError(f'Insertion {stage} checkpoint_sha256 mismatch: {path}')
 
 

@@ -7,13 +7,22 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from toolkits.factory_dual_franka_assembly.render_schedule import (
+    DEFAULT_LIVE_VIDEO_FPS,
+    DEFAULT_LIVE_VIDEO_FRAME_STRIDE,
+)
+from toolkits.factory_dual_franka_assembly.worker_logging import WorkerLogWriter
+
 DEFAULT_TASKS = (
     'beam',
     'car',
@@ -23,9 +32,14 @@ DEFAULT_TASKS = (
     'stool_circular',
 )
 FULL_TRACE_VARIABLES = (
-    'BEAM_CONTACT_TRACE_PATH', 'BEAM_CLOSE_CONTROL_TRACE_PATH', 'BEAM_CLOSE_GATE_TRACE_PATH',
-    'BEAM_HOLD_TRACE_PATH', 'BEAM_MOTION_TRACE_PATH', 'BEAM_IDLE_HOLD_TRACE_PATH',
-    'BEAM_SUPPORT_CONTACT_TRACE', 'BEAM_PHYSICS_DIAGNOSTICS',
+    'BEAM_CONTACT_TRACE_PATH',
+    'BEAM_CLOSE_CONTROL_TRACE_PATH',
+    'BEAM_CLOSE_GATE_TRACE_PATH',
+    'BEAM_HOLD_TRACE_PATH',
+    'BEAM_MOTION_TRACE_PATH',
+    'BEAM_IDLE_HOLD_TRACE_PATH',
+    'BEAM_SUPPORT_CONTACT_TRACE',
+    'BEAM_PHYSICS_DIAGNOSTICS',
 )
 
 
@@ -72,9 +86,7 @@ def _conda_executable() -> str:
     for candidate in candidates:
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
-    raise RuntimeError(
-        'Conda executable was not found. Set CONDA_EXE or activate the configured environment.'
-    )
+    raise RuntimeError('Conda executable was not found. Set CONDA_EXE or activate the configured environment.')
 
 
 def _worker_command(args, recipes: list[str], results_path: Path) -> list[str]:
@@ -90,40 +102,42 @@ def _worker_command(args, recipes: list[str], results_path: Path) -> list[str]:
     if not getattr(args, 'full_debug_traces', False):
         for name in FULL_TRACE_VARIABLES:
             command.extend(['-u', name])
-    command.extend([
-        'PYTHONNOUSERSITE=1',
-        'PYTHONUNBUFFERED=1',
-        f'OMP_NUM_THREADS={int(args.num_threads)}',
-        f'MKL_NUM_THREADS={int(args.num_threads)}',
-        f'OPENBLAS_NUM_THREADS={int(args.num_threads)}',
-        'python',
-        str(REPO_ROOT / 'roboassemblybench' / 'scripts' / 'generate_demos.py'),
-        '--worker-mode',
-        'collect',
-        '--worker-recipes',
-        *recipes,
-        '--worker-seeds',
-        str(int(args.seed)),
-        '--worker-layout-seeds',
-        str(int(args.layout_seed)),
-        '--worker-scene-profile',
-        args.scene_profile,
-        '--worker-results-path',
-        str(results_path),
-        '--output-dir',
-        str(Path(args.output_dir).resolve()),
-        '--headless',
-        '--skip-episode-steps',
-        '--runtime-constraint-monitor',
-        '--constraint-check-stride',
-        str(int(args.constraint_check_stride)),
-        '--assembly-sequence-precheck',
-        '--stage-trajectory-precheck',
-        '--stage-precheck-stride',
-        str(int(args.stage_precheck_stride)),
-        '--stage-precheck-waypoints',
-        str(int(args.stage_precheck_waypoints)),
-    ])
+    command.extend(
+        [
+            'PYTHONNOUSERSITE=1',
+            'PYTHONUNBUFFERED=1',
+            f'OMP_NUM_THREADS={int(args.num_threads)}',
+            f'MKL_NUM_THREADS={int(args.num_threads)}',
+            f'OPENBLAS_NUM_THREADS={int(args.num_threads)}',
+            'python',
+            str(REPO_ROOT / 'roboassemblybench' / 'scripts' / 'generate_demos.py'),
+            '--worker-mode',
+            'collect',
+            '--worker-recipes',
+            *recipes,
+            '--worker-seeds',
+            str(int(args.seed)),
+            '--worker-layout-seeds',
+            str(int(args.layout_seed)),
+            '--worker-scene-profile',
+            args.scene_profile,
+            '--worker-results-path',
+            str(results_path),
+            '--output-dir',
+            str(Path(args.output_dir).resolve()),
+            '--headless',
+            '--skip-episode-steps',
+            '--runtime-constraint-monitor',
+            '--constraint-check-stride',
+            str(int(args.constraint_check_stride)),
+            '--assembly-sequence-precheck',
+            '--stage-trajectory-precheck',
+            '--stage-precheck-stride',
+            str(int(args.stage_precheck_stride)),
+            '--stage-precheck-waypoints',
+            str(int(args.stage_precheck_waypoints)),
+        ]
+    )
     if getattr(args, 'domain_randomization', False):
         command.append('--domain-randomization')
     if args.record_live_video:
@@ -170,16 +184,35 @@ def _run_worker(command: list[str], *, log_path: Path, args) -> tuple[int, dict 
     resource_abort = None
     next_status_at = started_at
     with log_path.open('w', encoding='utf-8') as log_file:
+        log_writer = WorkerLogWriter(log_file, aggregate=not getattr(args, 'full_debug_traces', False))
+        log_errors = []
         process = subprocess.Popen(
             command,
             cwd=REPO_ROOT,
             env=os.environ.copy(),
-            stdout=log_file,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1,
         )
+
+        def capture_output():
+            try:
+                for line in process.stdout:
+                    log_writer.write(line)
+                log_writer.close()
+            except Exception as exc:
+                log_errors.append(repr(exc))
+
+        log_thread = threading.Thread(target=capture_output, name='validation-worker-log', daemon=True)
+        log_thread.start()
         try:
             while process.poll() is None:
+                if log_errors:
+                    raise RuntimeError(f'Worker log capture failed: {log_errors[0]}')
                 available_memory = _available_memory_gib()
                 minimum_available = min(minimum_available, available_memory)
                 if available_memory < float(args.abort_available_memory_gib):
@@ -216,11 +249,26 @@ def _run_worker(command: list[str], *, log_path: Path, args) -> tuple[int, dict 
         except BaseException:
             _terminate_process_group(process)
             raise
+        finally:
+            log_thread.join(timeout=30.0)
+            if log_thread.is_alive():
+                _terminate_process_group(process)
+                raise RuntimeError('Worker output pipe did not close after process termination')
+            process.stdout.close()
+            if not log_errors:
+                _write_json_atomic(log_path.with_name(log_path.stem + '_log_summary.json'), log_writer.close())
+        if log_errors:
+            raise RuntimeError(f'Worker log capture failed: {log_errors[0]}')
     elapsed = max(time.monotonic() - started_at, 0.0)
-    return int(process.wait()), resource_abort, {
-        'elapsed_seconds': elapsed,
-        'minimum_available_memory_gib': minimum_available,
-    }
+    return (
+        int(process.wait()),
+        resource_abort,
+        {
+            'elapsed_seconds': elapsed,
+            'minimum_available_memory_gib': minimum_available,
+            'worker_log': log_writer.counts,
+        },
+    )
 
 
 def _phase_at_step(result: dict, step: int | None) -> str | None:
@@ -310,9 +358,7 @@ def _summarize_results(
         'num_completed': len(task_results),
         'num_successful': sum(item['success'] for item in task_results),
         'missing_recipes': missing_recipes,
-        'runtime_collision_total': sum(
-            item['runtime_collisions']['violation_total'] for item in task_results
-        ),
+        'runtime_collision_total': sum(item['runtime_collisions']['violation_total'] for item in task_results),
         'stage_precheck_collision_total': sum(
             item['stage_precheck_collisions']['violation_total'] for item in task_results
         ),
@@ -341,11 +387,14 @@ def main() -> int:
     parser.add_argument('--num-threads', type=int, default=4)
     parser.add_argument('--rendering-interval', type=int, default=2399)
     parser.add_argument('--record-live-video', action='store_true')
-    parser.add_argument('--live-video-fps', type=int, default=15)
-    parser.add_argument('--live-video-frame-stride', type=int, default=16)
+    parser.add_argument('--live-video-fps', type=int, default=DEFAULT_LIVE_VIDEO_FPS)
+    parser.add_argument('--live-video-frame-stride', type=int, default=DEFAULT_LIVE_VIDEO_FRAME_STRIDE)
     parser.add_argument('--live-video-encoder', choices=('stream', 'png'), default='stream')
-    parser.add_argument('--full-debug-traces', action='store_true',
-                        help='Retain explicitly configured full debug trace environment variables; off by default.')
+    parser.add_argument(
+        '--full-debug-traces',
+        action='store_true',
+        help='Retain explicitly configured full debug trace environment variables; off by default.',
+    )
     parser.add_argument('--minimum-start-memory-gib', type=float, default=2.5)
     parser.add_argument('--abort-available-memory-gib', type=float, default=1.5)
     parser.add_argument('--low-memory-grace-polls', type=int, default=2)

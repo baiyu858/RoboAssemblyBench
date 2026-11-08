@@ -19,8 +19,8 @@ from internutopia.core.config import Config, SimConfig
 from internutopia.core.util import has_display
 from internutopia.core.vec_env import Env
 from internutopia_extension import import_fabrica_assembly_extensions
-from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
 from roboassemblybench.core.domain_randomization import RANDOMIZATION_PROFILE_CHOICES
+from roboassemblybench.datasets.cartesian_episode import CompactCartesianEpisodeRecorder
 from toolkits.constraint_checking.integration.pipeline import (
     RuntimeConstraintEpisodeHook,
 )
@@ -30,9 +30,15 @@ from toolkits.constraint_checking.integration.precheck_pipeline import (
 from toolkits.factory_dual_franka_assembly.demo_policy import (
     DualFrankaAssemblyDemoPolicy,
 )
+from toolkits.factory_dual_franka_assembly.render_schedule import (
+    DEFAULT_LIVE_VIDEO_FPS,
+    DEFAULT_LIVE_VIDEO_FRAME_STRIDE,
+    render_interval,
+)
+from toolkits.factory_dual_franka_assembly.rollout_performance import RolloutPerformance
 from toolkits.factory_dual_franka_assembly.scene_builder import (
-    build_dual_franka_assembly_episode,
     build_dual_franka_assembly_batch,
+    build_dual_franka_assembly_episode,
 )
 from toolkits.factory_dual_franka_assembly.scene_profiles import (
     DEFAULT_SCENE_PROFILE,
@@ -42,8 +48,6 @@ from toolkits.factory_dual_franka_assembly.task_specs import (
     list_task_recipes,
     load_task_recipe,
 )
-from toolkits.factory_dual_franka_assembly.render_schedule import render_interval
-from toolkits.factory_dual_franka_assembly.rollout_performance import RolloutPerformance
 
 RUNTIME_CAMERA_WARMUP_RENDER_STEPS = 8
 
@@ -298,11 +302,18 @@ class LiveRolloutVideoRecorder:
                 self._written_png_counts[camera_video_key] = 0
                 self._frame_shapes[camera_video_key] = (int(frame_rgb.shape[1]), int(frame_rgb.shape[0]))
                 if self.encoder_backend == 'stream':
-                    from toolkits.factory_dual_franka_assembly.streaming_video import StreamingVideoWriter
-                    video_path = (self.output_dir / f'episode_{self.episode_idx:04d}_live_videos'
-                                  / f'{camera_video_key.replace(".", "_")}.mp4')
+                    from toolkits.factory_dual_franka_assembly.streaming_video import (
+                        StreamingVideoWriter,
+                    )
+
+                    video_path = (
+                        self.output_dir
+                        / f'episode_{self.episode_idx:04d}_live_videos'
+                        / f'{camera_video_key.replace(".", "_")}.mp4'
+                    )
                     self._stream_writers[camera_video_key] = StreamingVideoWriter(
-                        video_path, width=frame_rgb.shape[1], height=frame_rgb.shape[0], fps=self.fps)
+                        video_path, width=frame_rgb.shape[1], height=frame_rgb.shape[0], fps=self.fps
+                    )
 
             self._image_stats[camera_video_key].update(frame_rgb)
             frame_index = self._written_png_counts[camera_video_key]
@@ -340,8 +351,11 @@ class LiveRolloutVideoRecorder:
             frame_dir = self._frame_dirs.get(camera_video_key)
             width, height = self._frame_shapes.get(camera_video_key, (0, 0))
             video_path = video_root_dir / f'{camera_video_key.replace(".", "_")}.mp4'
-            encode_summary = (stream_summaries[camera_video_key] if self.encoder_backend == 'stream'
-                              else _encode_mp4_from_pngs(frame_dir, video_path, self.fps))
+            encode_summary = (
+                stream_summaries[camera_video_key]
+                if self.encoder_backend == 'stream'
+                else _encode_mp4_from_pngs(frame_dir, video_path, self.fps)
+            )
             videos[camera_video_key] = str(video_path)
             summaries[camera_video_key] = {
                 'frames_dir': None if frame_dir is None else str(frame_dir),
@@ -434,15 +448,15 @@ def _warm_up_runtime_cameras(env, *, steps: int = RUNTIME_CAMERA_WARMUP_RENDER_S
     return env.get_observations()
 
 
-def _run_task_sequence(
+def _run_task_sequence(  # noqa: C901
     task_configs,
     headless: bool,
     output_dir: Path | None = None,
     results_output_path: Path | None = None,
     *,
     record_live_video: bool = False,
-    live_video_fps: int = 30,
-    live_video_frame_stride: int = 8,
+    live_video_fps: int = DEFAULT_LIVE_VIDEO_FPS,
+    live_video_frame_stride: int = DEFAULT_LIVE_VIDEO_FRAME_STRIDE,
     keep_video_frames: bool = False,
     live_video_encoder: str = 'stream',
     runtime_robochecker: bool = False,
@@ -487,7 +501,8 @@ def _run_task_sequence(
         live_stride=live_video_frame_stride if record_live_video else None,
         dataset_stride=dataset_frame_stride if record_lerobot_raw and not record_trajectory_only else None,
         checker_stride=runtime_rgb_frame_stride if runtime_robochecker and runtime_capture_rgb else None,
-        override=rendering_interval_override)
+        override=rendering_interval_override,
+    )
     env = _build_env(
         task_configs=task_configs,
         headless=headless,
@@ -524,8 +539,9 @@ def _run_task_sequence(
     )
     last_task = None
     rollout_started_at = time.monotonic()
-    performance = RolloutPerformance(output_dir, physics_fps=simulation_fps,
-                                     rendering_interval=rollout_rendering_interval)
+    performance = RolloutPerformance(
+        output_dir, physics_fps=simulation_fps, rendering_interval=rollout_rendering_interval
+    )
     rollout_loop_entered = False
     initial_tasks = getattr(env.runner, 'current_tasks', {})
     if initial_tasks:
@@ -624,11 +640,7 @@ def _run_task_sequence(
             # normal termination so recorders are finalized as successful.
             finished_metrics = list(getattr(env.runner, 'last_finished_task_metrics', []) or [])
             runner_completed = bool(
-                finished_metrics
-                and (
-                    task_name not in getattr(env.runner, 'current_tasks', {})
-                    or env.finished()
-                )
+                finished_metrics and (task_name not in getattr(env.runner, 'current_tasks', {}) or env.finished())
             )
             if runner_completed and not terminated[0]:
                 terminated = list(terminated)
@@ -684,12 +696,18 @@ def _run_task_sequence(
                     terminated = list(terminated)
                     terminated[0] = True
 
-            performance.record(phase=phase_before_step, task=task, observations=obs_list[0], timings={
-                'policy': policy_done_at - step_started_at,
-                'precheck': precheck_done_at - policy_done_at,
-                'env_step_and_dataset': env_done_at - precheck_done_at,
-                'constraint_monitor': safety_done_at - env_done_at,
-                'recording_and_other': time.monotonic() - safety_done_at})
+            performance.record(
+                phase=phase_before_step,
+                task=task,
+                observations=obs_list[0],
+                timings={
+                    'policy': policy_done_at - step_started_at,
+                    'precheck': precheck_done_at - policy_done_at,
+                    'env_step_and_dataset': env_done_at - precheck_done_at,
+                    'constraint_monitor': safety_done_at - env_done_at,
+                    'recording_and_other': time.monotonic() - safety_done_at,
+                },
+            )
             if terminated[0]:
                 metrics = _attach_policy_diagnostics(
                     finished_metrics[-1] if runner_completed else task.calculate_metrics(),
@@ -902,9 +920,7 @@ def _build_collect_worker_task_configs(
     elif len(recipes) == len(seeds):
         episode_recipes = recipes
     else:
-        raise ValueError(
-            'A multi-recipe collect worker requires either one shared seed or one seed per recipe.'
-        )
+        raise ValueError('A multi-recipe collect worker requires either one shared seed or one seed per recipe.')
 
     if layout_seeds is None:
         resolved_layout_seeds = list(seeds)
@@ -929,9 +945,7 @@ def _build_collect_worker_task_configs(
             randomization_profile=randomization_profile,
             control_fps=control_fps,
         )
-        for episode_idx, (recipe, seed, layout_seed) in enumerate(
-            zip(episode_recipes, seeds, resolved_layout_seeds)
-        )
+        for episode_idx, (recipe, seed, layout_seed) in enumerate(zip(episode_recipes, seeds, resolved_layout_seeds))
     ]
 
 
@@ -1025,19 +1039,19 @@ def _run_replay_sequence(
             raise RuntimeError('Replay task seed does not match its authoritative trajectory.')
         source_trajectory_path = Path(source_metadata['trajectory_path'])
         recorder = CompactCartesianEpisodeRecorder(
-                output_dir=output_dir,
-                episode_idx=episode_idx,
-                task=task,
-                fps=int(source_metadata['fps']),
-                frame_stride=int(source_metadata['frame_stride']),
-                simulation_fps=int(source_metadata['simulation_fps']),
-                rendering_interval=int(source_metadata['frame_stride']) - 1,
-                record_media=True,
-                video_codec=video_codec,
-                video_crf=video_crf,
-                video_preset=video_preset,
-                depth_compression_level=depth_compression_level,
-                allow_replay_recipe_fingerprint_mismatch=allow_recipe_fingerprint_mismatch,
+            output_dir=output_dir,
+            episode_idx=episode_idx,
+            task=task,
+            fps=int(source_metadata['fps']),
+            frame_stride=int(source_metadata['frame_stride']),
+            simulation_fps=int(source_metadata['simulation_fps']),
+            rendering_interval=int(source_metadata['frame_stride']) - 1,
+            record_media=True,
+            video_codec=video_codec,
+            video_crf=video_crf,
+            video_preset=video_preset,
+            depth_compression_level=depth_compression_level,
+            allow_replay_recipe_fingerprint_mismatch=allow_recipe_fingerprint_mismatch,
         )
         frame_count = recorder.prepare_replay_source(Path(source_metadata_path))
         with np.load(source_trajectory_path) as trajectory:
@@ -1058,13 +1072,10 @@ def _run_replay_sequence(
                     obs=obs_list[0],
                     frame_index=frame_index,
                 ):
-                    raise RuntimeError(
-                        f'Replay camera observations are unavailable at frame {frame_index}.'
-                    )
+                    raise RuntimeError(f'Replay camera observations are unavailable at frame {frame_index}.')
                 if frame_index == 0 or (frame_index + 1) % 100 == 0 or frame_index + 1 == frame_count:
                     print(
-                        '[replay-progress] '
-                        f'episode={episode_idx} frame={frame_index + 1}/{frame_count}',
+                        '[replay-progress] ' f'episode={episode_idx} frame={frame_index + 1}/{frame_count}',
                         flush=True,
                     )
         source_metrics = dict(source_metadata.get('metrics') or {})
@@ -1201,9 +1212,7 @@ def _worker_mode(args, *, headless: bool):
     task_configs = _build_collect_worker_task_configs(
         recipes=worker_recipes,
         seeds=[int(seed) for seed in (args.worker_seeds or [])],
-        layout_seeds=None
-        if not args.worker_layout_seeds
-        else [int(seed) for seed in args.worker_layout_seeds],
+        layout_seeds=None if not args.worker_layout_seeds else [int(seed) for seed in args.worker_layout_seeds],
         scene_profile=scene_profile,
         attach_runtime_cameras=bool(
             args.record_live_video
@@ -1275,8 +1284,8 @@ def _invoke_worker(
     max_trials: int,
     seeds: list[int] | None = None,
     record_live_video: bool = False,
-    live_video_fps: int = 30,
-    live_video_frame_stride: int = 8,
+    live_video_fps: int = DEFAULT_LIVE_VIDEO_FPS,
+    live_video_frame_stride: int = DEFAULT_LIVE_VIDEO_FRAME_STRIDE,
     keep_video_frames: bool = False,
     live_video_encoder: str = 'stream',
     runtime_robochecker: bool = False,
@@ -1385,8 +1394,8 @@ def _results_from_worker(
     max_trials: int,
     seeds: list[int] | None = None,
     record_live_video: bool = False,
-    live_video_fps: int = 30,
-    live_video_frame_stride: int = 8,
+    live_video_fps: int = DEFAULT_LIVE_VIDEO_FPS,
+    live_video_frame_stride: int = DEFAULT_LIVE_VIDEO_FRAME_STRIDE,
     keep_video_frames: bool = False,
     live_video_encoder: str = 'stream',
     runtime_robochecker: bool = False,
@@ -1532,8 +1541,8 @@ def main():
         help='Cap each worker episode for lifecycle smoke tests; omitted for full collection.',
     )
     parser.add_argument('--record-live-video', action='store_true')
-    parser.add_argument('--live-video-fps', type=int, default=30)
-    parser.add_argument('--live-video-frame-stride', type=int, default=8)
+    parser.add_argument('--live-video-fps', type=int, default=DEFAULT_LIVE_VIDEO_FPS)
+    parser.add_argument('--live-video-frame-stride', type=int, default=DEFAULT_LIVE_VIDEO_FRAME_STRIDE)
     parser.add_argument('--live-video-encoder', choices=('stream', 'png'), default='stream')
     parser.add_argument('--keep-video-frames', action='store_true')
     parser.add_argument('--record-lerobot-raw', action='store_true')

@@ -2,9 +2,11 @@
 from functools import reduce
 from math import gcd
 
+DEFAULT_LIVE_VIDEO_FPS = 10
+DEFAULT_LIVE_VIDEO_FRAME_STRIDE = 24
 
-def render_interval(*, simulation_fps, live_stride=None, dataset_stride=None,
-                    checker_stride=None, override=None):
+
+def render_interval(*, simulation_fps, live_stride=None, dataset_stride=None, checker_stride=None, override=None):
     periods = [p for p in (live_stride, dataset_stride, checker_stride) if p is not None]
     if any(type(p) is not int or p <= 0 for p in periods):
         raise ValueError('Image capture periods must be positive integer physics steps.')

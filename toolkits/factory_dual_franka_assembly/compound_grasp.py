@@ -1,7 +1,10 @@
 """Measure additional bodies held by the same jaw pair, without pose constraints."""
 import numpy as np
 
-from toolkits.factory_dual_franka_assembly.planner_primitives import pose_error, relative_pose
+from toolkits.factory_dual_franka_assembly.planner_primitives import (
+    pose_error,
+    relative_pose,
+)
 
 
 def compound_close_metrics(task, robot, spec, primary_metrics):
@@ -17,9 +20,12 @@ def compound_close_metrics(task, robot, spec, primary_metrics):
         observation = metrics[side].get('force_observation')
         if observation is not None:
             metrics[side]['force_observation'] = {**observation, 'contacts': list(observation.get('contacts', []))}
-    primary_floor = float(spec.get('primary_minimum_finger_force', 0.))
-    ready = all(bool((primary_metrics.get(s) or {}).get('force_probe_valid'))
-                and float((primary_metrics.get(s) or {}).get('force', 0.)) >= primary_floor for s in sides)
+    primary_floor = float(spec.get('primary_minimum_finger_force', 0.0))
+    ready = all(
+        bool((primary_metrics.get(s) or {}).get('force_probe_valid'))
+        and float((primary_metrics.get(s) or {}).get('force', 0.0)) >= primary_floor
+        for s in sides
+    )
     bodies = {}
     for group in spec.get('additional_grasp_contacts', []):
         extra = task._gripper_contact_metrics(group['object'], robot, attach_spec={**spec, **group})
@@ -30,11 +36,12 @@ def compound_close_metrics(task, robot, spec, primary_metrics):
         bodies[group['object']] = dict(forces=forces, valid=valid, contact_ready=contact)
         ready = ready and contact
         for side, force in zip(sides, forces):
-            metrics[side]['force'] = float(metrics[side].get('force', 0.)) + force
+            metrics[side]['force'] = float(metrics[side].get('force', 0.0)) + force
             metrics[side]['force_probe_valid'] = bool(metrics[side].get('force_probe_valid') and valid)
             extra_observation = (extra.get(side) or {}).get('force_observation') or {}
             metrics[side].setdefault('force_observation', {}).setdefault('contacts', []).extend(
-                extra_observation.get('contacts', []))
+                extra_observation.get('contacts', [])
+            )
     return metrics, dict(ready=ready, bodies=bodies)
 
 
@@ -49,11 +56,18 @@ def setup_pose_failure(task, config):
         reference = group.setdefault(name, pose)
         point = config.get('position_reference_points', {}).get(name)
         distance, angle = pose_error(*pose, *reference, position_reference_point=point)
-        if distance > config['position_limit'] or angle > config['orientation_limit']:
-            return dict(reason='setup_object_moved', object=name,
-                        position_drift=float(distance), orientation_drift=float(angle),
-                        root_position_drift=float(np.linalg.norm(pose[0] - np.asarray(reference[0]))),
-                        position_reference_point=point)
+        position_limit = config.get('position_limits', {}).get(name, config['position_limit'])
+        if distance > position_limit or angle > config['orientation_limit']:
+            return dict(
+                reason='setup_object_moved',
+                object=name,
+                position_drift=float(distance),
+                orientation_drift=float(angle),
+                position_limit=float(position_limit),
+                orientation_limit=float(config['orientation_limit']),
+                root_position_drift=float(np.linalg.norm(pose[0] - np.asarray(reference[0]))),
+                position_reference_point=point,
+            )
     return None
 
 
@@ -66,9 +80,14 @@ def compound_grasp_sample(task, robot, attachment, primary_metrics):
     spec = attachment['attach_spec']
     groups = spec.get('additional_grasp_contacts', [])
     fingers = [dict(primary_metrics.get(side) or {}) for side in ('left_finger', 'right_finger')]
-    floor = float(spec.get('primary_minimum_finger_force', 0.))
-    status = dict(ready=(floor == 0. or all(f.get('force_probe_valid') and float(f.get('force', 0.)) >= floor for f in fingers)),
-                  failure=None, bodies={})
+    floor = float(spec.get('primary_minimum_finger_force', 0.0))
+    status = dict(
+        ready=(
+            floor == 0.0 or all(f.get('force_probe_valid') and float(f.get('force', 0.0)) >= floor for f in fingers)
+        ),
+        failure=None,
+        bodies={},
+    )
     if not groups:
         return fingers, status
     anchors = attachment.setdefault('additional_contact_anchors', {})
@@ -95,7 +114,7 @@ def compound_grasp_sample(task, robot, attachment, primary_metrics):
         status['ready'] = bool(status['ready'] and contact)
         status['bodies'][obj] = detail
         for total, extra in zip(fingers, actual):
-            total['force'] = float(total.get('force', 0.)) + float(extra.get('force', 0.))
+            total['force'] = float(total.get('force', 0.0)) + float(extra.get('force', 0.0))
             total['force_probe_valid'] = bool(total.get('force_probe_valid') and extra.get('force_probe_valid'))
     step = int(task.step_counter)
     if status['ready']:

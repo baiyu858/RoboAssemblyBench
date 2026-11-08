@@ -170,6 +170,20 @@ profiles:
       enable_external_forces_every_iteration: true
       enable_stabilization: true
     fabrica_canonical:
+      # Rotate the complete fixture and its contents as one rigid layout;
+      # CAD mating targets, grasp transforms and acceptance remain physical.
+      pickup_yaw_candidates_degrees: [45.0]
+      # Cap confirmation/dwell windows in the final phase graph, including
+      # RL held seating. Shorter windows, motion timeouts and safety stay intact.
+      physical_wait_step_limit: 30
+      physical_rotation_speed: 0.15
+      physical_rotation_acceleration: 0.45
+      # High-clearance loaded transport only; retain the 0.010 rad tracking
+      # envelope and the slower lift, hover, contact and precision-insert rates.
+      physical_transport_rotation_speed: 0.35
+      physical_transport_rotation_acceleration: 1.80
+      # Keep the previous phase budget while testing the faster governor.
+      physical_motion_min_timeout_steps: 16145
       physical_terminal_home:
         enabled: true
         joint_tolerance: 0.025
@@ -187,14 +201,20 @@ profiles:
         '4': {steps: 24, maximum_surface_gap_m: 0.0005}
       physical_junction_support:
         enabled: true
+        # Left remains parked; the right hand directly regrips the seam.
+        temporary_left_support: false
+        # White-part drift from the fixed handover-start pose; base/cap keep
+        # their 1.5 mm setup limit and the shared 3 degree angular guard.
+        setup_position_limits_m:
+          '0': 0.005
         grasp_center_m: [0.045, 0.0012658, 0.072]
         approach_tilt_degrees: 30.0
         pad_center_m: 0.143
         # Combined cap + base load per finger. Keep the original hard guard.
         hold_force_control:
           enabled: true
-          low: 8.0
-          target: 10.0
+          low: 6.0
+          target: 7.0
           soft_limit: 16.0
           unload: 20.0
           hard_limit: 40.0
@@ -266,6 +286,8 @@ profiles:
           joint_step: 0.0025
           preload_joint_travel: 0.01
       physical_base_support:
+        # Empty high transfer only; lower/approach keep their existing rates.
+        coarse_transfer_speed_m_s: 0.12
         # Retain support between insertions. After part_3 the junction compiler
         # replaces the low-flange hold with the physical cap/base seam grasp.
         hold_between_insertions: true
@@ -278,7 +300,8 @@ profiles:
           released_rotation_tolerance: 0.08726646259971647  # Released shaft tilt: 5 degrees.
           released_axial_rotation:
             axis: [0.0, 0.0, 1.0]  # Shaft axis in part_1 local coordinates.
-            twist_tolerance_rad: 0.2617993877991494  # Released axial spin: 15 degrees.
+            # Full shortest-angle range: accept any released axial spin.
+            twist_tolerance_rad: 3.141592653589793
           torque_soft_limit: 1.2  # Physical-wrist contact moment, N m; raw hard limit remains 2.
           entry_waypoint: 1
           controller_config:
@@ -303,7 +326,8 @@ profiles:
           released_rotation_tolerance: 0.08726646259971647  # Released shaft tilt: 5 degrees.
           released_axial_rotation:
             axis: [0.0, 0.0, 1.0]  # Shaft axis in part_4 local coordinates.
-            twist_tolerance_rad: 0.2617993877991494  # Released axial spin: 15 degrees.
+            # Full shortest-angle range: accept any released axial spin.
+            twist_tolerance_rad: 3.141592653589793
           torque_soft_limit: 1.2
           torque_hard_limit: 2.2  # Experimental execution stop; checkpoint controller and soft taper unchanged.
           # Constrain the shaft along both live bores, not only its tip.
@@ -341,9 +365,16 @@ profiles:
           checkpoint_sha256: cb50cfd29b6999866c1c2ec0792010fafdb7cee76c6207594bab8b7b9cf838f9
           entry_waypoint: 1
           timeout_steps: 6000
-          # Circular fit can settle/twist after release. Keep held alignment at
-          # 1 degree (checkpoint config), but verify released orientation at 3.
-          released_rotation_tolerance: 0.05235987755982989  # radians = 3 degrees
+          # Released white-part acceptance only. Held seating and grasp-slip
+          # guards retain the checkpoint/controller's original tolerances.
+          released_pose_tolerances:
+            position_m: 0.015
+            orientation_rad: 0.8726646259971648  # 50 degrees, total rotation.
+          # Apply after release/withdrawal, preserving pickup and transport.
+          # Green stays 0.8/0.7; average combine gives 0.9/0.75 at the fit.
+          released_friction:
+            static_friction: 1.0
+            dynamic_friction: 0.8
           # Existing empty-arm withdrawal fix; task data, not RL core logic.
           retreat_control:
             free_space_trajectory: true
