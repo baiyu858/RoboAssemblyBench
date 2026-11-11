@@ -16,6 +16,7 @@ class RolloutPerformance:
         self.holds = {}
         self.previous_poses = {}
         self.physics_read_cache = {}
+        self.read_owners = {}
 
     @staticmethod
     def _pose_delta(a, b):
@@ -27,6 +28,7 @@ class RolloutPerformance:
     def record(self, *, phase, timings, task, observations=None):
         self.steps += 1
         self.physics_read_cache = getattr(task, '_physics_read_cache_counts', {})
+        self.read_owners = getattr(task, 'robots', {})
         row = self.phases.setdefault(phase, {'steps': 0, 'seconds': {}})
         row['steps'] += 1
         for key, value in timings.items():
@@ -95,6 +97,19 @@ class RolloutPerformance:
 
     def flush(self, *, finalized=False):
         elapsed = time.perf_counter() - self.started
+        state_caches, image_caches = {}, {}
+        for name, robot in self.read_owners.items():
+            state_caches[name] = {
+                'robot': getattr(robot, '_physics_read_cache_counts', {}),
+                'controllers': {
+                    key: getattr(c, '_physics_read_cache_counts', {})
+                    for key, c in getattr(robot, 'controllers', {}).items()
+                },
+            }
+            for key, sensor in getattr(robot, 'sensors', {}).items():
+                cache = getattr(sensor, '_render_frame_cache', None)
+                if cache is not None:
+                    image_caches[f'{name}/{key}'] = cache.counts
         result = {
             'finalized': finalized,
             'steps': self.steps,
@@ -108,6 +123,8 @@ class RolloutPerformance:
             'phases': self.phases,
             'cached_hold_summary': self.holds,
             'physics_read_cache': self.physics_read_cache,
+            'state_read_caches': state_caches,
+            'image_read_caches': image_caches,
             'timing_scope': 'CPU wall times including synchronization; not an exclusive GPU profile.',
         }
         if self.path is not None:

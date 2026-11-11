@@ -7,19 +7,46 @@ import math
 
 import numpy as np
 
+from .bore_fit import minimax_correction
 from .control import basis_for_axis, rotation_quaternion, rotation_vector, vector
-from .geometry import compose_pose, quat_conjugate, quat_multiply, quat_rotate, relative_pose
+from .geometry import (
+    compose_pose,
+    quat_conjugate,
+    quat_multiply,
+    quat_rotate,
+    relative_pose,
+)
 
 
 def alignment_settings(value):
     if value is None:
         return None
-    allowed = {'shaft_origin_m', 'shaft_axis', 'sections', 'radial_clearance_m',
-               'margin_m', 'linear_speed', 'angular_speed'}
+    allowed = {
+        'shaft_origin_m',
+        'shaft_axis',
+        'sections',
+        'radial_clearance_m',
+        'margin_m',
+        'linear_speed',
+        'angular_speed',
+        'keep_grip_direction',
+        'incompatible_steps',
+    }
     if not isinstance(value, dict) or set(value) - allowed:
         raise ValueError('axis_alignment has unknown settings or is not a mapping')
-    result = dict(radial_clearance_m=.00025, margin_m=.00008, linear_speed=.002, angular_speed=.04)
+    result = dict(
+        radial_clearance_m=0.00025,
+        margin_m=0.00008,
+        linear_speed=0.002,
+        angular_speed=0.04,
+        keep_grip_direction=False,
+        incompatible_steps=0,
+    )
     result.update(value)
+    if type(result['keep_grip_direction']) is not bool:
+        raise ValueError('axis_alignment.keep_grip_direction must be a boolean')
+    if type(result['incompatible_steps']) is not int or result['incompatible_steps'] < 0:
+        raise ValueError('axis_alignment.incompatible_steps must be a nonnegative integer')
     for key in ('radial_clearance_m', 'margin_m', 'linear_speed', 'angular_speed'):
         x = result[key]
         if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) or x <= 0:
@@ -37,14 +64,19 @@ def alignment_settings(value):
             raise ValueError('axis_alignment sections require object, center_m and axis')
         if not isinstance(section['object'], str) or not section['object']:
             raise ValueError('axis_alignment section object must be named')
-        result['sections'].append(dict(object=section['object'], center_m=vector(section['center_m'], 3).tolist(),
-                                       axis=basis_for_axis(section['axis'])[:, 2].tolist()))
+        result['sections'].append(
+            dict(
+                object=section['object'],
+                center_m=vector(section['center_m'], 3).tolist(),
+                axis=basis_for_axis(section['axis'])[:, 2].tolist(),
+            )
+        )
     return result
 
 
 def _skew(v):
     x, y, z = v
-    return np.array([[0., -z, y], [z, 0., -x], [-y, x, 0.]])
+    return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])
 
 
 class BoreAlignment:
@@ -58,7 +90,7 @@ class BoreAlignment:
     def allowance(self):
         return self.settings['radial_clearance_m'] - self.settings['margin_m']
 
-    def measure(self, moving, poses, pivot, basis):
+    def _section_data(self, moving, poses, pivot, basis):
         c = self.settings
         origin = moving[0] + quat_rotate(moving[1], c['shaft_origin_m'])
         axis = quat_rotate(moving[1], c['shaft_axis'])
@@ -68,7 +100,7 @@ class BoreAlignment:
             center = p + quat_rotate(q, spec['center_m'])
             normal = quat_rotate(q, spec['axis'])
             denominator = float(np.dot(normal, axis))
-            if abs(denominator) < .5:
+            if abs(denominator) < 0.5:
                 raise ValueError('shaft axis is not within 60 degrees of the bore')
             hit = origin + axis * (np.dot(normal, center - origin) / denominator)
             plane = basis_for_axis(normal)[:, :2]
@@ -77,25 +109,48 @@ class BoreAlignment:
             jacobian = plane.T @ projection @ np.column_stack((basis[:, :2], -_skew(hit - pivot) @ basis[:, :2]))
             errors.append(error)
             jacobians.append(jacobian)
-            sections.append(dict(object=spec['object'], center_local_m=spec['center_m'],
-                                 axis_error_m=float(np.linalg.norm(error)),
-                                 intersection_world_m=hit, center_world_m=center))
-        # Scaling makes millimetres and milliradians comparable for the fit.
-        scale = np.diag([1., 1., 20., 20.])
-        j = np.vstack(jacobians) @ scale
-        if np.linalg.matrix_rank(j) < 4:
-            raise ValueError('axis_alignment needs distinct axial section heights')
-        correction = scale @ np.linalg.lstsq(j, -np.concatenate(errors), rcond=None)[0]
+            sections.append(
+                dict(
+                    object=spec['object'],
+                    center_local_m=spec['center_m'],
+                    axis_error_m=float(np.linalg.norm(error)),
+                    intersection_world_m=hit,
+                    center_world_m=center,
+                )
+            )
+        return np.concatenate(errors), np.vstack(jacobians), sections
+
+    def measure(self, moving, poses, pivot, basis):
+        error, jacobian, sections = self._section_data(moving, poses, pivot, basis)
+        correction, fit_error, method = minimax_correction(jacobian, error, self.allowance)
         world = np.r_[basis[:, :2] @ correction[:2], basis[:, :2] @ correction[2:]]
-        return dict(max_error_m=max(s['axis_error_m'] for s in sections),
-                    allowance_m=self.allowance, ready=all(s['axis_error_m'] <= self.allowance for s in sections),
-                    correction_world=world, sections=sections)
+        # Re-evaluate the finite rotation, not only its linear approximation.
+        corrected = (
+            pivot + world[:3] + quat_rotate(rotation_quaternion(world[3:]), moving[0] - pivot),
+            quat_multiply(rotation_quaternion(world[3:]), moving[1]),
+        )
+        _, _, fitted = self._section_data(corrected, poses, pivot + world[:3], basis)
+        exact_fit = max(s['axis_error_m'] for s in fitted)
+        return dict(
+            max_error_m=max(s['axis_error_m'] for s in sections),
+            allowance_m=self.allowance,
+            ready=all(s['axis_error_m'] <= self.allowance for s in sections),
+            correction_world=world,
+            sections=sections,
+            fit_method=method,
+            linear_fit_error_m=fit_error,
+            receiver_fit_error_m=exact_fit,
+            receiver_fit_feasible=exact_fit <= self.allowance + 1e-9,
+        )
 
     def bounded_correction(self, sample, dt):
         raw = sample['correction_world']
         # A common scale preserves the fit's translation/rotation ratio.
-        factor = min(1., self.settings['linear_speed'] * dt / max(np.linalg.norm(raw[:3]), 1e-15),
-                     self.settings['angular_speed'] * dt / max(np.linalg.norm(raw[3:]), 1e-15))
+        factor = min(
+            1.0,
+            self.settings['linear_speed'] * dt / max(np.linalg.norm(raw[:3]), 1e-15),
+            self.settings['angular_speed'] * dt / max(np.linalg.norm(raw[3:]), 1e-15),
+        )
         return raw * factor
 
     def constrain_target(self, *, target, current, moving, poses, basis, sample, dt, relief_start=None):
@@ -103,18 +158,21 @@ class BoreAlignment:
         local = relative_pose(*current, *moving)
 
         def predicted(pose):
-            return self.measure(compose_pose(*pose, *local), poses, pose[0], basis)['max_error_m']
+            _, _, sections = self._section_data(compose_pose(*pose, *local), poses, pose[0], basis)
+            return max(s['axis_error_m'] for s in sections)
 
         if relief_start is not None:
             # Only scale the already validated unloading segment. Do not add
             # alignment movement against the reaction or lose holding bias.
             limit = max(self.allowance, predicted(relief_start))
             angle = rotation_vector(quat_multiply(target[1], quat_conjugate(relief_start[1])))
-            for fraction in (1., .5, .25, .125, .0625):
-                candidate = (relief_start[0] + fraction * (target[0] - relief_start[0]),
-                             quat_multiply(rotation_quaternion(angle * fraction), relief_start[1]))
+            for fraction in (1.0, 0.5, 0.25, 0.125, 0.0625):
+                candidate = (
+                    relief_start[0] + fraction * (target[0] - relief_start[0]),
+                    quat_multiply(rotation_quaternion(angle * fraction), relief_start[1]),
+                )
                 if predicted(candidate) <= limit + 1e-10:
-                    return candidate, fraction < 1.
+                    return candidate, fraction < 1.0
             return relief_start, True
         limit = max(self.allowance, sample['max_error_m'])
         if predicted(target) <= limit + 1e-10:
@@ -122,15 +180,19 @@ class BoreAlignment:
         correction = self.bounded_correction(sample, dt)
         axial = float(np.dot(basis[:, 2], target[0] - current[0]))
         if not sample['ready']:
-            axial = min(0., axial)
-        safe = (current[0] + correction[:3] + basis[:, 2] * axial,
-                quat_multiply(rotation_quaternion(correction[3:]), current[1]))
+            axial = min(0.0, axial)
+        safe = (
+            current[0] + correction[:3] + basis[:, 2] * axial,
+            quat_multiply(rotation_quaternion(correction[3:]), current[1]),
+        )
         if predicted(safe) > limit + 1e-10:
             safe = (current[0].copy(), current[1].copy())
         angle = rotation_vector(quat_multiply(target[1], quat_conjugate(safe[1])))
-        for fraction in (1., .5, .25, .125, .0625):
-            candidate = (safe[0] + fraction * (target[0] - safe[0]),
-                         quat_multiply(rotation_quaternion(angle * fraction), safe[1]))
+        for fraction in (1.0, 0.5, 0.25, 0.125, 0.0625):
+            candidate = (
+                safe[0] + fraction * (target[0] - safe[0]),
+                quat_multiply(rotation_quaternion(angle * fraction), safe[1]),
+            )
             if predicted(candidate) <= limit + 1e-10:
                 return candidate, True
         return safe, True

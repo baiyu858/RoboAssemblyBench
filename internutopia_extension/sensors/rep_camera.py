@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import OrderedDict, defaultdict
 
 import numpy as np
@@ -12,6 +13,7 @@ except ModuleNotFoundError:
 from internutopia.core.robot.robot import BaseRobot
 from internutopia.core.scene.scene import IScene
 from internutopia.core.sensor.camera import ICamera
+from internutopia.core.sensor.render_frame_cache import RenderFrameCache
 from internutopia.core.sensor.sensor import BaseSensor
 from internutopia.core.util import log
 from internutopia_extension.configs.sensors import RepCameraCfg
@@ -28,6 +30,7 @@ class RepCamera(BaseSensor):
         self.resolution = None
         self.config = config
         self._camera = None
+        self._render_frame_cache = RenderFrameCache()
 
     def post_reset(self):
         self.restore_sensor_info()
@@ -106,7 +109,15 @@ class RepCamera(BaseSensor):
         log.debug(f'resolution      : {self.resolution}')
         return prim_path
 
+    def prepare_render_frame(self, frame, *, rendered):
+        self._render_frame_cache.prepare(frame, rendered=rendered)
+
     def get_camera_data(self) -> OrderedDict:
+        if os.environ.get('INTERNUTOPIA_LEGACY_OBSERVATIONS') == '1':
+            return self._read_camera_data()
+        return self._render_frame_cache.read(self._read_camera_data)
+
+    def _read_camera_data(self) -> OrderedDict:
         """
         Get specified data from a camera.
 
@@ -116,6 +127,8 @@ class RepCamera(BaseSensor):
         Returns:
             output_data: dict, a dict of data corresponding to the requested data names
         """
+        counts = self._render_frame_cache.counts
+        counts['readbacks'] = counts.get('readbacks', 0) + 1
         # ================== run once ================
         output_data = {}
         if self.config.landmarks:
@@ -229,6 +242,7 @@ class RepCamera(BaseSensor):
         return self.get_camera_data()
 
     def cleanup(self) -> None:
+        self._render_frame_cache.clear()
         if self._camera is not None:
             self._camera.cleanup()
             self._camera = None

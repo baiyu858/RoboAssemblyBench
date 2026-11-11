@@ -5,13 +5,17 @@ These defaults are experiment settings, not measured manufacturing clearances.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import math
+from dataclasses import asdict, dataclass
 
 import numpy as np
 
 from .geometry import (
-    normalize_quat, quat_conjugate, quat_multiply, quat_rotate, relative_pose,
+    normalize_quat,
+    quat_conjugate,
+    quat_multiply,
+    quat_rotate,
+    relative_pose,
 )
 
 OBSERVATION_VERSION = 'contact-insertion-55-v1'
@@ -77,8 +81,10 @@ def virtual_reference_limits(config):
     offset would prevent a steady insertion load from being overcome at all.
     The published nominal+offset target still uses the original 0.5 mm limit.
     """
-    return (config.position_lead + config.compliance_position_limit,
-            config.rotation_lead + config.compliance_rotation_limit)
+    return (
+        config.position_lead + config.compliance_position_limit,
+        config.rotation_lead + config.compliance_rotation_limit,
+    )
 
 
 def geometric_guide(measurement, config, *, alignment_deadband=False):
@@ -89,19 +95,17 @@ def geometric_guide(measurement, config, *, alignment_deadband=False):
     """
     error = vector(measurement['error'], 3)
     angle = vector(measurement['rotation_error'], 3)
-    angular_gate = config.seated_rotation_tolerance / (4. if alignment_deadband else 2.)
-    translation = np.r_[clip_norm(error[:2], config.guide_translation_step), 0.]
+    angular_gate = config.seated_rotation_tolerance / (4.0 if alignment_deadband else 2.0)
+    translation = np.r_[clip_norm(error[:2], config.guide_translation_step), 0.0]
     rotation = clip_norm(angle, config.guide_rotation_step)
     if alignment_deadband:
-        if np.linalg.norm(error[:2]) <= config.seated_lateral_tolerance / 2.:
-            translation[:2] = 0.
+        if np.linalg.norm(error[:2]) <= config.seated_lateral_tolerance / 2.0:
+            translation[:2] = 0.0
         if np.linalg.norm(angle) <= angular_gate:
-            rotation[:] = 0.
-    if (np.linalg.norm(error[:2]) <= config.seated_lateral_tolerance
-            and np.linalg.norm(angle) <= angular_gate):
+            rotation[:] = 0.0
+    if np.linalg.norm(error[:2]) <= config.seated_lateral_tolerance and np.linalg.norm(angle) <= angular_gate:
         translation[2] = np.clip(error[2], -config.guide_translation_step, config.guide_translation_step)
-    return np.r_[clip_norm(translation, config.guide_translation_step),
-                 rotation]
+    return np.r_[clip_norm(translation, config.guide_translation_step), rotation]
 
 
 def vector(value, size):
@@ -121,13 +125,16 @@ def rotation_vector(quaternion):
 def rotation_quaternion(value):
     value = vector(value, 3)
     angle = np.linalg.norm(value)
-    return normalize_quat(np.r_[1.0, value / 2]) if angle < 1e-12 else np.r_[
-        math.cos(angle / 2), value * math.sin(angle / 2) / angle]
+    return (
+        normalize_quat(np.r_[1.0, value / 2])
+        if angle < 1e-12
+        else np.r_[math.cos(angle / 2), value * math.sin(angle / 2) / angle]
+    )
 
 
 def clip_norm(value, maximum):
     value = np.asarray(value, dtype=float)
-    return value * min(1., maximum / max(float(np.linalg.norm(value)), 1e-15))
+    return value * min(1.0, maximum / max(float(np.linalg.norm(value)), 1e-15))
 
 
 def basis_for_axis(axis):
@@ -148,8 +155,9 @@ class InsertionGeometry:
         self.base_anchor = tuple(np.array(x, dtype=float, copy=True) for x in base_pose)
         self.goal_local = relative_pose(*base_pose, *goal_pose)
         entry_local = relative_pose(*base_pose, *entry_pose)
-        self.position_reference_point = (None if position_reference_point is None
-                                         else vector(position_reference_point, 3).copy())
+        self.position_reference_point = (
+            None if position_reference_point is None else vector(position_reference_point, 3).copy()
+        )
         goal_point = self._position(*self.goal_local)
         entry_point = self._position(*entry_local)
         self.basis = basis_for_axis(goal_point - entry_point if insertion_axis is None else insertion_axis)
@@ -173,7 +181,8 @@ class InsertionGeometry:
         base_angle = rotation_vector(quat_multiply(base_pose[1], quat_conjugate(self.base_anchor[1])))
         world_basis = self.world_basis(base_pose)
         return {
-            'error': error, 'rotation_error': angle,
+            'error': error,
+            'rotation_error': angle,
             'axial_remaining': float(error[2]),
             'lateral_error': float(np.linalg.norm(error[:2])),
             'angle_error': float(np.linalg.norm(angle)),
@@ -181,7 +190,7 @@ class InsertionGeometry:
             'base_rotation_drift': float(np.linalg.norm(base_angle)),
             'base_delta': world_basis.T @ base_delta,
             'base_angle': world_basis.T @ base_angle,
-            'progress': float(1. - error[2] / self.path_length),
+            'progress': float(1.0 - error[2] / self.path_length),
         }
 
 
@@ -192,12 +201,18 @@ def pair_wrench(observation, origin):
     separate friction anchors, never from the gripper's clamp-force readings.
     Refuse missing/truncated data instead of inventing a zero-force sample.
     """
-    separated = bool(observation.get('valid') and observation.get('details_valid')
-                     and not observation.get('contacts')
-                     and np.linalg.norm(vector(observation.get('force_world', [np.nan] * 3), 3)) < 1e-12)
-    if not (observation.get('valid') and observation.get('details_valid')
-            and not observation.get('details_at_capacity')
-            and (observation.get('friction_valid') or separated)):
+    separated = bool(
+        observation.get('valid')
+        and observation.get('details_valid')
+        and not observation.get('contacts')
+        and np.linalg.norm(vector(observation.get('force_world', [np.nan] * 3), 3)) < 1e-12
+    )
+    if not (
+        observation.get('valid')
+        and observation.get('details_valid')
+        and not observation.get('details_at_capacity')
+        and (observation.get('friction_valid') or separated)
+    ):
         raise ValueError('Complete part/base normal and friction contact data are required')
     origin = vector(origin, 3)
     force = vector(observation['force_world'], 3).copy()
@@ -214,8 +229,12 @@ def pair_wrench(observation, origin):
 
 def validate_torque_soft_limit(value, config):
     """Optional post-policy guard; it does not change the trained action scale."""
-    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
-                              or not math.isfinite(value) or not 0 < value < config.insertion_torque_hard):
+    if value is not None and (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or not 0 < value < config.insertion_torque_hard
+    ):
         raise ValueError('torque_soft_limit must be positive and below insertion_torque_hard')
     return None if value is None else float(value)
 
@@ -228,8 +247,9 @@ def effective_torque_soft_limit(requested, trained, config):
 
 def validate_torque_hard_limit(value, config, soft_limit=None):
     """Explicit execution stop override; trained control/taper parameters stay fixed."""
-    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
-                              or not math.isfinite(value) or value <= 0):
+    if value is not None and (
+        isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0
+    ):
         raise ValueError('torque_hard_limit must be positive and finite')
     effective = config.insertion_torque_hard if value is None else float(value)
     if soft_limit is not None and effective <= soft_limit:
@@ -248,16 +268,22 @@ def arbitrate_delta(delta, controls, wrench_task, config, *, torque_soft_limit=N
     if not controls or any(c.get('failure') for c in controls):
         return np.zeros(6), 'grasp_failure'
     if any(not c.get('motion_ready') for c in controls):
-        safe_backoff = all(c.get('motion_ready') or (
-            c.get('mode') in ('force_limited', 'force_relief')
-            and c.get('weak_force', 0.) >= c.get('low_force', 6.)
-            and c.get('strong_force', math.inf) < c.get('unload_force', 18.)
-            and len(c.get('forces', [])) == 2
-            and all(math.isfinite(f) and f >= c.get('low_force', 6.) for f in c['forces'])
-            and not c.get('slipping') and c.get('probe_valid')) for c in controls)
+        safe_backoff = all(
+            c.get('motion_ready')
+            or (
+                c.get('mode') in ('force_limited', 'force_relief')
+                and c.get('weak_force', 0.0) >= c.get('low_force', 6.0)
+                and c.get('strong_force', math.inf) < c.get('unload_force', 18.0)
+                and len(c.get('forces', [])) == 2
+                and all(math.isfinite(f) and f >= c.get('low_force', 6.0) for f in c['forces'])
+                and not c.get('slipping')
+                and c.get('probe_valid')
+            )
+            for c in controls
+        )
         result = np.zeros(6)
         if safe_backoff:
-            result[2] = min(0., delta[2])
+            result[2] = min(0.0, delta[2])
             if any(c.get('mode') == 'force_relief' and not c.get('motion_ready') for c in controls):
                 return result, 'compliant_relief'
         return result, 'retreat_only' if safe_backoff else 'grasp_recovery_hold'
@@ -267,16 +293,15 @@ def arbitrate_delta(delta, controls, wrench_task, config, *, torque_soft_limit=N
         # virtual pin tip used by admittance. A long pin has a different arm.
         torque = float(np.linalg.norm(vector(safety_wrench, 6)[3:]))
         if torque >= soft:
-            scale = np.clip((config.insertion_torque_hard - torque)
-                            / (config.insertion_torque_hard - soft), 0., 1.)
-            delta[2] = min(0., delta[2])
+            scale = np.clip((config.insertion_torque_hard - torque) / (config.insertion_torque_hard - soft), 0.0, 1.0)
+            delta[2] = min(0.0, delta[2])
             delta[:2] *= scale
             delta[3:] *= scale
             return delta, 'insertion_torque_limit'
     if np.linalg.norm(wrench_task[:3]) > config.insertion_force_soft:
-        delta[2] = min(0., delta[2])
+        delta[2] = min(0.0, delta[2])
         return delta, 'insertion_force_limit'
-    return delta * min(c.get('motion_scale', 1.) for c in controls), 'policy'
+    return delta * min(c.get('motion_scale', 1.0) for c in controls), 'policy'
 
 
 def bounded_relief_step(candidate, wrench_task, config):
@@ -288,14 +313,14 @@ def bounded_relief_step(candidate, wrench_task, config):
     """
     result = vector(candidate, 6).copy()
     wrench = vector(wrench_task, 6)
-    result[2] = min(0., result[2])
+    result[2] = min(0.0, result[2])
     for selection in (slice(0, 2), slice(3, 6)):
         reaction = wrench[selection]
         norm_sq = float(np.dot(reaction, reaction))
         if norm_sq < 1e-12:
-            result[selection] = 0.
+            result[selection] = 0.0
         else:
-            loading = min(0., float(np.dot(result[selection], reaction)))
+            loading = min(0.0, float(np.dot(result[selection], reaction)))
             result[selection] -= loading / norm_sq * reaction
     result[:3] = clip_norm(result[:3], config.compliance_linear_speed / config.physics_hz)
     result[3:] = clip_norm(result[3:], config.compliance_angular_speed / config.physics_hz)
@@ -318,16 +343,19 @@ class BoundedAdmittance:
         stiffness = np.r_[np.full(3, c.translation_stiffness), np.full(3, c.rotation_stiffness)]
         # Backward Euler avoids an explicit-step damping instability at 240 Hz.
         self.velocity = (mass * self.velocity + dt * (self.filtered_wrench - stiffness * self.offset)) / (
-            mass + dt * damping + dt * dt * stiffness)
+            mass + dt * damping + dt * dt * stiffness
+        )
         self.velocity[:3] = clip_norm(self.velocity[:3], c.compliance_linear_speed)
         self.velocity[3:] = clip_norm(self.velocity[3:], c.compliance_angular_speed)
         candidate = self.offset + dt * self.velocity
-        for selection, limit in ((slice(0, 3), c.compliance_position_limit),
-                                 (slice(3, 6), c.compliance_rotation_limit)):
+        for selection, limit in (
+            (slice(0, 3), c.compliance_position_limit),
+            (slice(3, 6), c.compliance_rotation_limit),
+        ):
             bounded = clip_norm(candidate[selection], limit)
             if np.linalg.norm(candidate[selection] - bounded) > 1e-15:
                 # Saturated compliance must not accumulate hidden velocity.
-                self.velocity[selection] = 0.
+                self.velocity[selection] = 0.0
             self.offset[selection] = bounded
         return self.offset.copy()
 
@@ -343,26 +371,38 @@ def safety_failure(measurement, grasp_samples, wrench, config, *, torque_hard_li
         return 'base_position_drift'
     if measurement['base_rotation_drift'] > config.base_rotation_limit:
         return 'base_rotation_drift'
-    if measurement.get('support_position_drift', 0.) > config.base_position_limit:
+    if measurement.get('support_position_drift', 0.0) > config.base_position_limit:
         return 'support_position_drift'
-    if measurement.get('support_rotation_drift', 0.) > config.base_rotation_limit:
+    if measurement.get('support_rotation_drift', 0.0) > config.base_rotation_limit:
         return 'support_rotation_drift'
     for grasp in grasp_samples:
         if not grasp.get('valid') and not grasp.get('recovering_contact'):
             return 'physical_grasp_invalid'
         if grasp['position_slip'] > config.grasp_position_limit:
             return 'grasp_position_slip'
-        if grasp['orientation_slip'] > config.grasp_rotation_limit:
+        # The physical grasp owns its execution gate. Keep the checkpoint's
+        # config/observation normalization unchanged, including for supports.
+        rotation_limit = grasp.get('orientation_slip_limit', config.grasp_rotation_limit)
+        if (
+            isinstance(rotation_limit, bool)
+            or not isinstance(rotation_limit, (int, float))
+            or not math.isfinite(rotation_limit)
+            or not 0.0 < rotation_limit <= math.pi
+        ):
+            return 'grasp_rotation_limit_invalid'
+        if grasp['orientation_slip'] > rotation_limit:
             return 'grasp_rotation_slip'
     return None
 
 
 def seated(measurement, config):
-    return bool(abs(measurement['axial_remaining']) <= config.seated_axial_tolerance
-                and measurement['lateral_error'] <= config.seated_lateral_tolerance
-                and measurement['angle_error'] <= config.seated_rotation_tolerance
-                and measurement['base_position_drift'] <= config.base_position_limit
-                and measurement['base_rotation_drift'] <= config.base_rotation_limit)
+    return bool(
+        abs(measurement['axial_remaining']) <= config.seated_axial_tolerance
+        and measurement['lateral_error'] <= config.seated_lateral_tolerance
+        and measurement['angle_error'] <= config.seated_rotation_tolerance
+        and measurement['base_position_drift'] <= config.base_position_limit
+        and measurement['base_rotation_drift'] <= config.base_rotation_limit
+    )
 
 
 def seated_load_transfer_ready(controls, grasps):
@@ -383,20 +423,30 @@ def seated_load_transfer_ready(controls, grasps):
     if moving.get('motion_ready'):
         return True
     forces = moving.get('forces', [])
-    return bool(not moving.get('failure') and moving.get('probe_valid') and moving.get('force_within_limit')
-                and not moving.get('slipping') and moving.get('mode') in ('preload', 'force_limited', 'force_relief', 'hold')
-                and len(forces) == 2 and all(math.isfinite(f) and f > 0 for f in forces)
-                and max(forces) < moving.get('unload_force', 18.))
+    return bool(
+        not moving.get('failure')
+        and moving.get('probe_valid')
+        and moving.get('force_within_limit')
+        and not moving.get('slipping')
+        and moving.get('mode') in ('preload', 'force_limited', 'force_relief', 'hold')
+        and len(forces) == 2
+        and all(math.isfinite(f) and f > 0 for f in forces)
+        and max(forces) < moving.get('unload_force', 18.0)
+    )
 
 
 def insertion_reward(before, after, wrench, action, previous_action, failure, local_seated, config=None):
     """Dense local progress cannot be earned by translating the supported base."""
     c = config or InsertionConfig()
-    progress = float(np.clip(after['progress'] - before['progress'], -.05, .05))
-    result = (30. * progress - .01 * after['lateral_error'] / (2 * c.seated_lateral_tolerance)
-              - .005 * after['angle_error'] / c.seated_rotation_tolerance
-              - .02 * (after['base_position_drift'] / c.base_position_limit) ** 2
-              - .01 * (after['base_rotation_drift'] / c.base_rotation_limit) ** 2
-              - .002 * max(0., float(np.linalg.norm(wrench[:3])) - c.insertion_force_soft / 2.) ** 2
-              - .001 * float(np.sum((np.asarray(action) - previous_action) ** 2)) - .001)
-    return float(result + (10. if local_seated else 0.) - (10. if failure else 0.))
+    progress = float(np.clip(after['progress'] - before['progress'], -0.05, 0.05))
+    result = (
+        30.0 * progress
+        - 0.01 * after['lateral_error'] / (2 * c.seated_lateral_tolerance)
+        - 0.005 * after['angle_error'] / c.seated_rotation_tolerance
+        - 0.02 * (after['base_position_drift'] / c.base_position_limit) ** 2
+        - 0.01 * (after['base_rotation_drift'] / c.base_rotation_limit) ** 2
+        - 0.002 * max(0.0, float(np.linalg.norm(wrench[:3])) - c.insertion_force_soft / 2.0) ** 2
+        - 0.001 * float(np.sum((np.asarray(action) - previous_action) ** 2))
+        - 0.001
+    )
+    return float(result + (10.0 if local_seated else 0.0) - (10.0 if failure else 0.0))

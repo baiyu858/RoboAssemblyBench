@@ -3744,7 +3744,9 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
 
     def _get_robot_eef_pose(self, robot_name: str):
         try:
-            return self.robots[robot_name].articulation.end_effector.get_pose()
+            robot = self.robots[robot_name]
+            reader = getattr(robot, 'get_measured_eef_pose', robot.articulation.end_effector.get_pose)
+            return reader()
         except Exception:
             robot = self.robots[robot_name]
             try:
@@ -3983,6 +3985,30 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         min_release_steps = max(int(attach_spec.get('release_min_steps', 4)), 0)
         if int(self.phase_step_counter) < min_release_steps:
             return False
+
+        partial = phase_spec.get('physical_gripper_release') or {}
+        if partial.get('robot') == robot_name and partial.get('object') == object_name:
+            from toolkits.factory_dual_franka_assembly.physical_release import (
+                clear_contact_ready,
+            )
+
+            metrics = self._gripper_contact_metrics(object_name, robot_name, attach_spec=attach_spec)
+            fingers = [metrics.get(side, {}) for side in ('left_finger', 'right_finger')]
+            key = (self.phase_index, self.phase_entry_step)
+            state = attachment_state.setdefault('release_contact_qualification', {})
+            if state.get('phase_key') != key:
+                state.clear()
+                state['phase_key'] = key
+            return clear_contact_ready(
+                state,
+                step=int(self.step_counter),
+                openness=self._gripper_normalized_openness(robot_name),
+                minimum_openness=partial['minimum_openness'],
+                stable_steps=partial['clear_force_steps'],
+                forces=[f.get('force') for f in fingers],
+                probes_valid=all(f.get('force_probe_valid') for f in fingers),
+                threshold=float(attach_spec.get('contact_force_threshold', 0.1)),
+            )
 
         if 'release_open_openness' in attach_spec:
             openness = self._gripper_normalized_openness(robot_name)

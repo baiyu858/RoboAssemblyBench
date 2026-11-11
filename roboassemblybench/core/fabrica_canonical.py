@@ -3830,6 +3830,7 @@ def _compile_targets_and_phases(  # noqa: C901
     assembly_origin: list[float],
     assembly_orientation: list[float],
     robots: list[dict[str, Any]],
+    axial_transport: dict[str, dict] | None = None,
 ) -> tuple[list[dict], list[dict], list[dict], list[str], list[str]]:
     if assembly == 'beam' and bool(spec.get('continuous_physics', False)):
         from roboassemblybench.core.beam_physical_compiler import (
@@ -3852,6 +3853,15 @@ def _compile_targets_and_phases(  # noqa: C901
     pickup_target_names: list[str] = []
     assembly_target_names: list[str] = []
     parts_by_id = {str(part['part_id']): part for part in task['parts']}
+    from roboassemblybench.core.axial_transport import equivalent_axial_pose
+
+    axial_transport = axial_transport or {}
+    direct_hover_parts = spec.get('physical_direct_transport_to_hover_parts', [])
+    if not isinstance(direct_hover_parts, list) or any(
+        str(p) not in parts_by_id or str(p) == str(task['base_part']) for p in direct_hover_parts
+    ):
+        raise ValueError('physical_direct_transport_to_hover_parts must list existing movable parts')
+    direct_hover_parts = {str(p) for p in direct_hover_parts}
     base_robot = str(spec.get('base_robot', 'franka_right'))
     assembly_robot = str(spec.get('assembly_robot', 'franka_left'))
     release_retreat_distance = float(spec.get('release_retreat_distance', 0.06))
@@ -4370,6 +4380,19 @@ def _compile_targets_and_phases(  # noqa: C901
             grasp=grasp,
             tcp_height=transport_tcp_height,
         )
+        if part_id in direct_hover_parts:
+            # Some raised pin entries have a hover ABOVE the old transfer
+            # plane. Go diagonally to that hover rather than across below it
+            # and then back up. Keep pickup clearance and the subsequent
+            # fine convergence/settle phase. Never shortcut a descending leg.
+            hover_position = _add(destination_position, [0.0, 0.0, transport_hover_height])
+            hover_tcp_position, _ = _tcp_pose_for_object_pose(
+                object_position=hover_position,
+                object_orientation=destination_orientation,
+                grasp=grasp,
+            )
+            if hover_tcp_position[2] >= transport_tcp_height:
+                assembly_clearance_position = hover_position
         pickup_clearance_name = f'part_{part_id}_pickup_clearance'
         targets.append(
             _target(
@@ -4506,7 +4529,10 @@ def _compile_targets_and_phases(  # noqa: C901
     for part_id in parts_by_id:
         target_name = f'part_{part_id}_assembled'
         final_targets[part_id] = target_name
-        targets.append(_target(target_name, assembly_origin, assembly_orientation))
+        position, orientation = equivalent_axial_pose(
+            assembly_origin, assembly_orientation, axial_transport.get(part_id)
+        )
+        targets.append(_target(target_name, position, orientation))
         assembly_target_names.append(target_name)
 
     base_part_id = str(task['base_part'])
@@ -4723,6 +4749,7 @@ def _compile_targets_and_phases(  # noqa: C901
                 _vector(waypoint['position'], size=3, name='insertion waypoint position'),
                 _vector(waypoint['orientation'], size=4, name='insertion waypoint orientation'),
             )
+            position, orientation = equivalent_axial_pose(position, orientation, axial_transport.get(part_id))
             is_final_waypoint = waypoint_index == len(path) - 1
             if is_final_waypoint:
                 waypoint_name = final_targets[part_id]
@@ -6160,6 +6187,14 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             )
         )
 
+    from roboassemblybench.core.axial_transport import axial_transport_plan
+
+    axial_transport = axial_transport_plan(
+        task=task,
+        spec=spec,
+        pickup_orientation=pickup_orientation,
+        assembly_orientation=assembly_orientation,
+    )
     (targets, phases, success, pickup_target_names, assembly_target_names,) = _compile_targets_and_phases(
         assembly=assembly,
         task=task,
@@ -6169,6 +6204,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
         assembly_origin=assembly_origin,
         assembly_orientation=assembly_orientation,
         robots=robots,
+        axial_transport=axial_transport,
     )
     if plumbers_physics:
         from roboassemblybench.core.plumbers_physical import apply_plumbers_physics
@@ -6282,6 +6318,7 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
             assembly_origin=assembly_origin,
         ),
         'transport_timeout_steps': int(spec.get('transport_timeout_steps', 4800)),
+        'direct_transport_to_hover_parts': copy.deepcopy(spec.get('physical_direct_transport_to_hover_parts', [])),
         'pickup_departure_interpolation_waypoint_count': int(
             spec.get('pickup_departure_interpolation_waypoint_count', 0)
         ),
@@ -6479,6 +6516,8 @@ def compile_fabrica_canonical_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     }
     if reverse_part0 is not None:
         resolved['fabrica_canonical_resolved']['part0_reverse_insertion'] = reverse_part0
+    if axial_transport:
+        resolved['fabrica_canonical_resolved']['free_axial_transport'] = axial_transport
     resolved = compile_precision_insertions(resolved, precision)
     if assembly == 'plumbers_block' and spec.get('continuous_physics'):
         from roboassemblybench.core.plumbers_physical import (

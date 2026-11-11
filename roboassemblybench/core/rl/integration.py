@@ -31,6 +31,7 @@ def configure_full_flow(
     released_friction=None,
     torque_soft_limit=None,
     torque_hard_limit=None,
+    torque_relief=None,
     axis_alignment=None
 ):
     checkpoint = Path(checkpoint).resolve()
@@ -64,6 +65,15 @@ def configure_full_flow(
 
         settings['axis_alignment'] = alignment_settings(axis_alignment)
     existing = next((p for p in task_config.phase_specs if p['name'] == binding.rl_phase), None)
+    if torque_relief is not None:
+        from .torque_relief import relief_enabled
+
+        relief_soft = settings.get('torque_soft_limit')
+        if relief_soft is None and existing is not None:
+            limits = {skill.get('torque_soft_limit') for skill in existing['local_skills'].values()}
+            if len(limits) == 1:
+                relief_soft = limits.pop()
+        settings['torque_relief'] = relief_enabled(torque_relief, relief_soft)
     if existing is not None:
         for skill in existing['local_skills'].values():
             if skill.get('controller_config') != settings['controller_config']:
@@ -73,6 +83,8 @@ def configure_full_flow(
                 skill['torque_soft_limit'] = settings['torque_soft_limit']
             if torque_hard_limit is not None:
                 skill['torque_hard_limit'] = settings['torque_hard_limit']
+            if torque_relief is not None:
+                skill['torque_relief'] = settings['torque_relief']
             if axis_alignment is not None:
                 skill['axis_alignment'] = settings['axis_alignment']
         apply_released_pose_tolerances(task_config.phase_specs, task_config.success_criteria, binding, settings)
@@ -116,6 +128,9 @@ class InsertionPolicyAdapter:
         if hard_limit is None:
             hard_limit = getattr(model, 'torque_hard_limit', None)
         validate_torque_hard_limit(hard_limit, config, soft_limit)
+        from .torque_relief import relief_enabled
+
+        torque_relief = relief_enabled(spec.get('torque_relief', False), soft_limit)
         alignment = spec.get('axis_alignment')
         if alignment is None:
             alignment = getattr(model, 'axis_alignment', None)
@@ -130,6 +145,7 @@ class InsertionPolicyAdapter:
             key,
             soft_limit,
             hard_limit,
+            torque_relief,
             repr(alignment),
             completion_steps,
         )
@@ -144,6 +160,7 @@ class InsertionPolicyAdapter:
                         bridge=bridge,
                         torque_soft_limit=soft_limit,
                         torque_hard_limit=hard_limit,
+                        torque_relief=torque_relief,
                         axis_alignment=alignment,
                         completion_stable_steps=completion_steps,
                     ),

@@ -50,8 +50,11 @@ class GripperController(BaseController):
         opened_positions = np.asarray(self._gripper.joint_opened_positions, dtype=float)
         closed_positions = np.asarray(self._gripper.joint_closed_positions, dtype=float)
         physical_minimum = getattr(self._robot_config, 'gripper_min_openness', None)
-        min_openness = float((getattr(self._robot_config, 'gripper_close_openness', 0.0) or 0.0)
-                             if physical_minimum is None else physical_minimum)
+        min_openness = float(
+            (getattr(self._robot_config, 'gripper_close_openness', 0.0) or 0.0)
+            if physical_minimum is None
+            else physical_minimum
+        )
         if not np.isfinite(min_openness) or not 0.0 <= min_openness < 1.0:
             raise ValueError('gripper_min_openness must be finite and in [0, 1)')
         openness = float(np.clip(openness, max(min_openness, 0.0), 1.0))
@@ -63,8 +66,10 @@ class GripperController(BaseController):
                 joint_positions = joint_positions[: joint_indices.shape[0]]
         self._command_index += 1
         self.last_numeric_command = {
-            'command_index': self._command_index, 'requested_openness': requested_openness,
-            'clipped_openness': openness, 'minimum_openness': min_openness,
+            'command_index': self._command_index,
+            'requested_openness': requested_openness,
+            'clipped_openness': openness,
+            'minimum_openness': min_openness,
             'joint_positions': joint_positions.tolist(),
             'joint_indices': None if joint_indices is None else joint_indices.tolist(),
         }
@@ -92,4 +97,8 @@ class GripperController(BaseController):
         return self.forward(action[0])
 
     def get_obs(self) -> OrderedDict[str, Any]:
+        reader = getattr(self.robot, 'get_measured_joint_positions', None)
+        indices = getattr(self._gripper, 'active_joint_indices', None)
+        if reader is not None and indices is not None:
+            return OrderedDict({'gripper_pos': reader(joint_indices=np.asarray(indices, dtype=np.int64))})
         return OrderedDict({'gripper_pos': self._gripper.get_joint_positions()})

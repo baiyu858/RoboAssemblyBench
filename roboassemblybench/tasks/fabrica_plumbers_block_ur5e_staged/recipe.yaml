@@ -182,6 +182,17 @@ profiles:
       # envelope and the slower lift, hover, contact and precision-insert rates.
       physical_transport_rotation_speed: 0.35
       physical_transport_rotation_acceleration: 1.80
+      # Round pin shafts may arrive at an equivalent axial angle. Preserve the
+      # CAD shaft centre and all insertion depths; avoid rotating the hex heads
+      # back to a nominal yaw that the released success gate does not require.
+      physical_free_axial_transport_parts: ['1', '4']
+      # Raised pin hovers sit above the transfer plane. Reach them directly,
+      # keeping fixture clearance and the following fine settling check.
+      physical_direct_transport_to_hover_parts: ['1', '4']
+      # Held pin rotation relative to the fixed grasp reference: 10 degrees.
+      physical_hold_orientation_slip_tolerances_rad:
+        '1': 0.17453292519943295
+        '4': 0.17453292519943295
       # Keep the previous phase budget while testing the faster governor.
       physical_motion_min_timeout_steps: 16145
       physical_terminal_home:
@@ -199,6 +210,16 @@ profiles:
       physical_contact_recovery:
         '1': {steps: 24, maximum_surface_gap_m: 0.0005}
         '4': {steps: 24, maximum_surface_gap_m: 0.0005}
+      # Leave the seam-support gripper before fully opening the second pin jaw.
+      # Both target contacts must be clear for six physics steps before retreat.
+      physical_pin_release:
+        '4':
+          openness: 0.34
+          minimum_openness: 0.33
+          joint_rate: 0.2
+          clear_force_steps: 6
+          retreat_distance_m: 0.06
+          retreat_speed_m_s: 0.03
       physical_junction_support:
         enabled: true
         # Left remains parked; the right hand directly regrips the seam.
@@ -302,7 +323,24 @@ profiles:
             axis: [0.0, 0.0, 1.0]  # Shaft axis in part_1 local coordinates.
             # Full shortest-angle range: accept any released axial spin.
             twist_tolerance_rad: 3.141592653589793
-          torque_soft_limit: 1.2  # Physical-wrist contact moment, N m; raw hard limit remains 2.
+          torque_soft_limit: 1.2  # Physical-wrist contact moment, N m.
+          torque_hard_limit: 4.0  # Execution stop override; checkpoint normalization unchanged.
+          torque_relief: true  # Unload before resuming alignment/feed, including valid-grip preload.
+          # Constrain the shaft along both live bores, not only its tip.
+          axis_alignment:
+            shaft_origin_m: [-0.04, 0.0012658, 0.035]
+            shaft_axis: [0.0, 0.0, 1.0]
+            radial_clearance_m: 0.00025
+            margin_m: 0.00002  # Keep 20 um inside the nominal 250 um radial clearance.
+            linear_speed: 0.002
+            angular_speed: 0.04
+            keep_grip_direction: true
+            incompatible_steps: 30
+            sections:
+              - {object: fabrica_plumbers_block_3, center_m: [-0.04, 0.0012658, 0.080], axis: [0.0, 0.0, 1.0]}
+              - {object: fabrica_plumbers_block_3, center_m: [-0.04, 0.0012658, 0.065], axis: [0.0, 0.0, 1.0]}
+              - {object: fabrica_plumbers_block_2, center_m: [-0.04, 0.0012658, 0.065], axis: [0.0, 0.0, 1.0]}
+              - {object: fabrica_plumbers_block_2, center_m: [-0.04, 0.0012658, 0.035], axis: [0.0, 0.0, 1.0]}
           entry_waypoint: 1
           controller_config:
             position_lead: 0.001
@@ -329,15 +367,18 @@ profiles:
             # Full shortest-angle range: accept any released axial spin.
             twist_tolerance_rad: 3.141592653589793
           torque_soft_limit: 1.2
-          torque_hard_limit: 2.2  # Experimental execution stop; checkpoint controller and soft taper unchanged.
+          torque_hard_limit: 4.0  # Execution stop override; checkpoint normalization unchanged.
+          torque_relief: true  # Unload before resuming alignment/feed, including valid-grip preload.
           # Constrain the shaft along both live bores, not only its tip.
           axis_alignment:
             shaft_origin_m: [0.04, 0.0012658, 0.035]
             shaft_axis: [0.0, 0.0, 1.0]
             radial_clearance_m: 0.00025
-            margin_m: 0.00008
+            margin_m: 0.00002  # Keep 20 um inside the nominal 250 um radial clearance.
             linear_speed: 0.002
             angular_speed: 0.04
+            keep_grip_direction: true
+            incompatible_steps: 30
             sections:
               - {object: fabrica_plumbers_block_3, center_m: [0.04, 0.0012658, 0.080], axis: [0.0, 0.0, 1.0]}
               - {object: fabrica_plumbers_block_3, center_m: [0.04, 0.0012658, 0.065], axis: [0.0, 0.0, 1.0]}

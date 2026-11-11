@@ -14,13 +14,13 @@ class QualificationConfig:
     reset_trials: int = 3
     hold_decisions: int = 60
     probe_decisions: int = 80
-    probe_action: float = .5
-    probe_contact_N: float = 2.
+    probe_action: float = 0.5
+    probe_contact_N: float = 2.0
     dwell_decisions: int = 24
     retreat_decisions: int = 40
     lead_in_decisions: int = 0
     align_decisions: int = 0
-    probe_axis: tuple[float, float, float] = (0., 0., 1.)
+    probe_axis: tuple[float, float, float] = (0.0, 0.0, 1.0)
 
     def __post_init__(self):
         for field in ('reset_trials', 'hold_decisions', 'probe_decisions', 'dwell_decisions', 'retreat_decisions'):
@@ -57,8 +57,7 @@ def qualify(env, snapshot_path, output_path, *, config=None):
                 holds.append(info)
                 if terminal or truncated:
                     raise RuntimeError(info.get('failure') or 'Hold test terminated unexpectedly')
-            records.append({'test': 'bilateral_hold', 'trial': trial,
-                            'passed': True, 'last': info})
+            records.append({'test': 'bilateral_hold', 'trial': trial, 'passed': True, 'last': info})
         env.reset(options={'disable_guidance': True})
         if config.align_decisions:
             # Resolve the coarse precontact entry error before a straight
@@ -110,35 +109,57 @@ def qualify(env, snapshot_path, output_path, *, config=None):
     except (ValueError, RuntimeError, KeyError) as exc:
         failure = str(exc)
     excitation = lead_in + contact
-    peak = max((np.linalg.norm(x['wrench_world'][:3]) for x in excitation), default=0.)
+    peak = max((np.linalg.norm(x['wrench_world'][:3]) for x in excitation), default=0.0)
     last_force = np.linalg.norm(relief[-1]['wrench_world'][:3]) if relief else None
-    response = max((float(np.dot(x['wrench_world'][:3], x['admittance_offset'][:3]))
-                    for x in excitation), default=0.)
+    response = max((float(np.dot(x['wrench_world'][:3], x['admittance_offset'][:3])) for x in excitation), default=0.0)
     # Offset response alone validates the force-feedback implementation; native
     # force reduction during backoff additionally checks the mechanical sign.
     checks = {
         'repeated_real_contact_holds': len(records) == config.reset_trials,
-        'real_part_base_contact_excited': bool(peak >= .5),
+        'real_part_base_contact_excited': bool(peak >= 0.5),
         'admittance_responds_along_reaction_force': response > 1e-7,
-        'backoff_reduces_measured_contact_force': bool(last_force is not None and peak >= .5
-                                                       and last_force < max(.5, .8 * peak)),
+        'backoff_reduces_measured_contact_force': bool(
+            last_force is not None and peak >= 0.5 and last_force < max(0.5, 0.8 * peak)
+        ),
         'no_safety_failure': failure is None,
     }
-    result = dict(passed=all(checks.values()), checks=checks, failure=failure, failure_detail=info if failure else None,
-                  controller_config=asdict(env.config),
-                  torque_soft_limit=getattr(env, 'torque_soft_limit', None),
-                  torque_hard_limit=getattr(env, 'torque_hard_limit', None),
-                  axis_alignment=getattr(env, 'axis_alignment', None),
-                  task_contract=env.binding.policy_contract(), qualification_config=asdict(config),
-                  snapshot_sha256=hashlib.sha256(Path(snapshot_path).read_bytes()).hexdigest(),
-                  scope='real_grasp_and_outer_admittance_only', benchmark_success=False,
-                  peak_insertion_force_N=float(peak), final_retreat_force_N=None if last_force is None else float(last_force),
-                  max_force_offset_dot_Nm=response, holds=records,
-                  alignment=alignment, lead_in=lead_in, contact_probe=contact, retreat=relief)
+    result = dict(
+        passed=all(checks.values()),
+        checks=checks,
+        failure=failure,
+        failure_detail=info if failure else None,
+        controller_config=asdict(env.config),
+        torque_soft_limit=getattr(env, 'torque_soft_limit', None),
+        torque_hard_limit=getattr(env, 'torque_hard_limit', None),
+        torque_relief=getattr(env, 'torque_relief', False),
+        axis_alignment=getattr(env, 'axis_alignment', None),
+        task_contract=env.binding.policy_contract(),
+        qualification_config=asdict(config),
+        snapshot_sha256=hashlib.sha256(Path(snapshot_path).read_bytes()).hexdigest(),
+        scope='real_grasp_and_outer_admittance_only',
+        benchmark_success=False,
+        peak_insertion_force_N=float(peak),
+        final_retreat_force_N=None if last_force is None else float(last_force),
+        max_force_offset_dot_Nm=response,
+        holds=records,
+        alignment=alignment,
+        lead_in=lead_in,
+        contact_probe=contact,
+        retreat=relief,
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2))
-    print('[insertion-qualification] ' + json.dumps({k: v for k, v in result.items()
-                                                     if k not in ('holds', 'alignment', 'lead_in', 'contact_probe', 'retreat', 'failure_detail')}), flush=True)
+    print(
+        '[insertion-qualification] '
+        + json.dumps(
+            {
+                k: v
+                for k, v in result.items()
+                if k not in ('holds', 'alignment', 'lead_in', 'contact_probe', 'retreat', 'failure_detail')
+            }
+        ),
+        flush=True,
+    )
     return result
 
 
@@ -147,7 +168,7 @@ def evaluate(env, model, *, episodes, output_path):
     for i in range(episodes):
         obs, _ = env.reset(seed=10000 + i)
         terminal = truncated = False
-        reward_sum = 0.
+        reward_sum = 0.0
         while not (terminal or truncated):
             obs, reward, terminal, truncated, info = env.step(model.act(obs))
             reward_sum += reward
@@ -157,8 +178,12 @@ def evaluate(env, model, *, episodes, output_path):
         results.append(dict(episode=i, reward=reward_sum, **info))
         print(f'[insertion-eval] episode={i} local_seated={info["local_seated"]} failure={info["failure"]}', flush=True)
         Path(output_path).with_name('evaluation_episodes.json').write_text(json.dumps(results, indent=2))
-    payload = dict(episodes=results, local_held_successes=sum(int(x['local_seated']) for x in results),
-                   episode_count=episodes, benchmark_success=False,
-                   scope='local_held_insertion; release and unloaded stability still required')
+    payload = dict(
+        episodes=results,
+        local_held_successes=sum(int(x['local_seated']) for x in results),
+        episode_count=episodes,
+        benchmark_success=False,
+        scope='local_held_insertion; release and unloaded stability still required',
+    )
     Path(output_path).write_text(json.dumps(payload, indent=2))
     return payload

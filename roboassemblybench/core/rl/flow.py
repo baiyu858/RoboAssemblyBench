@@ -222,6 +222,9 @@ def build_flow_env(  # noqa: C901
                 raise ValueError(f'{name}: snapshot DOF order differs from asset')
             robot.articulation.set_joint_positions(np.asarray(state['joint_positions']))
             robot.articulation.set_joint_velocities(np.zeros(len(state['joint_positions'])))
+            invalidate = getattr(robot, 'invalidate_measurement_cache', None)
+            if invalidate is not None:
+                invalidate()
         for name, state in data['objects'].items():
             obj = task._resolve_object(name)
             if state.get('linear_velocity') is not None:

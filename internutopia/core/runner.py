@@ -52,6 +52,7 @@ class SimulatorRunner:
         self.render_trigger = 0
         self.loop = False
         self._render = False
+        self._render_frame_serial = 0
 
     @property
     def current_tasks(self) -> dict[str, BaseTask]:
@@ -84,6 +85,9 @@ class SimulatorRunner:
         else:
             for _ in range(steps):
                 SimulationContext.render(self._world)
+        if render:
+            self._render_frame_serial += steps
+        self._render = bool(render)
 
     def step(
         self, actions: Union[List[Dict], None] = None, render: bool = True
@@ -137,11 +141,14 @@ class SimulatorRunner:
         # Keep one cycle identifier even when observation processing changes phase.
         diagnostic_tasks = []
         if os.environ.get('BEAM_PHYSICS_DIAGNOSTICS') == '1':
-            from toolkits.factory_dual_franka_assembly.beam_physics_diagnostics import sample_boundary
+            from toolkits.factory_dual_franka_assembly.beam_physics_diagnostics import (
+                sample_boundary,
+            )
 
             diagnostic_tasks = [
                 (task, int(getattr(task, 'step_counter', 0)))
-                for task in self.current_tasks.values() if task.name not in self.finished_tasks
+                for task in self.current_tasks.values()
+                if task.name not in self.finished_tasks
             ]
             for task, cycle_step in diagnostic_tasks:
                 sample_boundary(task, 'before_action', cycle_step=cycle_step)
@@ -179,6 +186,8 @@ class SimulatorRunner:
         for task, cycle_step in diagnostic_tasks:
             sample_boundary(task, 'after_action', cycle_step=cycle_step)
         self._world.step(render=self._render)
+        if self._render:
+            self._render_frame_serial += 1
         for task, cycle_step in diagnostic_tasks:
             sample_boundary(task, 'after_physics', cycle_step=cycle_step)
 
@@ -237,6 +246,12 @@ class SimulatorRunner:
         """
         obs = {}
         for task_name, task in self.current_tasks.items():
+            # State and safety still advance at physics frequency.
+            for robot in getattr(task, 'robots', {}).values():
+                for sensor in getattr(robot, 'sensors', {}).values():
+                    prepare = getattr(sensor, 'prepare_render_frame', None)
+                    if prepare is not None:
+                        prepare((id(self), self._render_frame_serial), rendered=self._render)
             obs[task_name] = task.get_observations()
         # Add render obs
         for task_name, task_obs in obs.items():
@@ -517,22 +532,30 @@ class SimulatorRunner:
         # them later, while preparing contact probes, misses native scene creation.
         from internutopia.core.util.physics_scene import apply_physics_scene_settings
 
-        requested_scene_settings = {name: getattr(self.config.simulator, name, None) for name in (
-            'enable_stabilization', 'enable_external_forces_every_iteration')
-            if getattr(self.config.simulator, name, None) is not None}
-        self.physics_scene_settings = (apply_physics_scene_settings(
-            self._world.get_physics_context(), self._world.stage, requested_scene_settings)
-            if requested_scene_settings else {})
+        requested_scene_settings = {
+            name: getattr(self.config.simulator, name, None)
+            for name in ('enable_stabilization', 'enable_external_forces_every_iteration')
+            if getattr(self.config.simulator, name, None) is not None
+        }
+        self.physics_scene_settings = (
+            apply_physics_scene_settings(self._world.get_physics_context(), self._world.stage, requested_scene_settings)
+            if requested_scene_settings
+            else {}
+        )
         if self.physics_scene_settings:
             log.info('Physics scene settings: %s', json.dumps(self.physics_scene_settings, sort_keys=True))
         # Explicit, isolated Beam experiment; defaults leave every scene unchanged.
         requested_solver = os.environ.get('BEAM_PHYSICS_SOLVER_TYPE')
         if requested_solver is not None:
-            from toolkits.factory_dual_franka_assembly.beam_solver_control import apply_beam_solver_override
+            from toolkits.factory_dual_franka_assembly.beam_solver_control import (
+                apply_beam_solver_override,
+            )
 
             recipe_names = [getattr(task, 'recipe', None) for task in self.config.task_configs]
             audit = apply_beam_solver_override(
-                self._world.get_physics_context(), recipe_names, requested_solver,
+                self._world.get_physics_context(),
+                recipe_names,
+                requested_solver,
                 isolated_scene=self.env_num == 1,
             )
             log.info('Beam solver override: %s', json.dumps(audit, sort_keys=True))
@@ -544,8 +567,10 @@ class SimulatorRunner:
 
             recipe_names = [getattr(task, 'recipe', None) for task in self.config.task_configs]
             audit = apply_beam_external_force_override(
-                self._world.get_physics_context(), self._world.stage,
-                recipe_names, requested_external_forces,
+                self._world.get_physics_context(),
+                self._world.stage,
+                recipe_names,
+                requested_external_forces,
                 isolated_scene=self.env_num == 1,
             )
             self._beam_external_force_override_audit = audit

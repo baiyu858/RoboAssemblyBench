@@ -17,12 +17,12 @@ from internutopia_extension.configs.robots.ur5e import (
 )
 
 _UR5E_ARM_JOINT_NAMES = (
-    "shoulder_pan_joint",
-    "shoulder_lift_joint",
-    "elbow_joint",
-    "wrist_1_joint",
-    "wrist_2_joint",
-    "wrist_3_joint",
+    'shoulder_pan_joint',
+    'shoulder_lift_joint',
+    'elbow_joint',
+    'wrist_1_joint',
+    'wrist_2_joint',
+    'wrist_3_joint',
 )
 
 
@@ -30,7 +30,7 @@ class UR5e(IsaacsimArticulation):
     def __init__(
         self,
         prim_path: str,
-        name: str = "ur5e_robot",
+        name: str = 'ur5e_robot',
         usd_path: Optional[str] = None,
         position: Optional[np.ndarray] = None,
         orientation: Optional[np.ndarray] = None,
@@ -51,16 +51,18 @@ class UR5e(IsaacsimArticulation):
         deltas: Optional[np.ndarray] = None,
         scale: Optional[np.ndarray] = None,
     ) -> None:
-        from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper
+        from isaacsim.robot.manipulators.grippers.parallel_gripper import (
+            ParallelGripper,
+        )
 
         self._end_effector = None
         self._gripper = None
         self._root_prim_path = prim_path
         self._start_position = None if position is None else np.asarray(position, dtype=float)
         self._start_orientation = None if orientation is None else np.asarray(orientation, dtype=float)
-        self._end_effector_prim_name = end_effector_prim_name or "tool0"
-        self._end_effector_prim_path = prim_path + "/" + self._end_effector_prim_name
-        self._gripper_dof_name = gripper_dof_name or "finger_joint"
+        self._end_effector_prim_name = end_effector_prim_name or 'tool0'
+        self._end_effector_prim_path = prim_path + '/' + self._end_effector_prim_name
+        self._gripper_dof_name = gripper_dof_name or 'finger_joint'
         if gripper_open_position is None:
             gripper_open_position = 0.0
         if gripper_closed_position is None:
@@ -121,7 +123,7 @@ class UR5e(IsaacsimArticulation):
         if self._start_position is not None:
             value = Gf.Vec3d(*(float(component) for component in self._start_position))
             for op in xformable.GetOrderedXformOps():
-                if op.GetOpName() == "xformOp:translate":
+                if op.GetOpName() == 'xformOp:translate':
                     op.Set(value)
                     break
             else:
@@ -131,7 +133,7 @@ class UR5e(IsaacsimArticulation):
             quat = [float(component) for component in self._start_orientation]
             value_d = Gf.Quatd(quat[0], quat[1], quat[2], quat[3])
             for op in xformable.GetOrderedXformOps():
-                if op.GetOpName() == "xformOp:orient":
+                if op.GetOpName() == 'xformOp:orient':
                     if op.GetPrecision() == UsdGeom.XformOp.PrecisionFloat:
                         op.Set(Gf.Quatf(quat[0], quat[1], quat[2], quat[3]))
                     else:
@@ -140,7 +142,7 @@ class UR5e(IsaacsimArticulation):
             else:
                 xformable.AddOrientOp(precision=UsdGeom.XformOp.PrecisionDouble).Set(value_d)
 
-    def _author_gripper_mount_pose(self) -> None:
+    def _author_gripper_mount_pose(self) -> None:  # noqa: C901
         if not any(
             value is not None
             for value in (
@@ -170,7 +172,7 @@ class UR5e(IsaacsimArticulation):
             quat = [float(component) for component in quat_wxyz]
             xformable = UsdGeom.Xformable(prim)
             for op in xformable.GetOrderedXformOps():
-                if op.GetOpName() == "xformOp:orient":
+                if op.GetOpName() == 'xformOp:orient':
                     if op.GetPrecision() == UsdGeom.XformOp.PrecisionFloat:
                         op.Set(Gf.Quatf(quat[0], quat[1], quat[2], quat[3]))
                     else:
@@ -187,7 +189,7 @@ class UR5e(IsaacsimArticulation):
             value = Gf.Vec3d(*(float(component) for component in xyz))
             xformable = UsdGeom.Xformable(prim)
             for op in xformable.GetOrderedXformOps():
-                if op.GetOpName() == "xformOp:translate":
+                if op.GetOpName() == 'xformOp:translate':
                     op.Set(value)
                     return
             xformable.AddTranslateOp(precision=UsdGeom.XformOp.PrecisionDouble).Set(value)
@@ -225,7 +227,7 @@ class UR5e(IsaacsimArticulation):
             if not reset_stack:
                 return
 
-            body0_rel = joint_prim.GetRelationship("physics:body0")
+            body0_rel = joint_prim.GetRelationship('physics:body0')
             if not body0_rel:
                 return
             body0_targets = body0_rel.GetTargets()
@@ -239,10 +241,10 @@ class UR5e(IsaacsimArticulation):
             body0_world = cache.GetLocalToWorldTransform(body0_prim)
             body0_pos = body0_world.ExtractTranslation()
             body0_rot = body0_world.ExtractRotationQuat()
-            local_pos0 = _vec3_from_attr(joint_prim, "physics:localPos0", Gf.Vec3d(0.0, 0.0, 0.0))
-            local_pos1 = _vec3_from_attr(joint_prim, "physics:localPos1", Gf.Vec3d(0.0, 0.0, 0.0))
-            local_rot0 = _quat_from_attr(joint_prim, "physics:localRot0", Gf.Quatd(1.0, 0.0, 0.0, 0.0))
-            local_rot1 = _quat_from_attr(joint_prim, "physics:localRot1", Gf.Quatd(1.0, 0.0, 0.0, 0.0))
+            local_pos0 = _vec3_from_attr(joint_prim, 'physics:localPos0', Gf.Vec3d(0.0, 0.0, 0.0))
+            local_pos1 = _vec3_from_attr(joint_prim, 'physics:localPos1', Gf.Vec3d(0.0, 0.0, 0.0))
+            local_rot0 = _quat_from_attr(joint_prim, 'physics:localRot0', Gf.Quatd(1.0, 0.0, 0.0, 0.0))
+            local_rot1 = _quat_from_attr(joint_prim, 'physics:localRot1', Gf.Quatd(1.0, 0.0, 0.0, 0.0))
 
             target_rot = (body0_rot * local_rot0 * local_rot1.GetInverse()).GetNormalized()
             target_pos = body0_pos + _rotate_vec(body0_rot, local_pos0) - _rotate_vec(target_rot, local_pos1)
@@ -284,21 +286,21 @@ class UR5e(IsaacsimArticulation):
 
         if not self._configure_gripper_mount_joint:
             return
-        joint_prim = get_prim_at_path(f"{self._root_prim_path}/joints/robot_gripper_joint")
+        joint_prim = get_prim_at_path(f'{self._root_prim_path}/joints/robot_gripper_joint')
         if joint_prim is None or not joint_prim.IsValid():
             return
         if gripper_base_path is not None:
             try:
-                joint_prim.CreateRelationship("physics:body0", False).SetTargets(
-                    [Sdf.Path(f"{self._root_prim_path}/wrist_3_link")]
+                joint_prim.CreateRelationship('physics:body0', False).SetTargets(
+                    [Sdf.Path(f'{self._root_prim_path}/wrist_3_link')]
                 )
-                joint_prim.CreateRelationship("physics:body1", False).SetTargets([Sdf.Path(gripper_base_path)])
+                joint_prim.CreateRelationship('physics:body1', False).SetTargets([Sdf.Path(gripper_base_path)])
             except Exception:
                 pass
-        _set_vec3_attr(joint_prim, "physics:localPos0", self._gripper_mount_local_pos0)
-        _set_vec3_attr(joint_prim, "physics:localPos1", self._gripper_mount_local_pos1)
-        _set_quat_attr(joint_prim, "physics:localRot0", self._gripper_mount_local_rot0)
-        _set_quat_attr(joint_prim, "physics:localRot1", self._gripper_mount_local_rot1)
+        _set_vec3_attr(joint_prim, 'physics:localPos0', self._gripper_mount_local_pos0)
+        _set_vec3_attr(joint_prim, 'physics:localPos1', self._gripper_mount_local_pos1)
+        _set_quat_attr(joint_prim, 'physics:localRot0', self._gripper_mount_local_rot0)
+        _set_quat_attr(joint_prim, 'physics:localRot1', self._gripper_mount_local_rot1)
         if gripper_xform_path is not None:
             _align_reset_gripper_to_mount(gripper_xform_path, joint_prim)
 
@@ -314,10 +316,10 @@ class UR5e(IsaacsimArticulation):
                 return
 
         gripper_roots = [
-            f"{self._root_prim_path}/wrist_3_link/Gripper/Robotiq_2F_85",
-            f"{self._root_prim_path}/Gripper/Robotiq_2F_85",
-            f"{self._root_prim_path}/wrist_3_link/Gripper",
-            f"{self._root_prim_path}/Gripper",
+            f'{self._root_prim_path}/wrist_3_link/Gripper/Robotiq_2F_85',
+            f'{self._root_prim_path}/Gripper/Robotiq_2F_85',
+            f'{self._root_prim_path}/wrist_3_link/Gripper',
+            f'{self._root_prim_path}/Gripper',
         ]
 
         root_prim = None
@@ -334,7 +336,7 @@ class UR5e(IsaacsimArticulation):
 
         stage = root_prim.GetStage()
         material = self._visible_fingertip_material(stage, Gf=Gf, Sdf=Sdf, UsdGeom=UsdGeom, UsdShade=UsdShade)
-        keywords = ("finger", "fingertip", "tip", "pad")
+        keywords = ('finger', 'fingertip', 'tip', 'pad')
         for prim in Usd.PrimRange(root_prim):
             path_text = str(prim.GetPath()).lower()
             name_text = prim.GetName().lower()
@@ -349,7 +351,7 @@ class UR5e(IsaacsimArticulation):
                 imageable = UsdGeom.Imageable(prim)
                 if imageable:
                     imageable.CreateVisibilityAttr().Set(UsdGeom.Tokens.inherited)
-                    imageable.CreatePurposeAttr().Set("default")
+                    imageable.CreatePurposeAttr().Set('default')
             except Exception:
                 pass
             try:
@@ -367,16 +369,16 @@ class UR5e(IsaacsimArticulation):
 
     def _visible_fingertip_material(self, stage, *, Gf, Sdf, UsdGeom, UsdShade):
         try:
-            safe_name = self._root_prim_path.strip("/").replace("/", "_") or "ur5e"
-            looks_path = Sdf.Path(f"/World/Looks/{safe_name}_robotiq_visible_fingertips")
+            safe_name = self._root_prim_path.strip('/').replace('/', '_') or 'ur5e'
+            looks_path = Sdf.Path(f'/World/Looks/{safe_name}_robotiq_visible_fingertips')
             UsdGeom.Scope.Define(stage, looks_path.GetParentPath())
             material = UsdShade.Material.Define(stage, looks_path)
-            shader = UsdShade.Shader.Define(stage, looks_path.AppendPath("Shader"))
-            shader.CreateIdAttr("UsdPreviewSurface")
-            shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(0.72, 0.72, 0.68))
-            shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.55)
-            shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
-            material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+            shader = UsdShade.Shader.Define(stage, looks_path.AppendPath('Shader'))
+            shader.CreateIdAttr('UsdPreviewSurface')
+            shader.CreateInput('diffuseColor', Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(0.72, 0.72, 0.68))
+            shader.CreateInput('roughness', Sdf.ValueTypeNames.Float).Set(0.55)
+            shader.CreateInput('metallic', Sdf.ValueTypeNames.Float).Set(0.0)
+            material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), 'surface')
             return material
         except Exception:
             return None
@@ -395,25 +397,25 @@ class UR5e(IsaacsimArticulation):
                 return
 
         finger_specs = {
-            "inner_pad_collision": {
-                "links": ("left_inner_finger", "right_inner_finger"),
-                "center": (-0.0535, 0.1288, 0.0),
-                "size": (0.024, 0.044, 0.024),
+            'inner_pad_collision': {
+                'links': ('left_inner_finger', 'right_inner_finger'),
+                'center': (-0.0535, 0.1288, 0.0),
+                'size': (0.024, 0.044, 0.024),
             },
-            "inner_finger_collision": {
-                "links": ("left_inner_finger", "right_inner_finger"),
-                "center": (-0.0590, 0.1035, 0.0),
-                "size": (0.034, 0.032, 0.030),
+            'inner_finger_collision': {
+                'links': ('left_inner_finger', 'right_inner_finger'),
+                'center': (-0.0590, 0.1035, 0.0),
+                'size': (0.034, 0.032, 0.030),
             },
-            "outer_finger_collision": {
-                "links": ("left_outer_finger", "right_outer_finger"),
-                "center": (-0.0625, 0.0737, 0.0),
-                "size": (0.034, 0.064, 0.030),
+            'outer_finger_collision': {
+                'links': ('left_outer_finger', 'right_outer_finger'),
+                'center': (-0.0625, 0.0737, 0.0),
+                'size': (0.034, 0.064, 0.030),
             },
         }
         link_roots = [
-            f"{self._root_prim_path}/wrist_3_link/Gripper/Robotiq_2F_85",
-            f"{self._root_prim_path}/Gripper/Robotiq_2F_85",
+            f'{self._root_prim_path}/wrist_3_link/Gripper/Robotiq_2F_85',
+            f'{self._root_prim_path}/Gripper/Robotiq_2F_85',
         ]
 
         stage = None
@@ -425,16 +427,16 @@ class UR5e(IsaacsimArticulation):
             stage = root_prim.GetStage()
             material = self._visible_fingertip_material(stage, Gf=Gf, Sdf=Sdf, UsdGeom=UsdGeom, UsdShade=UsdShade)
             for spec_name, spec in finger_specs.items():
-                for link_name in spec["links"]:
-                    link_path = f"{root_path}/{link_name}"
+                for link_name in spec['links']:
+                    link_path = f'{root_path}/{link_name}'
                     link_prim = get_prim_at_path(link_path)
                     if link_prim is None or not link_prim.IsValid():
                         continue
                     self._define_gripper_collision_cube(
                         stage=stage,
-                        path=f"{link_path}/{spec_name}",
-                        center=spec["center"],
-                        size=spec["size"],
+                        path=f'{link_path}/{spec_name}',
+                        center=spec['center'],
+                        size=spec['size'],
                         material=material,
                         Gf=Gf,
                         Sdf=Sdf,
@@ -467,7 +469,7 @@ class UR5e(IsaacsimArticulation):
         try:
             imageable = UsdGeom.Imageable(prim)
             imageable.CreateVisibilityAttr().Set(UsdGeom.Tokens.inherited)
-            imageable.CreatePurposeAttr().Set("default")
+            imageable.CreatePurposeAttr().Set('default')
             cube.CreateDisplayColorAttr([Gf.Vec3f(0.72, 0.72, 0.68)])
             cube.CreateDisplayOpacityAttr([1.0])
             if material is not None:
@@ -484,10 +486,10 @@ class UR5e(IsaacsimArticulation):
         found_translate = False
         found_scale = False
         for op in xformable.GetOrderedXformOps():
-            if op.GetOpName() == "xformOp:translate":
+            if op.GetOpName() == 'xformOp:translate':
                 op.Set(translate)
                 found_translate = True
-            elif op.GetOpName() == "xformOp:scale":
+            elif op.GetOpName() == 'xformOp:scale':
                 op.Set(scale)
                 found_scale = True
         if not found_translate:
@@ -500,12 +502,12 @@ class UR5e(IsaacsimArticulation):
             collision_api.CreateCollisionEnabledAttr(True)
         except Exception:
             try:
-                prim.CreateAttribute("physics:collisionEnabled", Sdf.ValueTypeNames.Bool).Set(True)
+                prim.CreateAttribute('physics:collisionEnabled', Sdf.ValueTypeNames.Bool).Set(True)
             except Exception:
                 pass
         try:
-            prim.CreateAttribute("physxCollision:contactOffset", Sdf.ValueTypeNames.Float).Set(0.004)
-            prim.CreateAttribute("physxCollision:restOffset", Sdf.ValueTypeNames.Float).Set(0.0)
+            prim.CreateAttribute('physxCollision:contactOffset', Sdf.ValueTypeNames.Float).Set(0.004)
+            prim.CreateAttribute('physxCollision:restOffset', Sdf.ValueTypeNames.Float).Set(0.0)
         except Exception:
             pass
         del material, UsdShade
@@ -520,7 +522,7 @@ class UR5e(IsaacsimArticulation):
                 return None
 
         for relative_path in relative_paths:
-            path = f"{self._root_prim_path}/{relative_path}"
+            path = f'{self._root_prim_path}/{relative_path}'
             try:
                 prim = get_prim_at_path(path)
             except Exception:
@@ -535,8 +537,8 @@ class UR5e(IsaacsimArticulation):
             relative_paths.append(str(self._gripper_container_path_override))
         relative_paths.extend(
             [
-                "wrist_3_link/Gripper",
-                "Gripper",
+                'wrist_3_link/Gripper',
+                'Gripper',
             ]
         )
         return self._resolve_existing_prim_path(relative_paths)
@@ -547,17 +549,19 @@ class UR5e(IsaacsimArticulation):
             relative_paths.append(str(self._gripper_base_link_path_override))
         relative_paths.extend(
             [
-                "wrist_3_link/Gripper/Robotiq_2F_85/base_link",
-                "wrist_3_link/Gripper/base_link",
-                "Gripper/Robotiq_2F_85/base_link",
-                "Gripper/base_link",
+                'wrist_3_link/Gripper/Robotiq_2F_85/base_link',
+                'wrist_3_link/Gripper/base_link',
+                'Gripper/Robotiq_2F_85/base_link',
+                'Gripper/base_link',
             ]
         )
         return self._resolve_existing_prim_path(relative_paths)
 
     def _make_gripper(self, gripper_cls=None):
         if gripper_cls is None:
-            from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper as gripper_cls
+            from isaacsim.robot.manipulators.grippers.parallel_gripper import (
+                ParallelGripper as gripper_cls,
+            )
 
         gripper = gripper_cls(
             end_effector_prim_path=self._end_effector_prim_path,
@@ -575,7 +579,7 @@ class UR5e(IsaacsimArticulation):
 
     @staticmethod
     def _normalized_dof_name(dof_name: str) -> str:
-        return str(dof_name).replace("\\", "/").strip("/")
+        return str(dof_name).replace('\\', '/').strip('/')
 
     @classmethod
     def _dof_name_matches(cls, candidate: str, requested: str) -> bool:
@@ -585,11 +589,11 @@ class UR5e(IsaacsimArticulation):
             return True
         if not candidate_name or not requested_name:
             return False
-        return candidate_name.split("/")[-1] == requested_name.split("/")[-1]
+        return candidate_name.split('/')[-1] == requested_name.split('/')[-1]
 
     @classmethod
     def _resolve_dof_name_from_dofs(cls, requested: str, dof_names: List[str]) -> Optional[str]:
-        requested_name = str(requested or "finger_joint")
+        requested_name = str(requested or 'finger_joint')
         available_names = [str(name) for name in (dof_names or [])]
         if requested_name in available_names:
             return requested_name
@@ -600,7 +604,7 @@ class UR5e(IsaacsimArticulation):
         if len(suffix_matches) > 1:
             requested_norm = cls._normalized_dof_name(requested_name)
             for name in suffix_matches:
-                if cls._normalized_dof_name(name).endswith("/" + requested_norm):
+                if cls._normalized_dof_name(name).endswith('/' + requested_norm):
                     return name
             return suffix_matches[0]
         return None
@@ -620,13 +624,13 @@ class UR5e(IsaacsimArticulation):
         self._gripper_dof_name = str(dof_name)
         if self._gripper is None:
             return
-        if hasattr(self._gripper, "_joint_prim_names"):
+        if hasattr(self._gripper, '_joint_prim_names'):
             self._gripper._joint_prim_names = [self._gripper_dof_name]
-        if hasattr(self._gripper, "_joint_dof_indicies"):
+        if hasattr(self._gripper, '_joint_dof_indicies'):
             self._gripper._joint_dof_indicies = np.array([None, None])
 
     def _resolve_gripper_dof_name_for_initialized_articulation(self) -> str:
-        requested_name = self._gripper_dof_name or "finger_joint"
+        requested_name = self._gripper_dof_name or 'finger_joint'
         try:
             dof_names = list(self.dof_names or [])
         except Exception:
@@ -634,12 +638,11 @@ class UR5e(IsaacsimArticulation):
         resolved_name = self._resolve_dof_name_from_dofs(requested_name, dof_names)
         if resolved_name is None:
             log.warn(
-                f"ur5e {self.name}: failed to resolve gripper DOF {requested_name!r}; "
-                f"available DOFs: {dof_names!r}"
+                f'ur5e {self.name}: failed to resolve gripper DOF {requested_name!r}; ' f'available DOFs: {dof_names!r}'
             )
             return requested_name
         if resolved_name != requested_name:
-            log.info(f"ur5e {self.name}: resolved gripper DOF {requested_name!r} -> {resolved_name!r}.")
+            log.info(f'ur5e {self.name}: resolved gripper DOF {requested_name!r} -> {resolved_name!r}.')
         self._set_gripper_dof_name(resolved_name)
         return resolved_name
 
@@ -654,21 +657,21 @@ class UR5e(IsaacsimArticulation):
 
         candidates = [
             self._end_effector_prim_name,
-            "tool0",
-            "flange",
-            "wrist_3_link",
-            "wrist_3_link/ft_frame",
-            "wrist_3_link/Gripper/Robotiq_2F_85/base_link",
-            "wrist_3_link/Gripper/base_link",
-            "Gripper/Robotiq_2F_85/base_link",
-            "Gripper/base_link",
+            'tool0',
+            'flange',
+            'wrist_3_link',
+            'wrist_3_link/ft_frame',
+            'wrist_3_link/Gripper/Robotiq_2F_85/base_link',
+            'wrist_3_link/Gripper/base_link',
+            'Gripper/Robotiq_2F_85/base_link',
+            'Gripper/base_link',
         ]
         seen = set()
         for candidate in candidates:
             if not candidate or candidate in seen:
                 continue
             seen.add(candidate)
-            candidate_path = f"{self._root_prim_path}/{candidate}"
+            candidate_path = f'{self._root_prim_path}/{candidate}'
             try:
                 if is_prim_path_valid(candidate_path):
                     self._end_effector_prim_name = candidate
@@ -702,7 +705,7 @@ class UR5e(IsaacsimArticulation):
         if self._end_effector_prim_path != previous_end_effector_path:
             self._gripper = self._make_gripper()
         self._resolve_gripper_dof_name_for_initialized_articulation()
-        self._end_effector = IRigidBody.create(prim_path=self._end_effector_prim_path, name=self.name + "_end_effector")
+        self._end_effector = IRigidBody.create(prim_path=self._end_effector_prim_path, name=self.name + '_end_effector')
         self._end_effector.unwrap().initialize(physics_sim_view)
         self._gripper.initialize(
             physics_sim_view=physics_sim_view,
@@ -725,7 +728,7 @@ class UR5e(IsaacsimArticulation):
         self._author_gripper_collision_pads()
         self._gripper.post_reset()
         for dof_index in self.gripper.active_joint_indices:
-            self._articulation_controller.switch_dof_control_mode(dof_index=dof_index, mode="position")
+            self._articulation_controller.switch_dof_control_mode(dof_index=dof_index, mode='position')
 
 
 class _ArticulationPoseProxy:
@@ -774,7 +777,7 @@ class _UsdPrimPoseProxy:
         return self._pose()
 
 
-@BaseRobot.register("UR5eRobot")
+@BaseRobot.register('UR5eRobot')
 class UR5eRobot(BaseRobot):
     def __init__(self, config: UR5eRobotCfg, scene: IScene):
         super().__init__(config, scene)
@@ -786,11 +789,11 @@ class UR5eRobot(BaseRobot):
             self._robot_scale = np.array(config.scale)
 
         if config.usd_path is None:
-            raise ValueError("UR5eRobotCfg.usd_path must be set to a UR5e USD asset.")
+            raise ValueError('UR5eRobotCfg.usd_path must be set to a UR5e USD asset.')
 
-        log.debug(f"ur5e {config.name}: position    : {self._start_position}")
-        log.debug(f"ur5e {config.name}: orientation : {self._start_orientation}")
-        log.debug(f"ur5e {config.name}: usd_path    : {config.usd_path}")
+        log.debug(f'ur5e {config.name}: position    : {self._start_position}')
+        log.debug(f'ur5e {config.name}: orientation : {self._start_orientation}')
+        log.debug(f'ur5e {config.name}: usd_path    : {config.usd_path}')
 
         self.articulation = UR5e(
             prim_path=config.prim_path,
@@ -829,6 +832,7 @@ class UR5eRobot(BaseRobot):
         return self._robot_ik_base
 
     def post_reset(self):
+        self.invalidate_measurement_cache()
         super().post_reset()
         self._robot_ik_base = self._resolve_ik_base_rigid_body()
         self._sync_resolved_gripper_dof_name_to_config()
@@ -838,7 +842,7 @@ class UR5eRobot(BaseRobot):
             self._apply_gripper_contact_material()
 
     def _robot_rigid_body_by_suffix(self, suffix: str):
-        suffix = f"/{suffix}"
+        suffix = f'/{suffix}'
         for prim_path, rigid_body in self._rigid_body_map.items():
             if prim_path.endswith(suffix):
                 return rigid_body
@@ -847,10 +851,10 @@ class UR5eRobot(BaseRobot):
     def _resolve_ik_base_rigid_body(self):
         candidate_names = [
             self.config.ik_base_prim_name,
-            "base_link",
-            "base",
-            "base_link_inertia",
-            "shoulder_link",
+            'base_link',
+            'base',
+            'base_link_inertia',
+            'shoulder_link',
         ]
         seen = set()
         for candidate_name in candidate_names:
@@ -864,8 +868,8 @@ class UR5eRobot(BaseRobot):
         if self._rigid_body_map:
             first_path, first_body = next(iter(self._rigid_body_map.items()))
             log.warn(
-                f"ur5e {self.config.name}: failed to resolve IK base {self.config.ik_base_prim_name!r}; "
-                f"falling back to first rigid body {first_path!r}."
+                f'ur5e {self.config.name}: failed to resolve IK base {self.config.ik_base_prim_name!r}; '
+                f'falling back to first rigid body {first_path!r}.'
             )
             return first_body
 
@@ -874,8 +878,8 @@ class UR5eRobot(BaseRobot):
             return usd_pose_proxy
 
         log.warn(
-            f"ur5e {self.config.name}: no rigid bodies were found for IK base resolution; "
-            "using the articulation root pose as IK base."
+            f'ur5e {self.config.name}: no rigid bodies were found for IK base resolution; '
+            'using the articulation root pose as IK base.'
         )
         return _ArticulationPoseProxy(self.articulation)
 
@@ -893,20 +897,18 @@ class UR5eRobot(BaseRobot):
             if not candidate_name or candidate_name in seen:
                 continue
             seen.add(candidate_name)
-            prim_path = f"{self.config.prim_path}/{candidate_name}"
+            prim_path = f'{self.config.prim_path}/{candidate_name}'
             try:
                 prim = get_prim_at_path(prim_path)
             except Exception:
                 prim = None
             if prim is not None and prim.IsValid():
-                log.info(
-                    f"ur5e {self.config.name}: using USD prim {prim_path!r} as IK base pose source."
-                )
+                log.info(f'ur5e {self.config.name}: using USD prim {prim_path!r} as IK base pose source.')
                 return _UsdPrimPoseProxy(prim_path)
         return None
 
     def _resolved_articulation_dof_name(self, dof_name: str) -> Optional[str]:
-        resolver = getattr(self.articulation, "resolve_dof_name", None)
+        resolver = getattr(self.articulation, 'resolve_dof_name', None)
         if callable(resolver):
             resolved_name = resolver(dof_name)
             if resolved_name is not None:
@@ -918,9 +920,9 @@ class UR5eRobot(BaseRobot):
             return None
 
     def _sync_resolved_gripper_dof_name_to_config(self) -> None:
-        resolved_name = getattr(self.articulation, "gripper_dof_name", None)
+        resolved_name = getattr(self.articulation, 'gripper_dof_name', None)
         if not resolved_name:
-            resolved_name = self._resolved_articulation_dof_name(self.config.gripper_dof_name or "finger_joint")
+            resolved_name = self._resolved_articulation_dof_name(self.config.gripper_dof_name or 'finger_joint')
         if resolved_name and resolved_name != self.config.gripper_dof_name:
             self.config.gripper_dof_name = str(resolved_name)
 
@@ -958,8 +960,12 @@ class UR5eRobot(BaseRobot):
         results = []
         for requested_name, index in zip(joint_names, indices):
             index = int(index)
-            metadata = {'joint_name': requested_name, 'dof_index': index, 'valid': False,
-                        'source': 'existing_robot_joint_prim:UsdPhysics.DriveAPI(angular).GetTypeAttr'}
+            metadata = {
+                'joint_name': requested_name,
+                'dof_index': index,
+                'valid': False,
+                'source': 'existing_robot_joint_prim:UsdPhysics.DriveAPI(angular).GetTypeAttr',
+            }
             try:
                 dof_name = str(actual_names[index])
                 metadata['native_dof_name'] = dof_name
@@ -983,14 +989,17 @@ class UR5eRobot(BaseRobot):
 
     def _configure_drive_gains(self) -> None:
         from toolkits.factory_dual_franka_assembly.beam_arm_drive import (
-            ArmDriveReadbackError, configure_arm_drive,
+            ArmDriveReadbackError,
+            configure_arm_drive,
         )
 
         self.gripper_drive_diagnostics = {'configured': False}
         try:
             self.arm_drive_diagnostics = configure_arm_drive(
-                self.articulation, _UR5E_ARM_JOINT_NAMES,
-                self.config.arm_drive_kp, self.config.arm_drive_kd,
+                self.articulation,
+                _UR5E_ARM_JOINT_NAMES,
+                self.config.arm_drive_kp,
+                self.config.arm_drive_kd,
                 self._arm_drive_type_readbacks,
             )
         except ArmDriveReadbackError as exc:
@@ -1003,11 +1012,13 @@ class UR5eRobot(BaseRobot):
             print(f'[arm-drive-readback] robot={self.config.name} {self.arm_drive_diagnostics}', flush=True)
         strict_gripper = bool(getattr(self.config, 'gripper_require_drive_readback', False))
         self.gripper_drive_diagnostics.update(
-            kp_requested=self.config.gripper_drive_kp, kd_requested=self.config.gripper_drive_kd,
-            max_effort_requested=self.config.gripper_drive_max_effort, strict_request=strict_gripper,
+            kp_requested=self.config.gripper_drive_kp,
+            kd_requested=self.config.gripper_drive_kd,
+            max_effort_requested=self.config.gripper_drive_max_effort,
+            strict_request=strict_gripper,
         )
         try:
-            gripper_dof_name = self._resolved_articulation_dof_name(self.config.gripper_dof_name or "finger_joint")
+            gripper_dof_name = self._resolved_articulation_dof_name(self.config.gripper_dof_name or 'finger_joint')
             if gripper_dof_name is None:
                 raise ValueError('Gripper DOF could not be resolved')
             gripper_index = np.asarray([self.articulation.get_dof_index(gripper_dof_name)], dtype=np.int64)
@@ -1030,25 +1041,35 @@ class UR5eRobot(BaseRobot):
             kps, kds = view.get_gains(joint_indices=gripper_index)
             kps, kds = np.asarray(kps).copy(), np.asarray(kds).copy()
             effort = np.asarray(view.get_max_efforts(joint_indices=gripper_index), dtype=float)
-            self.gripper_drive_diagnostics.update({
-                'kp_readback': np.asarray(kps).tolist(), 'kd_readback': np.asarray(kds).tolist(),
-                'max_effort_readback': effort.tolist(),
-                'legacy_effort_setter_available': callable(getattr(self.articulation, 'set_max_efforts', None)),
-            })
+            self.gripper_drive_diagnostics.update(
+                {
+                    'kp_readback': np.asarray(kps).tolist(),
+                    'kd_readback': np.asarray(kds).tolist(),
+                    'max_effort_readback': effort.tolist(),
+                    'legacy_effort_setter_available': callable(getattr(self.articulation, 'set_max_efforts', None)),
+                }
+            )
             for name, actual, requested in (
-                ('kp', kps, self.config.gripper_drive_kp), ('kd', kds, self.config.gripper_drive_kd),
+                ('kp', kps, self.config.gripper_drive_kp),
+                ('kd', kds, self.config.gripper_drive_kd),
                 ('max_effort', effort, before_effort if requested_effort is None else requested_effort),
             ):
                 actual = np.asarray(actual, dtype=float)
-                if (actual.size != 1 or not np.all(np.isfinite(actual)) or not np.all(actual > 0)
-                        or not np.allclose(actual, requested, rtol=1e-5, atol=1e-6)):
+                if (
+                    actual.size != 1
+                    or not np.all(np.isfinite(actual))
+                    or not np.all(actual > 0)
+                    or not np.allclose(actual, requested, rtol=1e-5, atol=1e-6)
+                ):
                     raise ValueError(f'{name} native readback does not match request: {actual} vs {requested}')
             self.gripper_drive_diagnostics['configured'] = True
         except Exception as exc:
             self.gripper_drive_diagnostics['error'] = f'{type(exc).__name__}: {exc}'
             log.warn(f'Gripper drive configuration/readback failed: {self.gripper_drive_diagnostics}')
             if strict_gripper:
-                raise RuntimeError(f'Gripper drive native verification failed: {self.gripper_drive_diagnostics}') from exc
+                raise RuntimeError(
+                    f'Gripper drive native verification failed: {self.gripper_drive_diagnostics}'
+                ) from exc
         if os.environ.get('BEAM_CONTACT_TRACE_PATH') or strict_gripper:
             print(f'[gripper-drive-readback] robot={self.config.name} {self.gripper_drive_diagnostics}', flush=True)
 
@@ -1061,7 +1082,9 @@ class UR5eRobot(BaseRobot):
         try:
             name = self._resolved_articulation_dof_name(self.config.gripper_dof_name or 'finger_joint')
             indices = np.asarray([self.articulation.get_dof_index(name)], dtype=np.int64)
-            result['joint_velocity'] = np.asarray(self.articulation.get_joint_velocities(joint_indices=indices)).tolist()
+            result['joint_velocity'] = np.asarray(
+                self.articulation.get_joint_velocities(joint_indices=indices)
+            ).tolist()
             # Solver-projected joint effort includes reactions; it is not a motor-only torque sensor.
             value = self.articulation.unwrap().get_measured_joint_efforts(joint_indices=indices)
             result['measured_joint_effort'] = None if value is None else np.asarray(value).tolist()
@@ -1074,8 +1097,13 @@ class UR5eRobot(BaseRobot):
         dynamic = getattr(self.config, 'gripper_pad_dynamic_friction', None)
         if static is None and dynamic is None:
             return 80.0, 70.0  # Preserve recipes that do not opt in.
-        if (static is None or dynamic is None or not np.isfinite(static)
-                or not np.isfinite(dynamic) or not 0.0 <= dynamic <= static):
+        if (
+            static is None
+            or dynamic is None
+            or not np.isfinite(static)
+            or not np.isfinite(dynamic)
+            or not 0.0 <= dynamic <= static
+        ):
             raise ValueError('Pad friction requires finite 0 <= dynamic <= static coefficients')
         return float(static), float(dynamic)
 
@@ -1087,6 +1115,7 @@ class UR5eRobot(BaseRobot):
         links and verify every enabled collision shape's resolved binding.
         """
         from pxr import Usd, UsdPhysics, UsdShade
+
         root = stage.GetPrimAtPath(self.config.prim_path)
         if root is None or not root.IsValid():
             raise RuntimeError('Robot root unavailable for explicit pad material')
@@ -1095,30 +1124,42 @@ class UR5eRobot(BaseRobot):
         diagnostics = self.gripper_contact_material_diagnostics
         diagnostics['collider_bindings'] = []
         for name in (self.config.left_finger_link_name, self.config.right_finger_link_name):
-            links = [p for p in Usd.PrimRange(root, Usd.TraverseInstanceProxies())
-                     if name and str(p.GetPath()).endswith('/' + str(name))]
+            links = [
+                p
+                for p in Usd.PrimRange(root, Usd.TraverseInstanceProxies())
+                if name and str(p.GetPath()).endswith('/' + str(name))
+            ]
             if len(links) != 1:
                 raise RuntimeError(f'Explicit pad material needs one {name} link; found {len(links)}')
-            colliders = [p for p in Usd.PrimRange(links[0], Usd.TraverseInstanceProxies()) if p.HasAPI(UsdPhysics.CollisionAPI)
-                         and p.GetAttribute('physics:collisionEnabled').Get() is not False]
+            colliders = [
+                p
+                for p in Usd.PrimRange(links[0], Usd.TraverseInstanceProxies())
+                if p.HasAPI(UsdPhysics.CollisionAPI) and p.GetAttribute('physics:collisionEnabled').Get() is not False
+            ]
             if not colliders:
                 raise RuntimeError(f'No enabled collision shapes under {name}')
             for collider in colliders:
                 api = UsdShade.MaterialBindingAPI(collider)  # Read instance proxies without authoring on them.
                 before, _ = api.ComputeBoundMaterial(materialPurpose='physics')
                 old = before.GetPrim() if before else None
-                record = {'collider': str(collider.GetPath()),
-                          'previous_material': str(before.GetPath()) if before else None,
-                          'previous_static_friction': None if old is None else old.GetAttribute('physics:staticFriction').Get(),
-                          'previous_dynamic_friction': None if old is None else old.GetAttribute('physics:dynamicFriction').Get()}
+                record = {
+                    'collider': str(collider.GetPath()),
+                    'previous_material': str(before.GetPath()) if before else None,
+                    'previous_static_friction': None
+                    if old is None
+                    else old.GetAttribute('physics:staticFriction').Get(),
+                    'previous_dynamic_friction': None
+                    if old is None
+                    else old.GetAttribute('physics:dynamicFriction').Get(),
+                }
                 bind_prim = collider
                 while bind_prim.IsInstanceProxy():
                     bind_prim = bind_prim.GetParent()
                 if not str(bind_prim.GetPath()).startswith(str(links[0].GetPath()) + '/') and bind_prim != links[0]:
                     raise RuntimeError(f'Cannot isolate instance material under {name}')
                 UsdShade.MaterialBindingAPI.Apply(bind_prim).Bind(
-                    material, bindingStrength=UsdShade.Tokens.strongerThanDescendants,
-                    materialPurpose='physics')
+                    material, bindingStrength=UsdShade.Tokens.strongerThanDescendants, materialPurpose='physics'
+                )
                 resolved, _ = api.ComputeBoundMaterial(materialPurpose='physics')
                 if not resolved or str(resolved.GetPath()) != expected:
                     raise RuntimeError(f'Physics material binding did not resolve on {collider.GetPath()}')
@@ -1133,14 +1174,19 @@ class UR5eRobot(BaseRobot):
         damping = getattr(self.config, 'gripper_pad_contact_damping', None)
         if (stiffness is None) != (damping is None):
             raise ValueError('Compliant pad contact requires stiffness and damping together')
-        if stiffness is not None and (not np.isfinite(stiffness) or stiffness <= 0
-                                      or not np.isfinite(damping) or damping < 0):
+        if stiffness is not None and (
+            not np.isfinite(stiffness) or stiffness <= 0 or not np.isfinite(damping) or damping < 0
+        ):
             raise ValueError('Compliant pad contact requires finite positive stiffness and nonnegative damping')
         if stiffness is not None and getattr(self.config, 'gripper_pad_static_friction', None) is None:
             raise ValueError('Compliant pad contact requires an explicitly bound pad material')
         self.gripper_contact_material_diagnostics = {
-            'requested_static_friction': static, 'requested_dynamic_friction': dynamic,
-            'bound_finger_paths': [], 'binding_errors': [], 'combine_mode': 'max'}
+            'requested_static_friction': static,
+            'requested_dynamic_friction': dynamic,
+            'bound_finger_paths': [],
+            'binding_errors': [],
+            'combine_mode': 'max',
+        }
         try:
             from isaacsim.core.api.materials import PhysicsMaterial
         except Exception:
@@ -1152,8 +1198,8 @@ class UR5eRobot(BaseRobot):
                 return
 
         try:
-            material_name = f"{self.config.name}_robotiq_high_friction"
-            material_path = f"/World/Physics_Materials/{material_name}"
+            material_name = f'{self.config.name}_robotiq_high_friction'
+            material_path = f'/World/Physics_Materials/{material_name}'
             physics_material = PhysicsMaterial(
                 prim_path=material_path,
                 name=material_name,
@@ -1162,28 +1208,33 @@ class UR5eRobot(BaseRobot):
                 restitution=0.0,
             )
             try:
-                from pxr import PhysxSchema
                 import omni.usd
+                from pxr import PhysxSchema
 
                 stage = omni.usd.get_context().get_stage()
                 material_prim = stage.GetPrimAtPath(material_path) if stage is not None else None
                 if material_prim is not None and material_prim.IsValid():
                     # Keep the combine rule fixed during the coefficient trial.
                     physx_material = PhysxSchema.PhysxMaterialAPI.Apply(material_prim)
-                    physx_material.CreateFrictionCombineModeAttr().Set("max")
+                    physx_material.CreateFrictionCombineModeAttr().Set('max')
                     if stiffness is not None:
                         physx_material.CreateCompliantContactStiffnessAttr().Set(stiffness)
                         physx_material.CreateCompliantContactDampingAttr().Set(damping)
                         self.gripper_contact_material_diagnostics.update(
                             contact_stiffness_readback=physx_material.GetCompliantContactStiffnessAttr().Get(),
-                            contact_damping_readback=physx_material.GetCompliantContactDampingAttr().Get())
-                        if (not np.isclose(self.gripper_contact_material_diagnostics['contact_stiffness_readback'], stiffness)
-                                or not np.isclose(self.gripper_contact_material_diagnostics['contact_damping_readback'], damping)):
+                            contact_damping_readback=physx_material.GetCompliantContactDampingAttr().Get(),
+                        )
+                        if not np.isclose(
+                            self.gripper_contact_material_diagnostics['contact_stiffness_readback'], stiffness
+                        ) or not np.isclose(
+                            self.gripper_contact_material_diagnostics['contact_damping_readback'], damping
+                        ):
                             raise RuntimeError('Compliant pad material readback differs from its configuration')
                     self.gripper_contact_material_diagnostics.update(
                         material_path=material_path,
                         static_friction_readback=material_prim.GetAttribute('physics:staticFriction').Get(),
-                        dynamic_friction_readback=material_prim.GetAttribute('physics:dynamicFriction').Get())
+                        dynamic_friction_readback=material_prim.GetAttribute('physics:dynamicFriction').Get(),
+                    )
             except Exception:
                 if stiffness is not None:
                     raise
@@ -1196,8 +1247,10 @@ class UR5eRobot(BaseRobot):
             # Opt-in only: do not newly activate the legacy 80/70 material on
             # other recipes as a side effect of fixing the Beam binding path.
             self._bind_explicit_gripper_material(stage, material_prim)
-            if stiffness is not None and (self.gripper_contact_material_diagnostics['binding_errors']
-                                          or not self.gripper_contact_material_diagnostics['bound_finger_paths']):
+            if stiffness is not None and (
+                self.gripper_contact_material_diagnostics['binding_errors']
+                or not self.gripper_contact_material_diagnostics['bound_finger_paths']
+            ):
                 raise RuntimeError('Compliant pad material was not bound to the finger colliders')
         else:
             for link_name in (self.config.left_finger_link_name, self.config.right_finger_link_name):
@@ -1208,11 +1261,16 @@ class UR5eRobot(BaseRobot):
                     continue
                 try:
                     rigid_body.unwrap().apply_physics_material(physics_material)
-                    self.gripper_contact_material_diagnostics['bound_finger_paths'].append(str(rigid_body.unwrap().prim_path))
+                    self.gripper_contact_material_diagnostics['bound_finger_paths'].append(
+                        str(rigid_body.unwrap().prim_path)
+                    )
                 except Exception as exc:
                     self.gripper_contact_material_diagnostics['binding_errors'].append(f'{link_name}: {exc}')
         if os.environ.get('BEAM_CONTACT_TRACE_PATH') or getattr(self.config, 'gripper_require_drive_readback', False):
-            print(f'[gripper-material-readback] robot={self.config.name} {self.gripper_contact_material_diagnostics}', flush=True)
+            print(
+                f'[gripper-material-readback] robot={self.config.name} {self.gripper_contact_material_diagnostics}',
+                flush=True,
+            )
 
     @staticmethod
     def action_to_dict(action):
@@ -1220,10 +1278,10 @@ class UR5eRobot(BaseRobot):
             return array.tolist() if isinstance(array, np.ndarray) else array
 
         return {
-            "joint_efforts": numpy_to_list(action.joint_efforts),
-            "joint_indices": numpy_to_list(action.joint_indices),
-            "joint_positions": numpy_to_list(action.joint_positions),
-            "joint_velocities": numpy_to_list(action.joint_velocities),
+            'joint_efforts': numpy_to_list(action.joint_efforts),
+            'joint_indices': numpy_to_list(action.joint_indices),
+            'joint_positions': numpy_to_list(action.joint_positions),
+            'joint_velocities': numpy_to_list(action.joint_velocities),
         }
 
     @staticmethod
@@ -1238,7 +1296,7 @@ class UR5eRobot(BaseRobot):
                 [self.articulation.get_dof_index(name) for name in _UR5E_ARM_JOINT_NAMES],
                 dtype=np.int64,
             )
-            current = np.asarray(self.articulation.get_joint_positions(joint_indices=indices), dtype=float).reshape(-1)
+            current = np.asarray(self.get_measured_joint_positions(indices), dtype=float).reshape(-1)
         except Exception:
             return None
         if current.shape[0] != expected_size or not np.all(np.isfinite(current)):
@@ -1253,7 +1311,7 @@ class UR5eRobot(BaseRobot):
                 [self.articulation.get_dof_index(name) for name in _UR5E_ARM_JOINT_NAMES],
                 dtype=np.int64,
             )
-            current = np.asarray(self.articulation.get_joint_positions(joint_indices=indices), dtype=float).reshape(-1)
+            current = np.asarray(self.get_measured_joint_positions(indices), dtype=float).reshape(-1)
         except Exception:
             return
         if current.shape[0] != len(_UR5E_ARM_JOINT_NAMES) or not np.all(np.isfinite(current)):
@@ -1263,6 +1321,7 @@ class UR5eRobot(BaseRobot):
             return
         try:
             self.articulation.set_joint_positions(bounded, joint_indices=indices)
+            self.invalidate_measurement_cache()
         except Exception:
             return
         try:
@@ -1273,7 +1332,7 @@ class UR5eRobot(BaseRobot):
     def _normalize_arm_joint_controller_action(self, controller_name: str, controller_action):
         if self.config.preserve_continuous_arm_joints:
             return controller_action
-        if controller_name != "arm_joint_controller" or not isinstance(controller_action, (list, tuple)):
+        if controller_name != 'arm_joint_controller' or not isinstance(controller_action, (list, tuple)):
             return controller_action
         if not controller_action:
             return controller_action
@@ -1306,9 +1365,9 @@ class UR5eRobot(BaseRobot):
     def _normalize_arm_control(self, controller_name: str, control):
         if self.config.preserve_continuous_arm_joints:
             return control
-        if controller_name not in {"arm_joint_controller", "arm_ik_controller"}:
+        if controller_name not in {'arm_joint_controller', 'arm_ik_controller'}:
             return control
-        joint_positions = getattr(control, "joint_positions", None)
+        joint_positions = getattr(control, 'joint_positions', None)
         if joint_positions is None:
             return control
         try:
@@ -1335,24 +1394,24 @@ class UR5eRobot(BaseRobot):
     def apply_action(self, action: dict):
         self.last_action = []
         deferred_controls = []
-        has_joint_override = "arm_joint_controller" in action and "arm_ik_controller" in action
+        has_joint_override = 'arm_joint_controller' in action and 'arm_ik_controller' in action
         self._renormalize_arm_joint_state_if_needed()
         for controller_name, controller_action in action.items():
             if controller_name not in self.controllers:
-                log.warn(f"unknown controller {controller_name} in action")
+                log.warn(f'unknown controller {controller_name} in action')
                 continue
             controller = self.controllers[controller_name]
             controller_action = self._normalize_arm_joint_controller_action(controller_name, controller_action)
             control = controller.action_to_control(controller_action)
             if control is None:
-                if os.environ.get("UR5E_DEBUG_GRASP", "0").lower() in {"1", "true", "yes"}:
+                if os.environ.get('UR5E_DEBUG_GRASP', '0').lower() in {'1', 'true', 'yes'}:
                     log.warn(
-                        f"ur5e {self.config.name}: controller {controller_name} returned None "
-                        f"for action {controller_action!r}; skipping this control."
+                        f'ur5e {self.config.name}: controller {controller_name} returned None '
+                        f'for action {controller_action!r}; skipping this control.'
                     )
                 continue
             control = self._normalize_arm_control(controller_name, control)
-            if has_joint_override and controller_name == "arm_ik_controller":
+            if has_joint_override and controller_name == 'arm_ik_controller':
                 self.last_action.append(self.action_to_dict(control))
                 continue
             deferred_controls.append(control)
@@ -1363,29 +1422,51 @@ class UR5eRobot(BaseRobot):
     def get_last_action(self):
         return self.last_action
 
+    def invalidate_measurement_cache(self):
+        from internutopia.core.util.physics_frame_cache import invalidate_physics_frame
+
+        invalidate_physics_frame(self)
+        for controller in self.controllers.values():
+            invalidate_physics_frame(controller)
+
+    def get_measured_joint_positions(self, joint_indices=None):
+        from internutopia.core.util.physics_frame_cache import read_sim_state
+
+        values = read_sim_state(self, ('joint_positions',), self.articulation.get_joint_positions)
+        if values is None or joint_indices is None:
+            return values
+        return np.asarray(values)[joint_indices].copy()
+
+    def get_measured_eef_pose(self):
+        from internutopia.core.util.physics_frame_cache import read_sim_state
+
+        return read_sim_state(self, ('physical_eef_pose',), self.articulation.end_effector.get_pose)
+
     def get_obs(self) -> OrderedDict[str, Any]:
-        position, orientation = self.articulation.get_pose()
+        from internutopia.core.util.physics_frame_cache import read_sim_state
+
+        position, orientation = read_sim_state(self, ('root_pose',), self.articulation.get_pose)
         obs = {
-            "position": position,
-            "orientation": orientation,
-            "joint_action": self.get_last_action(),
-            "controllers": {},
-            "sensors": {},
+            'position': position,
+            'orientation': orientation,
+            'joint_action': self.get_last_action(),
+            'controllers': {},
+            'sensors': {},
         }
-        eef_pose = self.articulation.end_effector.get_pose()
-        obs["eef_body_position"] = eef_pose[0]
-        obs["eef_body_orientation"] = eef_pose[1]
+        eef_pose = self.get_measured_eef_pose()
+        obs['eef_body_position'] = eef_pose[0]
+        obs['eef_body_orientation'] = eef_pose[1]
         # Keep recorded state in the physical TCP frame.  Lula FK remains
         # available for controller-frame diagnostics.
-        obs["eef_position"] = eef_pose[0]
-        obs["eef_orientation"] = eef_pose[1]
-        if "arm_ik_controller" in self.controllers:
-            ik_obs = self.controllers["arm_ik_controller"].get_obs()
-            obs["eef_kinematics_position"] = ik_obs.get("eef_position")
-            obs["eef_kinematics_orientation"] = ik_obs.get("eef_orientation")
-
+        obs['eef_position'] = eef_pose[0]
+        obs['eef_orientation'] = eef_pose[1]
         for c_obs_name, controller_obs in self.controllers.items():
-            obs["controllers"][c_obs_name] = controller_obs.get_obs()
+            obs['controllers'][c_obs_name] = controller_obs.get_obs()
+        if 'arm_ik_controller' in obs['controllers']:
+            ik_obs = obs['controllers']['arm_ik_controller']
+            obs['eef_kinematics_position'] = ik_obs.get('eef_position')
+            obs['eef_kinematics_orientation'] = ik_obs.get('eef_orientation')
+
         for sensor_name, sensor_obs in self.sensors.items():
-            obs["sensors"][sensor_name] = sensor_obs.get_data()
+            obs['sensors'][sensor_name] = sensor_obs.get_data()
         return self._make_ordered(obs)

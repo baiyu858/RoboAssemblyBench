@@ -43,6 +43,7 @@ def precision_insertion_settings(spec):
         'qualification_config',
         'torque_soft_limit',
         'torque_hard_limit',
+        'torque_relief',
         'axis_alignment',
     }
     for key, entry in entries.items():
@@ -81,6 +82,9 @@ def precision_insertion_settings(spec):
         from .axis_alignment import alignment_settings
 
         alignment = alignment_settings(entry.get('axis_alignment'))
+        from .torque_relief import relief_enabled
+
+        torque_relief = relief_enabled(entry.get('torque_relief', False), torque_soft)
         torque_hard = entry.get('torque_hard_limit')
         validate_torque_hard_limit(torque_hard, InsertionConfig(**config), torque_soft)
         from .validate import QualificationConfig
@@ -132,6 +136,7 @@ def precision_insertion_settings(spec):
             retreat_control=copy.deepcopy(entry.get('retreat_control', {})),
             torque_soft_limit=torque_soft,
             torque_hard_limit=torque_hard,
+            torque_relief=torque_relief,
             axis_alignment=alignment,
             released_axial_rotation=copy.deepcopy(released_axial),
             released_pose_tolerances=released_pose or None,
@@ -260,6 +265,9 @@ def replace_insertion(phases, success, binding, settings):
     phase.pop('skill', None)
     config = InsertionConfig(**settings.get('controller_config', {}))
     validate_torque_hard_limit(settings.get('torque_hard_limit'), config, settings.get('torque_soft_limit'))
+    from .torque_relief import relief_enabled
+
+    torque_relief = relief_enabled(settings.get('torque_relief', False), settings.get('torque_soft_limit'))
     common = dict(
         name='contact_insert_rl',
         backend=BACKEND,
@@ -271,6 +279,7 @@ def replace_insertion(phases, success, binding, settings):
         fallback='fail',
         torque_soft_limit=validate_torque_soft_limit(settings.get('torque_soft_limit'), config),
         torque_hard_limit=settings.get('torque_hard_limit'),
+        torque_relief=torque_relief,
         axis_alignment=copy.deepcopy(settings.get('axis_alignment')),
         requires_held_object=True,
         continuous_physics=True,

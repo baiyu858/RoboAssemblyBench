@@ -11,6 +11,7 @@ from internutopia.core.robot.articulation_action import ArticulationAction
 from internutopia.core.robot.controller import BaseController
 from internutopia.core.robot.robot import BaseRobot
 from internutopia.core.scene.scene import IScene
+from internutopia.core.util.physics_frame_cache import read_sim_state
 from internutopia_extension.configs.controllers import InverseKinematicsControllerCfg
 
 # yapf: enable
@@ -146,9 +147,7 @@ class InverseKinematicsController(BaseController):
             else:
                 joint_velocities = None
             return (
-                subset.make_articulation_action(
-                    joint_positions=joint_positions, joint_velocities=joint_velocities
-                ),
+                subset.make_articulation_action(joint_positions=joint_positions, joint_velocities=joint_velocities),
                 True,
             )
 
@@ -205,11 +204,14 @@ class InverseKinematicsController(BaseController):
         except ImportError:
             from omni.isaac.core.utils.numpy.rotations import rot_matrices_to_quats
 
-        ik_base_pose = self.get_ik_base_world_pose()
-        self._kinematics_solver.set_robot_base_pose(
-            robot_position=ik_base_pose[0] / self._robot_scale, robot_orientation=ik_base_pose[1]
-        )
-        pos, ori = self._kinematics_solver.compute_end_effector_pose()
+        def measured_fk():
+            ik_base_pose = self.get_ik_base_world_pose()
+            self._kinematics_solver.set_robot_base_pose(
+                robot_position=ik_base_pose[0] / self._robot_scale, robot_orientation=ik_base_pose[1]
+            )
+            return self._kinematics_solver.compute_end_effector_pose()
+
+        pos, ori = read_sim_state(self, ('measured_fk',), measured_fk)
 
         finished = False
         if self.last_action is not None:

@@ -330,6 +330,21 @@ def apply_plumbers_physics(phases: list[dict], *, success: list[dict], spec: dic
     if not isinstance(points, dict):
         raise ValueError('physical_success_reference_points_m must map part ids to CAD-local points')
     known = {entry['object'] for entry in success}
+    hold_angle_overrides = spec.get('physical_hold_orientation_slip_tolerances_rad', {})
+    if not isinstance(hold_angle_overrides, dict):
+        raise ValueError('physical_hold_orientation_slip_tolerances_rad must map part ids to radians')
+    hold_angle_overrides = {str(key): value for key, value in hold_angle_overrides.items()}
+    for part_id, value in hold_angle_overrides.items():
+        if (
+            f'fabrica_plumbers_block_{part_id}' not in known
+            or isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or not 0.0 < value <= math.pi
+        ):
+            raise ValueError(
+                'physical_hold_orientation_slip_tolerances_rad requires existing parts and (0, pi] radians'
+            )
     for part_id, point in points.items():
         if (
             f'fabrica_plumbers_block_{part_id}' not in known
@@ -462,6 +477,9 @@ def apply_plumbers_physics(phases: list[dict], *, success: list[dict], spec: dic
         for attach in phase.get('attach', []):
             attach.update(contact_policy)
             part_id = str(attach.get('object', '')).removeprefix('fabrica_plumbers_block_')
+            if part_id in hold_angle_overrides:
+                attach['hold_orientation_slip_tolerance'] = float(hold_angle_overrides[part_id])
+                attach['hold_orientation_slip_limit_override'] = True
             if part_id in move_hold_controls:
                 attach['hold_force_control'] = copy.deepcopy(move_hold_controls[part_id])
             recovery = spec.get('physical_contact_recovery', {}).get(
@@ -487,6 +505,8 @@ def apply_plumbers_physics(phases: list[dict], *, success: list[dict], spec: dic
         if skill.get('name') == 'ur5e_close_gripper':
             part_id = str(skill.get('object', '')).removeprefix('fabrica_plumbers_block_')
             skill.update(contact_policy)
+            if part_id in hold_angle_overrides:
+                skill['hold_orientation_slip_tolerance'] = float(hold_angle_overrides[part_id])
             if part_id in move_hold_controls:
                 skill['hold_force_control'] = copy.deepcopy(move_hold_controls[part_id])
             if close_stability['enabled']:
@@ -653,6 +673,9 @@ def apply_plumbers_physics(phases: list[dict], *, success: list[dict], spec: dic
     from roboassemblybench.core.plumbers_junction import apply_junction_support
 
     apply_junction_support(result, spec=spec)
+    from roboassemblybench.core.plumbers_release import apply_pin_release_sequence
+
+    apply_pin_release_sequence(result, spec=spec)
     result[-1]['physical_unloaded_verification'] = True
     idle_robot = str(spec.get('assembly_robot', 'franka_left'))
     for index, phase in enumerate(result):
