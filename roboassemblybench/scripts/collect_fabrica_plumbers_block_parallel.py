@@ -130,6 +130,10 @@ def _collector_command(args, shard: dict[str, Any]) -> list[str]:
         '1',
         '--conda-env',
         str(args.conda_env),
+        '--dataset-format',
+        str(getattr(args, 'dataset_format', 'raw')),
+        '--lerobot-queue-size',
+        str(getattr(args, 'lerobot_queue_size', 2)),
         '--recipe',
         str(args.recipe),
         '--scene-profile',
@@ -153,6 +157,10 @@ def _collector_command(args, shard: dict[str, Any]) -> list[str]:
     ]
     if args.skip_qualification:
         command.append('--skip-qualification')
+    if getattr(args, 'lerobot_python', None):
+        command.extend(['--lerobot-python', str(args.lerobot_python)])
+    if getattr(args, 'dataset_format', 'raw') == 'lerobot-v3':
+        command.append('--require-extended-observations')
     return command
 
 
@@ -177,6 +185,11 @@ def _start_shard(args, shard: dict[str, Any], restart_count: int) -> dict[str, A
             'ROBOASSEMBLYBENCH_SHARD_INDEX': str(shard['index']),
         }
     )
+    portable_base = os.environ.get('ISAACSIM_PORTABLE_BASE')
+    if portable_base:
+        portable_root = Path(portable_base).expanduser().resolve() / shard['name']
+        portable_root.mkdir(parents=True, exist_ok=True)
+        env['ISAACSIM_PORTABLE_ROOT'] = str(portable_root)
     process = subprocess.Popen(
         command,
         cwd=REPO_ROOT,
@@ -248,6 +261,7 @@ def _merge_manifests(args, shards: list[dict[str, Any]], recipe_fingerprint: str
         raise ValueError(f'Merged shards contain {len(successful)} episodes, expected {args.num_episodes}.')
     manifest = {
         'schema_version': 'roboassemblybench_position_2k_collection_v2',
+        'dataset_format': getattr(args, 'dataset_format', 'raw'),
         'recipe': args.recipe,
         'scene_profile': args.scene_profile,
         'recipe_fingerprint': recipe_fingerprint,
@@ -409,6 +423,9 @@ def main() -> None:
     parser.add_argument('--restart-delay-seconds', type=float, default=60.0)
     parser.add_argument('--poll-seconds', type=float, default=30.0)
     parser.add_argument('--conda-env', default='internutopia311')
+    parser.add_argument('--dataset-format', choices=['lerobot-v3', 'raw'], default='lerobot-v3')
+    parser.add_argument('--lerobot-python', default=None)
+    parser.add_argument('--lerobot-queue-size', type=int, default=2)
     parser.add_argument('--recipe', default=DEFAULT_RECIPE)
     parser.add_argument('--scene-profile', default=DEFAULT_SCENE_PROFILE)
     parser.add_argument(
@@ -439,6 +456,7 @@ def main() -> None:
         args.layout_seeds = [int(seed) for seed in (recipe.get('collection') or {}).get('layout_seeds', [])]
     if (
         args.num_episodes <= 0
+        or args.lerobot_queue_size <= 0
         or args.num_workers <= 0
         or args.num_workers > args.num_episodes
         or (

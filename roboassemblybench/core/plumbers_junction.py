@@ -57,6 +57,13 @@ def junction_support_settings(spec):
     )
 
     force_control = hold_force_settings({**spec.get('hold_force_control', {}), **raw.get('hold_force_control', {})})
+    from toolkits.factory_dual_franka_assembly.support_precision import (
+        precision_hold_settings,
+    )
+
+    precision_hold = precision_hold_settings(raw.get('precision_hold'))
+    if precision_hold and precision_hold['target_force_N'] >= force_control['soft_limit']:
+        raise ValueError('precision_hold.target_force_N must be below the combined jaw-force soft limit')
     temporary_overrides = raw.get('temporary_left_hold_force_control', {})
     if not isinstance(temporary_overrides, dict):
         raise ValueError('physical_junction_support.temporary_left_hold_force_control must be a mapping')
@@ -91,6 +98,7 @@ def junction_support_settings(spec):
                 minimum_finger_force=1.0,
                 max_position_drift=0.001,
                 max_orientation_drift=math.radians(2.0),
+                **({'precision_hold': precision_hold} if precision_hold else {}),
             )
         ],
     )

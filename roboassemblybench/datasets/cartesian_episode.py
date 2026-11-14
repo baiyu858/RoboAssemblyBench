@@ -8,7 +8,10 @@ from typing import Any
 import cv2
 import numpy as np
 
-from roboassemblybench.datasets.media_codecs import ChunkedDepthWriter, FFmpegVideoWriter
+from roboassemblybench.datasets.media_codecs import (
+    ChunkedDepthWriter,
+    FFmpegVideoWriter,
+)
 
 ROBOT_NAMES = ('franka_left', 'franka_right')
 CAMERA_KEYS = (
@@ -53,10 +56,7 @@ def task_progress_annotations(
     substage_indices,
 ) -> dict[str, list[dict[str, Any]]]:
     subtask_names = sorted({str(item.get('subtask_id', 'unknown')) for item in phase_annotations.values()})
-    subtask_labels = [
-        {'subtask_index': index, 'subtask_id': name}
-        for index, name in enumerate(subtask_names)
-    ]
+    subtask_labels = [{'subtask_index': index, 'subtask_id': name} for index, name in enumerate(subtask_names)]
     substage_labels = []
     for phase_name, annotation in sorted(
         phase_annotations.items(), key=lambda item: int(item[1].get('phase_index', -1))
@@ -287,16 +287,20 @@ def _safe_joint_effort_vector(task, robot_name: str, *, width: int = 7) -> tuple
         unwrapped = None
     candidates = [articulation, unwrapped]
     for candidate in candidates:
-        if candidate is None or not hasattr(candidate, 'get_joint_efforts'):
+        if candidate is None:
             continue
-        try:
-            values = np.asarray(candidate.get_joint_efforts(), dtype=np.float32).reshape(-1)[:width]
-            if values.size < width:
-                values = np.pad(values, (0, width - values.size))
-            if np.all(np.isfinite(values)):
-                return values.astype(np.float32, copy=False), True
-        except Exception:
-            continue
+        for method_name in ('get_joint_efforts', 'get_applied_joint_efforts'):
+            method = getattr(candidate, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                values = np.asarray(method(), dtype=np.float32).reshape(-1)[:width]
+                if values.size < width:
+                    values = np.pad(values, (0, width - values.size))
+                if np.all(np.isfinite(values)):
+                    return values.astype(np.float32, copy=False), True
+            except Exception:
+                continue
     return np.zeros(width, dtype=np.float32), False
 
 
@@ -317,7 +321,9 @@ def _safe_wrist_wrench(task, robot_name: str, robot_obs: dict[str, Any]) -> tupl
     for candidate in (articulation, unwrapped):
         if candidate is None:
             continue
-        for method_name in ('get_wrist_wrench', 'get_eef_wrench', 'get_net_contact_forces'):
+        # Net contact forces are N x 3, not a six-axis wrench. Flattening two
+        # bodies would incorrectly label the second body's force as torque.
+        for method_name in ('get_wrist_wrench', 'get_eef_wrench'):
             method = getattr(candidate, method_name, None)
             if callable(method):
                 try:
@@ -466,10 +472,7 @@ def runtime_scene_integrity(task) -> dict[str, Any]:
         if not result['isolated_camera_paths']:
             result['errors'].append('camera-path-not-episode-scoped')
         if any(
-            not status.get('valid')
-            or not status.get('active')
-            or not status.get('loaded')
-            or not status.get('visible')
+            not status.get('valid') or not status.get('active') or not status.get('loaded') or not status.get('visible')
             for status in required_statuses
         ):
             result['errors'].append('prim-invalid')
@@ -540,9 +543,7 @@ class CartesianObservationEncoder:
         if len(output_resolution) != 2 or any(int(value) <= 0 for value in output_resolution):
             raise ValueError(f'Invalid dataset output resolution: {output_resolution}.')
         self.output_resolution = tuple(int(value) for value in output_resolution)
-        self.front_output_resolution = tuple(
-            int(value) for value in (front_output_resolution or output_resolution)
-        )
+        self.front_output_resolution = tuple(int(value) for value in (front_output_resolution or output_resolution))
         if any(value <= 0 for value in self.front_output_resolution):
             raise ValueError(f'Invalid front output resolution: {self.front_output_resolution}.')
         self.camera_bindings = self.resolve_camera_bindings(task)
@@ -607,9 +608,7 @@ class CartesianObservationEncoder:
 
     def letterbox_frame(self, frame: np.ndarray, camera_key: str | None = None) -> np.ndarray:
         target_width, target_height = (
-            self.front_output_resolution
-            if camera_key == 'observation.images.front'
-            else self.output_resolution
+            self.front_output_resolution if camera_key == 'observation.images.front' else self.output_resolution
         )
         source_height, source_width = frame.shape[:2]
         if (source_width, source_height) == (target_width, target_height):
@@ -810,9 +809,7 @@ class CompactCartesianEpisodeRecorder:
         self._runtime_scene_integrity_start = runtime_scene_integrity(task)
         self._expected_recipe_fingerprint = str(getattr(task.config, 'recipe_fingerprint', '') or '')
         self._expected_replay_robot_names = list(getattr(task.config, 'robot_names', ROBOT_NAMES) or ROBOT_NAMES)
-        self._expected_replay_joint_widths = expected_replay_joint_widths(
-            getattr(task.config, 'robot_metadata', [])
-        )
+        self._expected_replay_joint_widths = expected_replay_joint_widths(getattr(task.config, 'robot_metadata', []))
         self._source_actions: np.ndarray | None = None
         self._replay_source_metadata_path: str | None = None
         self._replay_source_recipe_fingerprint: str | None = None
@@ -877,15 +874,15 @@ class CompactCartesianEpisodeRecorder:
                 raise RuntimeError(f'Invalid tracked-object position for {name!r}: {position}.')
             positions.append(position)
             orientations.append(orientation)
-        self._tracked_object_positions.append(
-            np.stack(positions) if positions else np.empty((0, 3), dtype=np.float32)
-        )
+        self._tracked_object_positions.append(np.stack(positions) if positions else np.empty((0, 3), dtype=np.float32))
         self._tracked_object_orientations.append(
             np.stack(orientations) if orientations else np.empty((0, 4), dtype=np.float32)
         )
 
     @staticmethod
-    def _phase_indices(phase_annotation: dict[str, Any], phase_annotations: dict[str, dict[str, Any]]) -> tuple[int, int]:
+    def _phase_indices(
+        phase_annotation: dict[str, Any], phase_annotations: dict[str, dict[str, Any]]
+    ) -> tuple[int, int]:
         phase_index = int(phase_annotation.get('phase_index', -1))
         subtask_names = sorted({item.get('subtask_id', 'unknown') for item in phase_annotations.values()})
         subtask_index = subtask_names.index(phase_annotation.get('subtask_id', 'unknown')) if phase_annotation else -1
@@ -1090,15 +1087,10 @@ class CompactCartesianEpisodeRecorder:
                     f'signature {self._expected_replay_joint_widths}: {trajectory_path}.'
                 )
             replay_joint_state = np.asarray(source['replay_joint_state'], dtype=np.float32)
-            self._replay_joint_states = [
-                list(np.split(frame, np.cumsum(widths)[:-1]))
-                for frame in replay_joint_state
-            ]
+            self._replay_joint_states = [list(np.split(frame, np.cumsum(widths)[:-1])) for frame in replay_joint_state]
             self._tracked_object_names = [str(value) for value in np.asarray(source['tracked_object_names']).tolist()]
             self._tracked_object_positions = list(np.asarray(source['tracked_object_position'], dtype=np.float32))
-            self._tracked_object_orientations = list(
-                np.asarray(source['tracked_object_orientation'], dtype=np.float32)
-            )
+            self._tracked_object_orientations = list(np.asarray(source['tracked_object_orientation'], dtype=np.float32))
         arrays = [
             self._source_actions,
             self._gripper_commands,
@@ -1298,7 +1290,9 @@ class CompactCartesianEpisodeRecorder:
                 if isinstance(config_metadata, dict)
                 else {}
             ),
-            'preconditions': _jsonable(config_metadata.get('preconditions', []) if isinstance(config_metadata, dict) else []),
+            'preconditions': _jsonable(
+                config_metadata.get('preconditions', []) if isinstance(config_metadata, dict) else []
+            ),
             'completion_conditions': _jsonable(
                 config_metadata.get('completion_conditions', getattr(task.config, 'success_criteria', []))
                 if isinstance(config_metadata, dict)
@@ -1325,16 +1319,10 @@ class CompactCartesianEpisodeRecorder:
             'task': str(task.config.task_description or task.config.prompt),
             'scene_profile': str(getattr(task.config, 'scene_profile', '') or ''),
             'scene_asset_path': str(getattr(task.config, 'scene_asset_path', '') or ''),
-            'scene_asset_fallback_path': str(
-                getattr(task.config, 'scene_asset_fallback_path', '') or ''
-            ),
+            'scene_asset_fallback_path': str(getattr(task.config, 'scene_asset_fallback_path', '') or ''),
             'scene_asset_source': str(getattr(task.config, 'scene_asset_source', '') or ''),
-            'scene_asset_selection_policy': str(
-                getattr(task.config, 'scene_asset_selection_policy', '') or ''
-            ),
-            'scene_asset_selection_reason': str(
-                getattr(task.config, 'scene_asset_selection_reason', '') or ''
-            ),
+            'scene_asset_selection_policy': str(getattr(task.config, 'scene_asset_selection_policy', '') or ''),
+            'scene_asset_selection_reason': str(getattr(task.config, 'scene_asset_selection_reason', '') or ''),
             'scene_profile_metadata': _jsonable(getattr(task.config, 'scene_profile_metadata', {}) or {}),
             'scene_family': str(
                 getattr(task.config, 'resolved_scene_family', '')
@@ -1419,8 +1407,7 @@ class CompactCartesianEpisodeRecorder:
                 'wrist_wrench': bool(self._wrist_wrench_available and any(self._wrist_wrench_available)),
                 'collision_signal': bool(self._collision_signals),
                 'trajectory_replay': bool(
-                    len(replay_joint_state) == len(states)
-                    and len(tracked_object_position) == len(states)
+                    len(replay_joint_state) == len(states) and len(tracked_object_position) == len(states)
                 ),
             },
             'collision_signal_names': [

@@ -167,6 +167,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         self._stabilization_policy_history = []
         self._friction_policy_history = []
         self._contact_probes = {}
+        self._robot_link_pose_readers = {}
         self._native_closure_geometry = {}
         self._native_closure_clearance_reports = {}
         self._contact_sensors = {}
@@ -2126,11 +2127,17 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         for prim_path, rigid_body in rigid_body_map.items():
             if prim_path.endswith(suffix):
                 return rigid_body
+        readers = self.__dict__.setdefault('_robot_link_pose_readers', {})
+        for (owner, prim_path), reader in readers.items():
+            if owner == robot_name and prim_path.endswith(suffix):
+                return reader
         try:
             from isaacsim.core.utils.prims import get_prim_at_path
             from pxr import Usd
 
-            from internutopia.core.robot.rigid_body import IRigidBody
+            from toolkits.factory_dual_franka_assembly.robot_link_pose import (
+                RobotLinkPose,
+            )
         except Exception:
             return None
         try:
@@ -2172,19 +2179,12 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
                     prim_path = str(prim.GetPath())
                     if not prim_path.endswith(suffix):
                         continue
-                    rigid_body = IRigidBody.create(prim_path=prim_path, name=prim_path)
-                    try:
-                        from isaacsim.core.simulation_manager import SimulationManager
-
-                        simulation_view = SimulationManager.get_physics_sim_view()
-                        if simulation_view is not None and hasattr(rigid_body.unwrap(), 'initialize'):
-                            rigid_body.unwrap().initialize(physics_sim_view=simulation_view)
-                    except Exception:
-                        pass
-                    if not hasattr(robot, '_rigid_body_map') or getattr(robot, '_rigid_body_map') is None:
-                        robot._rigid_body_map = {}
-                    robot._rigid_body_map[prim_path] = rigid_body
-                    return rigid_body
+                    # A pose lookup must not instantiate SingleRigidPrim:
+                    # its constructor authors xforms/APIs/sleep policy even
+                    # when wrapping an existing articulation link.
+                    reader = RobotLinkPose(prim_path)
+                    readers[(robot_name, prim_path)] = reader
+                    return reader
         except Exception:
             return None
         return None
@@ -7377,6 +7377,7 @@ class FactoryDualFrankaAssemblyTask(BeamSupportState, BaseTask):
         for object_name in list(self._attachment_joints.keys()):
             self._remove_attachment_joint(object_name)
         self._contact_probes.clear()
+        self._robot_link_pose_readers.clear()
         self.__dict__.pop('_physics_read_cache_stamp', None)
         self.__dict__.pop('_physics_read_cache', None)
         self.__dict__.pop('_physics_read_cache_counts', None)

@@ -31,6 +31,8 @@ def alignment_settings(value):
         'angular_speed',
         'keep_grip_direction',
         'incompatible_steps',
+        'alarm_tolerance_m',
+        'fit_strategy',
     }
     if not isinstance(value, dict) or set(value) - allowed:
         raise ValueError('axis_alignment has unknown settings or is not a mapping')
@@ -41,6 +43,8 @@ def alignment_settings(value):
         angular_speed=0.04,
         keep_grip_direction=False,
         incompatible_steps=0,
+        alarm_tolerance_m=None,
+        fit_strategy='minimax',
     )
     result.update(value)
     if type(result['keep_grip_direction']) is not bool:
@@ -53,6 +57,16 @@ def alignment_settings(value):
             raise ValueError(f'axis_alignment.{key} must be positive and finite')
     if result['margin_m'] >= result['radial_clearance_m']:
         raise ValueError('axis_alignment margin must be below radial clearance')
+    alarm = result['alarm_tolerance_m']
+    if alarm is not None and (
+        isinstance(alarm, bool)
+        or not isinstance(alarm, (int, float))
+        or not math.isfinite(alarm)
+        or alarm < result['radial_clearance_m'] - result['margin_m']
+    ):
+        raise ValueError('axis_alignment alarm_tolerance_m must be finite and at least the physical allowance')
+    if result['fit_strategy'] not in ('minimax', 'least_squares'):
+        raise ValueError('axis_alignment fit_strategy must be minimax or least_squares')
     result['shaft_origin_m'] = vector(result['shaft_origin_m'], 3).tolist()
     result['shaft_axis'] = basis_for_axis(result['shaft_axis'])[:, 2].tolist()
     sections = result.get('sections')
@@ -90,6 +104,11 @@ class BoreAlignment:
     def allowance(self):
         return self.settings['radial_clearance_m'] - self.settings['margin_m']
 
+    @property
+    def alarm_tolerance(self):
+        value = self.settings['alarm_tolerance_m']
+        return self.allowance if value is None else value
+
     def _section_data(self, moving, poses, pivot, basis):
         c = self.settings
         origin = moving[0] + quat_rotate(moving[1], c['shaft_origin_m'])
@@ -122,7 +141,7 @@ class BoreAlignment:
 
     def measure(self, moving, poses, pivot, basis):
         error, jacobian, sections = self._section_data(moving, poses, pivot, basis)
-        correction, fit_error, method = minimax_correction(jacobian, error, self.allowance)
+        correction, fit_error, method = minimax_correction(jacobian, error, strategy=self.settings['fit_strategy'])
         world = np.r_[basis[:, :2] @ correction[:2], basis[:, :2] @ correction[2:]]
         # Re-evaluate the finite rotation, not only its linear approximation.
         corrected = (
@@ -141,6 +160,8 @@ class BoreAlignment:
             linear_fit_error_m=fit_error,
             receiver_fit_error_m=exact_fit,
             receiver_fit_feasible=exact_fit <= self.allowance + 1e-9,
+            alarm_tolerance_m=self.alarm_tolerance,
+            receiver_alarm_exceeded=exact_fit > self.alarm_tolerance + 1e-9,
         )
 
     def bounded_correction(self, sample, dt):

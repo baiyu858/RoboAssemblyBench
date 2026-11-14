@@ -131,9 +131,7 @@ class InsertionController:
         failure = safety_failure(measurement, grasps, safety_wrench, c, torque_hard_limit=self.torque_hard_limit)
         failure = failure or next((x['failure'] for x in controls if x.get('failure')), None)
         if alignment is not None:
-            incompatible = (
-                not alignment['receiver_fit_feasible'] and np.linalg.norm(wrench[:3]) < c.insertion_force_soft
-            )
+            incompatible = alignment['receiver_alarm_exceeded'] and np.linalg.norm(wrench[:3]) < c.insertion_force_soft
             self.incompatible_bore_steps = self.incompatible_bore_steps + 1 if incompatible else 0
             alignment['incompatible_steps'] = self.incompatible_bore_steps
             limit = self.axis_alignment.settings['incompatible_steps']

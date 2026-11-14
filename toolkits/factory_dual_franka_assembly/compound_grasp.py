@@ -91,6 +91,7 @@ def compound_grasp_sample(task, robot, attachment, primary_metrics):
     if not groups:
         return fingers, status
     anchors = attachment.setdefault('additional_contact_anchors', {})
+    status.update(precision_ready=True, preload_requested=False, preload_required=False)
     primary = task._resolve_object(spec['object']).get_pose()
     for group in groups:
         obj = group['object']
@@ -109,6 +110,27 @@ def compound_grasp_sample(task, robot, attachment, primary_metrics):
             detail.update(position_drift=float(distance), orientation_drift=float(angle))
             if distance > group['max_position_drift'] or angle > group['max_orientation_drift']:
                 status['failure'] = 'additional_grasp_body_moved'
+            precision = group.get('precision_hold')
+            if precision:
+                from toolkits.factory_dual_franka_assembly.support_precision import (
+                    precision_hold_sample,
+                )
+
+                state = attachment.setdefault('precision_hold_states', {}).setdefault(obj, {})
+                sample = precision_hold_sample(
+                    precision,
+                    state,
+                    pose=pose,
+                    anchor=anchor,
+                    forces=forces,
+                    contact=contact,
+                    step=int(task.step_counter),
+                )
+                detail['precision'] = sample
+                status['precision_ready'] &= sample['ready']
+                status['preload_requested'] |= sample['preload_requested']
+                status['preload_required'] |= sample['preload_required']
+                status['failure'] = status['failure'] or sample['failure']
         if not valid:
             status['failure'] = 'additional_grasp_probe_invalid'
         status['ready'] = bool(status['ready'] and contact)

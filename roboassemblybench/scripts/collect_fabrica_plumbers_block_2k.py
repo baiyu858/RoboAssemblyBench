@@ -240,9 +240,7 @@ def _robot_visibility_metrics(gray: np.ndarray, chroma: np.ndarray, *, side: str
         and local_contrast_mean >= ROBOT_ANCHOR_LOCAL_CONTRAST_THRESHOLD
     )
     neutral_structure_fraction = float(np.mean(neutral_structure))
-    structure_visible = bool(
-        neutral_structure_fraction >= ROBOT_STRUCTURE_NEUTRAL_FRACTION_THRESHOLD
-    )
+    structure_visible = bool(neutral_structure_fraction >= ROBOT_STRUCTURE_NEUTRAL_FRACTION_THRESHOLD)
     return {
         'anchor_edge_mean': edge_mean,
         'anchor_edge_p90': edge_p90,
@@ -335,9 +333,7 @@ def _front_visual_quality(video_path: Path) -> dict[str, Any]:
                 result[f'{side}_robot_roi_bright_neutral_fraction'].append(
                     robot_metrics['structure_bright_neutral_fraction']
                 )
-                result[f'{side}_robot_anchor_local_contrast_mean'].append(
-                    robot_metrics['anchor_local_contrast_mean']
-                )
+                result[f'{side}_robot_anchor_local_contrast_mean'].append(robot_metrics['anchor_local_contrast_mean'])
                 result[f'{side}_robot_anchor_visible'].append(robot_metrics['anchor_visible'])
                 result[f'{side}_robot_structure_visible'].append(robot_metrics['structure_visible'])
                 result[f'{side}_robot_visible'].append(robot_metrics['visible'])
@@ -387,9 +383,7 @@ def _front_visual_quality(video_path: Path) -> dict[str, Any]:
         edge_values = result[f'{side}_robot_roi_edge_mean']
         result[f'{side}_robot_roi_edge_median'] = float(np.median(edge_values)) if edge_values else 0.0
         edge_p90_values = result[f'{side}_robot_roi_edge_p90']
-        result[f'{side}_robot_roi_edge_p90_median'] = (
-            float(np.median(edge_p90_values)) if edge_p90_values else 0.0
-        )
+        result[f'{side}_robot_roi_edge_p90_median'] = float(np.median(edge_p90_values)) if edge_p90_values else 0.0
         neutral_values = result[f'{side}_robot_roi_bright_neutral_fraction']
         result[f'{side}_robot_roi_bright_neutral_fraction_median'] = (
             float(np.median(neutral_values)) if neutral_values else 0.0
@@ -406,9 +400,7 @@ def _front_visual_quality(video_path: Path) -> dict[str, Any]:
             )
             if frame_index >= VISUAL_INITIAL_ROBOT_VISIBILITY_GRACE_FRAMES
         ]
-        result[f'{side}_robot_visible_fraction'] = (
-            float(np.mean(visibility_values)) if visibility_values else 0.0
-        )
+        result[f'{side}_robot_visible_fraction'] = float(np.mean(visibility_values)) if visibility_values else 0.0
         visible_fraction = float(np.mean(visibility_values)) if visibility_values else 0.0
         if visible_fraction < ROBOT_MIN_VISIBLE_FRACTION:
             missing_robot_sides.append(side)
@@ -425,8 +417,7 @@ def _front_visual_quality(video_path: Path) -> dict[str, Any]:
     )
     if any(
         laplacian >= RENDER_ARTIFACT_CHROMA_LAPLACIAN_THRESHOLD
-        and laplacian
-        >= result['chroma_laplacian_median'] * RENDER_ARTIFACT_LAPLACIAN_RATIO_THRESHOLD
+        and laplacian >= result['chroma_laplacian_median'] * RENDER_ARTIFACT_LAPLACIAN_RATIO_THRESHOLD
         and high_chroma >= RENDER_ARTIFACT_HIGH_CHROMA_FRACTION_THRESHOLD
         for laplacian, high_chroma in zip(
             result['chroma_laplacian_mean'],
@@ -452,7 +443,7 @@ def _front_visual_quality(video_path: Path) -> dict[str, Any]:
     return result
 
 
-def _quality_check_episode(
+def _quality_check_episode(  # noqa: C901
     metadata_path: Path,
     *,
     expected_recipe_fingerprint: str | None = None,
@@ -463,6 +454,14 @@ def _quality_check_episode(
 ) -> dict[str, Any]:
     metadata = _load_json(metadata_path)
     errors = []
+    if metadata.get('recording_mode') == 'direct_lerobot_v3':
+        direct = metadata.get('lerobot_v3') or {}
+        root = Path(direct.get('root') or '')
+        marker = root / '.roboassemblybench_v3_complete'
+        if not direct.get('committed') or direct.get('diagnostic_only') or not marker.is_file():
+            errors.append('direct_v3_not_committed')
+        elif not bool(_load_json(marker).get('success', False)):
+            errors.append('direct_v3_not_successful')
     if metadata.get('schema_version') != 'roboassemblybench_raw_cartesian_v1':
         errors.append('schema_version')
     if list(metadata.get('state_names') or []) != list(STATE_NAMES):
@@ -480,9 +479,8 @@ def _quality_check_episode(
         errors.append('domain_randomization')
     domain_randomization = metadata.get('domain_randomization') or {}
     actual_randomization_profile = normalize_randomization_profile(domain_randomization.get('profile'))
-    if (
-        expected_randomization_profile is not None
-        and actual_randomization_profile != normalize_randomization_profile(expected_randomization_profile)
+    if expected_randomization_profile is not None and actual_randomization_profile != normalize_randomization_profile(
+        expected_randomization_profile
     ):
         errors.append('randomization_profile')
     randomized_groups = domain_randomization.get('groups') or {}
@@ -567,10 +565,15 @@ def _quality_check_episode(
         if not metadata.get('scene_family'):
             errors.append('visual:scene-family')
         if scene_profile == 'taoyuan_grscenes_tabletop' and actual_randomization_profile != 'scene':
-            selection_policy = str(
-                metadata.get('scene_asset_selection_policy')
-                or (metadata.get('scene_profile_metadata') or {}).get('scene_asset_preference', '')
-            ).strip().lower().replace('-', '_')
+            selection_policy = (
+                str(
+                    metadata.get('scene_asset_selection_policy')
+                    or (metadata.get('scene_profile_metadata') or {}).get('scene_asset_preference', '')
+                )
+                .strip()
+                .lower()
+                .replace('-', '_')
+            )
             if selection_policy in {'fallback', 'fallback_first', 'stable_fallback'}:
                 if metadata.get('scene_asset_source') != 'fallback':
                     errors.append('visual:scene-source')
@@ -698,8 +701,7 @@ def _quality_check_episode(
             errors.extend(f'visual:{error}' for error in visual_quality['errors'])
             if metadata.get('recording_mode') == 'rendered_replay' and (
                 visual_quality['motion_mae_from_first_max'] < REPLAY_MOTION_MAE_THRESHOLD
-                or visual_quality['motion_changed_fraction_from_first_max']
-                < REPLAY_MOTION_CHANGED_FRACTION_THRESHOLD
+                or visual_quality['motion_changed_fraction_from_first_max'] < REPLAY_MOTION_CHANGED_FRACTION_THRESHOLD
             ):
                 errors.append('visual:static-replay')
         else:
@@ -716,6 +718,11 @@ def _quality_check_episode(
         'randomization_profile': actual_randomization_profile,
         'runtime_scene_integrity': runtime_integrity,
         'visual_quality': visual_quality,
+        'lerobot_v3': (
+            {key: value for key, value in metadata['lerobot_v3'].items() if key not in {'videos', 'depth'}}
+            if metadata.get('lerobot_v3')
+            else None
+        ),
     }
 
 
@@ -758,6 +765,7 @@ def _initial_manifest(args, existing: dict[int, dict[str, Any]]) -> dict[str, An
         'dataset_frame_stride': int(args.dataset_frame_stride),
         'rendering_fps': int(args.rendering_fps),
         'trajectory_only': bool(getattr(args, 'trajectory_only', False)),
+        'dataset_format': 'raw' if getattr(args, 'trajectory_only', False) else getattr(args, 'dataset_format', 'raw'),
         'worker_timeout_seconds': float(getattr(args, 'worker_timeout_seconds', 1800.0)),
         'worker_stall_timeout_seconds': float(getattr(args, 'worker_stall_timeout_seconds', 0.0)),
         'timing_contract': {
@@ -827,6 +835,10 @@ def _batch_command(
         f'UR5E_DEBUG_GRASP={os.environ.get("UR5E_DEBUG_GRASP", "0")}',
         f'UR5E_DEBUG_TRANSPORT_EVERY={os.environ.get("UR5E_DEBUG_TRANSPORT_EVERY", "0")}',
     ]
+    isaac_threads = os.environ.get('ROBOASSEMBLYBENCH_ISAAC_THREADS')
+    if isaac_threads:
+        # conda run reactivates the environment, so apply this after activation.
+        environment.append(f'ISAACSIM_THREAD_COUNT={max(1, int(isaac_threads))}')
     configured_isaac_python = getattr(args, 'isaac_python', None)
     if configured_isaac_python:
         isaac_python = Path(configured_isaac_python).expanduser().resolve()
@@ -834,7 +846,9 @@ def _batch_command(
             raise RuntimeError(f'Isaac Python executable was not found: {isaac_python}')
         command = ['env', *environment, str(isaac_python)]
     else:
-        conda = shutil.which('conda')
+        # The activated SDK uses CPython 3.11. CONDA_EXE can point at the
+        # deployment wrapper that clears SDK variables for base Conda 3.13.
+        conda = os.environ.get('CONDA_EXE') or shutil.which('conda')
         if conda is None:
             raise RuntimeError('conda executable was not found; pass --isaac-python for a direct runtime.')
         command = [
@@ -849,42 +863,42 @@ def _batch_command(
         ]
     command.extend(
         [
-        str(REPO_ROOT / 'roboassemblybench' / 'scripts' / 'generate_demos.py'),
-        '--worker-mode',
-        'collect',
-        '--worker-recipe',
-        args.recipe,
-        '--worker-scene-profile',
-        args.scene_profile,
-        '--worker-results-path',
-        str(results_path),
-        '--worker-seeds',
-        *[str(seed) for seed in seeds],
-        '--max-trials',
-        str(len(seeds)),
-        '--start-seed',
-        str(seeds[0]),
-        '--output-dir',
-        str(batch_dir),
-        '--dataset-fps',
-        str(args.dataset_fps),
-        '--dataset-frame-stride',
-        str(args.dataset_frame_stride),
-        '--rendering-fps',
-        str(args.rendering_fps),
-        '--video-codec',
-        str(getattr(args, 'video_codec', 'h264')),
-        '--video-crf',
-        str(getattr(args, 'video_crf', 23)),
-        '--video-preset',
-        str(getattr(args, 'video_preset', 'veryfast')),
-        '--depth-compression-level',
-        str(getattr(args, 'depth_compression_level', 5)),
-        '--domain-randomization',
-        '--randomization-profile',
-        normalize_randomization_profile(getattr(args, 'randomization_profile', None)),
-        '--skip-episode-steps',
-        '--headless',
+            str(REPO_ROOT / 'roboassemblybench' / 'scripts' / 'generate_demos.py'),
+            '--worker-mode',
+            'collect',
+            '--worker-recipe',
+            args.recipe,
+            '--worker-scene-profile',
+            args.scene_profile,
+            '--worker-results-path',
+            str(results_path),
+            '--worker-seeds',
+            *[str(seed) for seed in seeds],
+            '--max-trials',
+            str(len(seeds)),
+            '--start-seed',
+            str(seeds[0]),
+            '--output-dir',
+            str(batch_dir),
+            '--dataset-fps',
+            str(args.dataset_fps),
+            '--dataset-frame-stride',
+            str(args.dataset_frame_stride),
+            '--rendering-fps',
+            str(args.rendering_fps),
+            '--video-codec',
+            str(getattr(args, 'video_codec', 'h264')),
+            '--video-crf',
+            str(getattr(args, 'video_crf', 23)),
+            '--video-preset',
+            str(getattr(args, 'video_preset', 'veryfast')),
+            '--depth-compression-level',
+            str(getattr(args, 'depth_compression_level', 5)),
+            '--domain-randomization',
+            '--randomization-profile',
+            normalize_randomization_profile(getattr(args, 'randomization_profile', None)),
+            '--skip-episode-steps',
+            '--headless',
         ]
     )
     if layout_seeds is not None:
@@ -896,7 +910,14 @@ def _batch_command(
             *[str(seed) for seed in layout_seeds],
         ]
     if record_raw:
-        command.insert(command.index('--dataset-fps'), '--record-lerobot-raw')
+        direct_v3 = getattr(args, 'dataset_format', 'raw') == 'lerobot-v3' and not bool(
+            getattr(args, 'trajectory_only', False)
+        )
+        command.insert(command.index('--dataset-fps'), '--record-lerobot-v3' if direct_v3 else '--record-lerobot-raw')
+        if direct_v3:
+            command.extend(['--lerobot-queue-size', str(getattr(args, 'lerobot_queue_size', 2))])
+            if getattr(args, 'lerobot_python', None):
+                command.extend(['--lerobot-writer-python', str(args.lerobot_python)])
         if bool(getattr(args, 'trajectory_only', False)):
             command.insert(command.index('--dataset-fps'), '--record-trajectory-only')
     return command
@@ -1065,6 +1086,11 @@ def _ensure_recipe_qualified(args, output_dir: Path) -> dict[str, Any]:
     )
     if manifest_path.is_file():
         manifest = _load_json(manifest_path)
+        expected_format = 'raw' if getattr(args, 'trajectory_only', False) else getattr(args, 'dataset_format', 'raw')
+        if manifest.get('dataset_format', 'raw') != expected_format:
+            raise RuntimeError(
+                'Collection dataset format changed; use a new output directory or --dataset-format raw for an existing raw run.'
+            )
         if str(manifest.get('recipe_fingerprint') or '') != fingerprint:
             raise RuntimeError(f'Qualification manifest fingerprint mismatch: {manifest_path}.')
         if _reconcile_qualification_seed_contract(manifest, selected_seeds):
@@ -1337,9 +1363,7 @@ def collect(args) -> dict[str, Any]:
     if bool(getattr(args, 'allow_recipe_fingerprint_mismatch', False)):
         scan_require_extended_observations = False
         scan_require_visual_quality = False
-    expected_randomization_profile = normalize_randomization_profile(
-        getattr(args, 'randomization_profile', None)
-    )
+    expected_randomization_profile = normalize_randomization_profile(getattr(args, 'randomization_profile', None))
     unique_layout_seeds = bool(getattr(args, 'unique_layout_seeds', False))
     allowed_layout_seeds = None if unique_layout_seeds else {int(seed) for seed in args.layout_seeds}
     existing = _scan_existing(
@@ -1401,9 +1425,7 @@ def collect(args) -> dict[str, Any]:
         count = min(int(args.batch_size), remaining, max_attempt_seed - next_seed)
         seeds = list(range(next_seed, next_seed + count))
         layout_seeds = (
-            list(seeds)
-            if unique_layout_seeds
-            else [args.layout_seeds[seed % len(args.layout_seeds)] for seed in seeds]
+            list(seeds) if unique_layout_seeds else [args.layout_seeds[seed % len(args.layout_seeds)] for seed in seeds]
         )
         batch_name = f'batch_{seeds[0]:06d}_{seeds[-1]:06d}'
         batch_dir = output_dir / 'batches' / batch_name
@@ -1472,12 +1494,13 @@ def collect(args) -> dict[str, Any]:
 
         if bool(getattr(args, 'prune_failed_raw', False)):
             valid_episode_dirs = {
-                str(Path(item['metadata_path']).resolve().parent)
-                for item in batch_quality
-                if item['valid']
+                str(Path(item['metadata_path']).resolve().parent) for item in batch_quality if item['valid']
             }
             for episode_dir in batch_dir.rglob('episode_*_cartesian_raw'):
                 if str(episode_dir.resolve()) not in valid_episode_dirs:
+                    direct_root = episode_dir.with_name(episode_dir.name.replace('_cartesian_raw', '_lerobot_v3'))
+                    if direct_root.is_dir():
+                        shutil.rmtree(direct_root)
                     shutil.rmtree(episode_dir, ignore_errors=True)
 
         result_by_seed = {}
@@ -1543,6 +1566,18 @@ def main() -> None:
     parser.add_argument('--max-attempts', type=int, default=10000)
     parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument('--conda-env', default='internutopia311')
+    parser.add_argument(
+        '--dataset-format',
+        choices=['lerobot-v3', 'raw'],
+        default='lerobot-v3',
+        help='Direct background v3 is the default; trajectory-only collection still uses raw replay signals.',
+    )
+    parser.add_argument(
+        '--lerobot-python',
+        default=None,
+        help='Isolated data environment Python; also accepts ROBOASSEMBLYBENCH_LEROBOT_PYTHON.',
+    )
+    parser.add_argument('--lerobot-queue-size', type=int, default=2)
     parser.add_argument(
         '--isaac-python',
         default=None,
@@ -1644,6 +1679,7 @@ def main() -> None:
     if (
         args.num_episodes <= 0
         or args.batch_size <= 0
+        or args.lerobot_queue_size <= 0
         or args.max_attempts < args.num_episodes
         or args.dataset_fps <= 0
         or args.dataset_frame_stride <= 0

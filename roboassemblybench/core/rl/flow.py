@@ -30,6 +30,16 @@ def refresh_grasp_force_control(attachment, phases, resume_phase):
                 and authored.get('hold_force_control', {}).get('enabled')
             ):
                 spec['hold_force_control'] = copy.deepcopy(authored['hold_force_control'])
+                # Refresh execution policy only; the original actual contact
+                # references remain frozen across a resumed run.
+                current = {g['object']: g for g in authored.get('additional_grasp_contacts', [])}
+                for group in spec.get('additional_grasp_contacts', []):
+                    policy = current.get(group['object'], {}).get('precision_hold')
+                    if policy is not None:
+                        group['precision_hold'] = copy.deepcopy(policy)
+                    else:
+                        group.pop('precision_hold', None)
+                result.pop('precision_hold_states', None)
     return result
 
 

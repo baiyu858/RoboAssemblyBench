@@ -1,6 +1,6 @@
 # RoboAssemblyBench：双 UR5e 数据生成、训练与仿真评测
 
-本分支 `ur5e-batch-generation-20260826` 面向 **两台 UR5e + 两个 Robotiq 2F-85** 的 Fabrica 长程装配任务。本文从一台新机器开始，说明如何安装环境、准备资产、验证七个任务、生成带域随机化的数据、转换为 LeRobot v3、训练 ACT，并在 Isaac Sim 中做闭环模型评测。
+本仓库面向 **两台 UR5e + 两个 Robotiq 2F-85** 的 Fabrica 长程装配任务。本文从一台新机器开始，说明如何安装环境、准备资产、验证七个任务、生成带域随机化的数据、转换为 LeRobot v3、训练 ACT，并在 Isaac Sim 中做闭环模型评测。
 
 当前支持的七个 canonical 任务是：
 
@@ -13,6 +13,8 @@
 | `gamepad` | `fabrica_gamepad_ur5e_staged` | 6 |
 | `plumbers_block` | `fabrica_plumbers_block_ur5e_staged` | 5 |
 | `stool_circular` | `fabrica_stool_circular_ur5e_staged` | 9 |
+
+`plumbers_block` 的两套固定摆放现登记为 `@layout_000`（原始成功布局）和 `@layout_001`（本次新布局）。[布局说明与俯视对比图](docs/plumbers_block_layouts.md)提供坐标、成功记录、复现命令及本次只读测量、支撑精度和补夹控制修复；[布局登记表](roboassemblybench/tasks/fabrica_plumbers_block_ur5e_staged/layouts.json)保留可核对的初始零件位姿。
 
 > 仓库中仍有 `toolkits/factory_dual_franka_assembly/`、`build_dual_franka_assembly_*` 和内部 robot key `franka_left` / `franka_right`。这些是为旧数据和 API 保留的兼容名称，不代表当前机器人是 Franka。UR5e recipe 中的实际类型是 `UR5eRobot`，USD 是 UR5e + Robotiq 2F-85。不要在本分支的数据生产中使用 `*_franka_*` recipe 或脚本。
 
@@ -352,6 +354,8 @@ bash roboassemblybench/scripts/pause_fabrica_stage2.sh \
 ```
 
 ## 9. 转换为 LeRobot v3
+
+实时采集新增[后台直接写 LeRobot v3](docs/direct_lerobot_v3_collection.md)：plumbers 单路/并行采集器默认 `--dataset-format lerobot-v3`，三路 RGB、无损毫米深度、关节/EE/力和过程标注同步落盘。每回合为独立标准 v3 分片，后台使用独立 LeRobot 环境；历史 raw 数据与两阶段回放仍使用下面的转换入口。旧实时 raw 模式使用 `--dataset-format raw`。
 
 ### 9.1 转换一个 raw 子集
 

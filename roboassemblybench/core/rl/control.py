@@ -272,10 +272,13 @@ def arbitrate_delta(delta, controls, wrench_task, config, *, torque_soft_limit=N
             c.get('motion_ready')
             or (
                 c.get('mode') in ('force_limited', 'force_relief')
-                and c.get('weak_force', 0.0) >= c.get('low_force', 6.0)
+                and c.get('weak_force', 0.0) >= c.get('unload_contact_force', c.get('low_force', 6.0))
                 and c.get('strong_force', math.inf) < c.get('unload_force', 18.0)
                 and len(c.get('forces', [])) == 2
-                and all(math.isfinite(f) and f >= c.get('low_force', 6.0) for f in c['forces'])
+                and all(
+                    math.isfinite(f) and f >= c.get('unload_contact_force', c.get('low_force', 6.0))
+                    for f in c['forces']
+                )
                 and not c.get('slipping')
                 and c.get('probe_valid')
             )

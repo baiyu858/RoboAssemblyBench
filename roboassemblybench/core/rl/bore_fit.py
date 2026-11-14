@@ -2,12 +2,13 @@
 import numpy as np
 
 
-def minimax_correction(jacobian, error, allowance):
+def minimax_correction(jacobian, error, *, strategy='minimax'):
     """Return a four-DOF line correction and its linearized worst error.
 
     Translation variables are millimetres, rotation variables are 0.02 rad.
-    The small convex problem has an analytic constraint Jacobian. Compatible
-    least-squares fits take the fast path without invoking the optimizer.
+    The small convex problem has an analytic constraint Jacobian.
+    Exact least-squares fits take the fast path. Optimization choice never
+    depends on a reporting threshold or on the allowed insertion clearance.
     """
     scale = np.diag([1.0, 1.0, 20.0, 20.0])
     matrix = np.asarray(jacobian) @ scale
@@ -23,7 +24,9 @@ def minimax_correction(jacobian, error, allowance):
         return float(np.max(np.linalg.norm(residual(value), axis=1)))
 
     best, method = initial, 'least_squares'
-    if worst(initial) > allowance * 1000.0 + 1e-8:
+    if strategy not in ('minimax', 'least_squares'):
+        raise ValueError('Unknown bore fit strategy')
+    if strategy == 'minimax' and worst(initial) > 1e-8:
         from scipy.optimize import minimize
 
         blocks = matrix.reshape(-1, 2, 4)

@@ -4542,6 +4542,8 @@ class UR5eAssemblyAtomicSkillAdapter:
                 position_slip=float(sample['position_slip']),
                 contact_threshold=float(attach_spec.get('contact_force_threshold', 0.1)),
                 allow_contact_recovery=recovering,
+                preload_requested=compound.get('preload_requested', False),
+                preload_required=compound.get('preload_required', False),
             )
         except (ValueError, TypeError, KeyError) as exc:
             return {'failure': 'loaded_force_control_invalid', 'error': str(exc)}
@@ -4567,6 +4569,8 @@ class UR5eAssemblyAtomicSkillAdapter:
             control.update(failure=compound['failure'], motion_ready=False, motion_scale=0.0)
         elif not compound['ready']:
             control.update(motion_ready=False, motion_scale=0.0, compound_contact_recovery=True)
+        elif not compound.get('precision_ready', True):
+            control.update(motion_ready=False, motion_scale=0.0, compound_precision_recovery=True)
         control['additional_contacts'] = compound['bodies']
         if not control['failure']:
             saved['gripper_openness'] = control['command_openness']

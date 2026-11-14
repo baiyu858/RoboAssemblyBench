@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -442,9 +443,46 @@ def _build_env(
     return Env(config)
 
 
-def _warm_up_runtime_cameras(env, *, steps: int = RUNTIME_CAMERA_WARMUP_RENDER_STEPS):
+def _warm_up_runtime_cameras(env, *, steps: int = RUNTIME_CAMERA_WARMUP_RENDER_STEPS, require_rgbd=False):
     """Converge newly composed RTX camera history without advancing physics."""
     env.warm_up(steps=max(int(steps), 1), render=True, physics=False)
+    if require_rgbd:
+        from roboassemblybench.datasets.cartesian_episode import (
+            CartesianObservationEncoder,
+        )
+
+        tasks = list(env.runner.current_tasks.values())
+        if not tasks:
+            raise RuntimeError('No active task while waiting for RGB-D cameras')
+        task = tasks[0]
+        bindings = CartesianObservationEncoder.resolve_camera_bindings(task)
+        deadline = time.monotonic() + 180.0
+        missing = list(bindings)
+        for attempt in range(240):
+            missing = []
+            for key, (owner, sensor_name) in bindings.items():
+                sensor = task.robots[owner].sensors[sensor_name]
+                prepare = getattr(sensor, 'prepare_render_frame', None)
+                if prepare is not None:
+                    prepare((id(env.runner), env.runner._render_frame_serial), rendered=True)
+                # Read sensors directly: polling task.get_observations() here
+                # could advance phase bookkeeping without a physics tick.
+                sensor_obs = sensor.get_data()
+                obs = {owner: {'sensors': {sensor_name: sensor_obs}}}
+                rgb = CartesianObservationEncoder.rgb_frame(obs, (owner, sensor_name))
+                depth = CartesianObservationEncoder.depth_frame(obs, (owner, sensor_name))
+                if rgb is None or depth is None or not rgb.size or not depth.size:
+                    missing.append(key)
+            if not missing:
+                print(f'[camera-ready] rgbd=3 render_poll={attempt}', flush=True)
+                break
+            if time.monotonic() >= deadline:
+                break
+            if attempt % 20 == 0:
+                print(f'[camera-warmup] waiting_for={missing} render_poll={attempt}', flush=True)
+            env.warm_up(steps=4, render=True, physics=False)
+        if missing:
+            raise RuntimeError(f'RGB-D cameras did not become ready before physics started: {missing}')
     return env.get_observations()
 
 
@@ -512,7 +550,7 @@ def _run_task_sequence(  # noqa: C901
     policy = DualFrankaAssemblyDemoPolicy()
     obs_list, task_cfgs = env.reset()
     if requires_runtime_rendering and task_cfgs and task_cfgs[0] is not None:
-        obs_list = _warm_up_runtime_cameras(env)
+        obs_list = _warm_up_runtime_cameras(env, require_rgbd=record_lerobot_raw and not record_trajectory_only)
     results = []
     if results_output_path is not None:
         _write_json(results_output_path, results)
@@ -608,7 +646,14 @@ def _run_task_sequence(  # noqa: C901
                     encoder_backend=live_video_encoder,
                 )
             if record_lerobot_raw and dataset_recorder is None:
-                dataset_recorder = CompactCartesianEpisodeRecorder(
+                recorder_class = CompactCartesianEpisodeRecorder
+                if os.environ.get('ROBOASSEMBLYBENCH_DATASET_FORMAT') == 'lerobot-v3':
+                    from roboassemblybench.datasets.lerobot_v3 import (
+                        DirectLeRobotEpisodeRecorder,
+                    )
+
+                    recorder_class = DirectLeRobotEpisodeRecorder
+                dataset_recorder = recorder_class(
                     output_dir=output_dir or Path.cwd(),
                     episode_idx=episode_idx,
                     task=task,
@@ -717,9 +762,6 @@ def _run_task_sequence(  # noqa: C901
                     metrics['runtime_robochecker'] = runtime_checker.finalize()
                 constraint_hook.attach_metrics(metrics)
                 precheck_hook.attach_metrics(metrics)
-                results.append(metrics)
-                if results_output_path is not None:
-                    _write_json(results_output_path, results)
                 recorded_videos = {}
                 recorded_video_summaries = {}
                 recorded_video_mode = None
@@ -736,7 +778,23 @@ def _run_task_sequence(  # noqa: C901
                     recorded_frame_summaries = live_video_output.get('frame_summaries', {})
                     recorded_frame_mode = live_video_output.get('frame_mode')
                 if dataset_recorder is not None:
-                    recorded_dataset = dataset_recorder.finalize(task=task, metrics=metrics)
+                    try:
+                        recorded_dataset = dataset_recorder.finalize(task=task, metrics=metrics)
+                    except Exception as error:
+                        metrics.update(
+                            success=False,
+                            status='failed',
+                            terminal_reason='dataset-write-failed',
+                            dataset_write_error=f'{type(error).__name__}: {error}',
+                        )
+                        results.append(metrics)
+                        if results_output_path is not None:
+                            _write_json(results_output_path, results)
+                        dataset_recorder = None
+                        raise
+                results.append(metrics)
+                if results_output_path is not None:
+                    _write_json(results_output_path, results)
                 if recorder is not None:
                     recorder.save(
                         task=task,
@@ -758,7 +816,9 @@ def _run_task_sequence(  # noqa: C901
                 precheck_hook.reset_episode()
                 obs_list, task_cfgs = env.reset([0])
                 if requires_runtime_rendering and task_cfgs and task_cfgs[0] is not None:
-                    obs_list = _warm_up_runtime_cameras(env)
+                    obs_list = _warm_up_runtime_cameras(
+                        env, require_rgbd=record_lerobot_raw and not record_trajectory_only
+                    )
                 if not task_cfgs or task_cfgs[0] is None:
                     break
         if not results:
@@ -1547,6 +1607,22 @@ def main():
     parser.add_argument('--keep-video-frames', action='store_true')
     parser.add_argument('--record-lerobot-raw', action='store_true')
     parser.add_argument(
+        '--record-lerobot-v3',
+        action='store_true',
+        help='Write synchronized RGB-D and robot data directly to v3 in a background process.',
+    )
+    parser.add_argument(
+        '--lerobot-writer-python',
+        default=None,
+        help='Python executable of an isolated lerobot==0.4.4 data environment.',
+    )
+    parser.add_argument('--lerobot-queue-size', type=int, default=2)
+    parser.add_argument(
+        '--lerobot-keep-failed',
+        action='store_true',
+        help='Keep failed/interrupted v3 episodes for diagnostics only; never enable for production data.',
+    )
+    parser.add_argument(
         '--record-trajectory-only',
         action='store_true',
         help='Record synchronized replay state without runtime cameras or RGB-D media.',
@@ -1611,6 +1687,18 @@ def main():
     )
     parser.add_argument('--headless', action='store_true')
     args = parser.parse_args()
+    if args.record_lerobot_v3:
+        if args.record_trajectory_only or args.worker_mode == 'replay':
+            parser.error('--record-lerobot-v3 requires live RGB-D collection, not trajectory-only or replay.')
+        args.record_lerobot_raw = True
+        os.environ['ROBOASSEMBLYBENCH_DATASET_FORMAT'] = 'lerobot-v3'
+    if args.lerobot_writer_python:
+        os.environ['ROBOASSEMBLYBENCH_LEROBOT_PYTHON'] = str(Path(args.lerobot_writer_python).expanduser().resolve())
+    if args.lerobot_queue_size <= 0:
+        parser.error('--lerobot-queue-size must be positive')
+    os.environ['ROBOASSEMBLYBENCH_LEROBOT_QUEUE_SIZE'] = str(args.lerobot_queue_size)
+    if args.lerobot_keep_failed:
+        os.environ['ROBOASSEMBLYBENCH_LEROBOT_KEEP_FAILED'] = '1'
 
     headless = args.headless or not has_display()
     output_root = Path(args.output_dir).resolve()

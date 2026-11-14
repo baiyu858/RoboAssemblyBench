@@ -30,10 +30,16 @@ def unloading_grip_ready(controls, grasps):
             or not ctrl.get('probe_valid')
             or forces.shape != (2,)
             or not np.all(np.isfinite(forces))
-            or np.min(forces) < ctrl.get('low_force', 6.0)
+            or np.min(forces) < ctrl.get('unload_contact_force', ctrl.get('low_force', 6.0))
             or ctrl.get('strong_force', np.max(forces)) >= ctrl.get('unload_force', 18.0)
         ):
             return False
+        # A supported body must retain its own real bilateral contact. A
+        # precision pause is recoverable; lost contact or a hard body-motion
+        # failure is not permission to unload.
+        for body in ctrl.get('additional_contacts', {}).values():
+            if not body.get('valid') or not body.get('contact_ready'):
+                return False
     return True
 
 

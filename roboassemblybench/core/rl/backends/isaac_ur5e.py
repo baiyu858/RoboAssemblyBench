@@ -192,7 +192,17 @@ class IsaacUR5eBridge:
                     task=t, robot_name=robot, saved=saved, attachment=attachment
                 )
         force_config = attachment['attach_spec'].get('hold_force_control', {})
-        control = dict(control, low_force=force_config.get('low', 6.0), unload_force=force_config.get('unload', 18.0))
+        control = dict(
+            control,
+            low_force=force_config.get('low', 6.0),
+            unload_force=force_config.get('unload', 18.0),
+            # Decreasing the contact load needs less clamp force than feeding
+            # into it. Hard grasp/contact guards still execute first.
+            unload_contact_force=max(
+                float(attachment['attach_spec'].get('contact_force_threshold', 0.1)),
+                force_config.get('unload_contact_force', force_config.get('low', 6.0)),
+            ),
+        )
         hold = attachment.get('last_hold_validation') or {}
         grasp = dict(
             valid=bool(hold.get('valid')),

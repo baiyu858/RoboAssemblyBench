@@ -1,0 +1,293 @@
+{
+  "schema_version": "roboassemblybench_plumbers_layouts_v1",
+  "coordinate_convention": {
+    "scene_origin_units": "m",
+    "world_units": "m",
+    "scene_to_world_translation_m": [
+      0.0,
+      0.0,
+      0.99
+    ],
+    "quaternion_order": "wxyz",
+    "pickup_origin_definition": "CAD placement transform, not the fixture USD prim origin or mesh centre",
+    "assembly_origin_definition": "part_2_assembled base target origin"
+  },
+  "preview": "../../../docs/assets/plumbers_block/layouts_comparison.png",
+  "notes": [
+    "Identifiers bind explicit fixed geometry, not seed numbers alone.",
+    "Historical layout_000 was successful before subsequent support/readout changes; the new fixed selector has placement equivalence checks, not another full latest-code rollout.",
+    "Old seed-4906 position-randomized previews have different geometry and are not layout_000."
+  ],
+  "layouts": {
+    "layout_000": {
+      "recipe": "fabrica_plumbers_block_ur5e_staged@layout_000",
+      "seed": 4906,
+      "layout_seed": 4906,
+      "scene_profile": "taoyuan_grscenes_tabletop",
+      "pickup_origin_scene_m": [
+        0.35,
+        -0.48,
+        0.0125
+      ],
+      "assembly_origin_scene_m": [
+        0.7,
+        -0.18,
+        0.0125
+      ],
+      "pickup_yaw_degrees": 45.0,
+      "assembly_origin_world_m": [
+        0.7,
+        -0.18,
+        1.0025
+      ],
+      "fixture_prim_origin_world_m": [
+        0.49142135623730954,
+        -0.4214213562373095,
+        1.0025
+      ],
+      "fixture_orientation_wxyz": [
+        0.9238795325112867,
+        0.0,
+        0.0,
+        0.3826834323650898
+      ],
+      "initial_parts_world": {
+        "fabrica_plumbers_block_0": {
+          "position": [
+            0.43906439163322886,
+            -0.32663789990922215,
+            1.0046286057452174
+          ],
+          "orientation_wxyz": [
+            -0.3689698212882145,
+            -0.1015277320995075,
+            0.24510962779161322,
+            0.8907719466603844
+          ]
+        },
+        "fabrica_plumbers_block_1": {
+          "position": [
+            0.2735284180757709,
+            -0.2565954609824747,
+            0.9682780577539771
+          ],
+          "orientation_wxyz": [
+            0.382893820016006,
+            -0.05924966100608684,
+            0.024466932538573252,
+            0.9215656077981464
+          ]
+        },
+        "fabrica_plumbers_block_2": {
+          "position": [
+            0.3515728049923836,
+            -0.32771471858745677,
+            1.0755490296267955
+          ],
+          "orientation_wxyz": [
+            0.8069527108300739,
+            0.18634119469023297,
+            0.44986743944996577,
+            -0.3342507570195513
+          ]
+        },
+        "fabrica_plumbers_block_3": {
+          "position": [
+            0.31105828671788094,
+            -0.19876716351606455,
+            0.9840184342163024
+          ],
+          "orientation_wxyz": [
+            0.3641671221181489,
+            0.28390285745491395,
+            -0.1175964139543009,
+            0.8791772051880149
+          ]
+        },
+        "fabrica_plumbers_block_4": {
+          "position": [
+            0.2933376397395425,
+            -0.2766495335650017,
+            0.9785133676932853
+          ],
+          "orientation_wxyz": [
+            0.3828938200160059,
+            -0.05924966100608674,
+            0.024466932538573214,
+            0.9215656077981466
+          ]
+        }
+      },
+      "position_randomization_ranges_m": {
+        "x": [
+          0.0,
+          0.0
+        ],
+        "y": [
+          0.0,
+          0.0
+        ],
+        "z": [
+          0.0,
+          0.0
+        ]
+      },
+      "validation": {
+        "scope": "single successful full rollout from normal initialization",
+        "historical_recipe": "fabrica_plumbers_block_ur5e_staged@rl",
+        "historical_domain_randomization_enabled": false,
+        "run_directory": "outputs/plumbers_limited_release_full_20261110_142548",
+        "success": true,
+        "steps": 64130,
+        "phase_count": 105,
+        "wall_seconds": 3630.691780368099,
+        "final_unloaded_settle": {
+          "phase": "assemble_03_part_4_unloaded_settle",
+          "step": 64129,
+          "stable_steps": 30,
+          "required_stable_steps": 30,
+          "reason": null,
+          "mode": "unloaded_velocity_and_pose"
+        },
+        "source_provenance_file": "outputs/plumbers_limited_release_full_20261110_142548/source_provenance.json",
+        "latest_code_full_rollout": false,
+        "historical_spec_path": "/home/baiyu24/model/InternUtopia/roboassemblybench/tasks/fabrica_plumbers_block_ur5e_staged/recipe.yaml@rl"
+      }
+    },
+    "layout_001": {
+      "recipe": "fabrica_plumbers_block_ur5e_staged@layout_001",
+      "seed": 20261117,
+      "layout_seed": 20261117,
+      "scene_profile": "taoyuan_grscenes_tabletop",
+      "pickup_origin_scene_m": [
+        0.289,
+        -0.342,
+        0.0125
+      ],
+      "assembly_origin_scene_m": [
+        0.68,
+        -0.23,
+        0.0125
+      ],
+      "pickup_yaw_degrees": 45.0,
+      "assembly_origin_world_m": [
+        0.68,
+        -0.23,
+        1.0025
+      ],
+      "fixture_prim_origin_world_m": [
+        0.4304213562373095,
+        -0.2834213562373095,
+        1.0025
+      ],
+      "fixture_orientation_wxyz": [
+        0.9238795325112867,
+        0.0,
+        0.0,
+        0.3826834323650898
+      ],
+      "initial_parts_world": {
+        "fabrica_plumbers_block_0": {
+          "position": [
+            0.3780643916332288,
+            -0.1886378999092222,
+            1.0046286057452174
+          ],
+          "orientation_wxyz": [
+            -0.3689698212882145,
+            -0.1015277320995075,
+            0.24510962779161322,
+            0.8907719466603844
+          ]
+        },
+        "fabrica_plumbers_block_1": {
+          "position": [
+            0.2125284180757708,
+            -0.11859546098247475,
+            0.9682780577539771
+          ],
+          "orientation_wxyz": [
+            0.382893820016006,
+            -0.05924966100608684,
+            0.024466932538573252,
+            0.9215656077981464
+          ]
+        },
+        "fabrica_plumbers_block_2": {
+          "position": [
+            0.2905728049923835,
+            -0.1897147185874568,
+            1.0755490296267955
+          ],
+          "orientation_wxyz": [
+            0.8069527108300739,
+            0.18634119469023297,
+            0.44986743944996577,
+            -0.3342507570195513
+          ]
+        },
+        "fabrica_plumbers_block_3": {
+          "position": [
+            0.2500582867178809,
+            -0.06076716351606459,
+            0.9840184342163024
+          ],
+          "orientation_wxyz": [
+            0.3641671221181489,
+            0.28390285745491395,
+            -0.1175964139543009,
+            0.8791772051880149
+          ]
+        },
+        "fabrica_plumbers_block_4": {
+          "position": [
+            0.23233763973954247,
+            -0.13864953356500176,
+            0.9785133676932853
+          ],
+          "orientation_wxyz": [
+            0.3828938200160059,
+            -0.05924966100608674,
+            0.024466932538573214,
+            0.9215656077981466
+          ]
+        }
+      },
+      "position_randomization_ranges_m": {
+        "x": [
+          0.0,
+          0.0
+        ],
+        "y": [
+          0.0,
+          0.0
+        ],
+        "z": [
+          0.0,
+          0.0
+        ]
+      },
+      "validation": {
+        "scope": "single successful full rollout from normal initialization",
+        "historical_recipe": "fabrica_plumbers_block_ur5e_staged@rl_marked_layout",
+        "historical_domain_randomization_enabled": true,
+        "run_directory": "outputs/plumbers_readonly_full_20261114_211956",
+        "success": true,
+        "steps": 64279,
+        "phase_count": 105,
+        "wall_seconds": 3970.800465887063,
+        "final_unloaded_settle": {
+          "phase": "assemble_03_part_4_unloaded_settle",
+          "step": 64278,
+          "stable_steps": 30,
+          "required_stable_steps": 30,
+          "reason": null,
+          "mode": "unloaded_velocity_and_pose"
+        },
+        "source_provenance_file": "outputs/plumbers_readonly_full_20261114_211956/source_provenance.json",
+        "latest_code_full_rollout": true,
+        "historical_spec_path": "/home/baiyu24/model/InternUtopia/roboassemblybench/tasks/fabrica_plumbers_block_ur5e_staged/recipe.yaml@rl_marked_layout"
+      }
+    }
+  }
+}

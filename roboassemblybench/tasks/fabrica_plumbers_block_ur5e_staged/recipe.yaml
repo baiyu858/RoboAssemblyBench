@@ -203,6 +203,9 @@ profiles:
         # At incipient slip, recover the existing weak-side target inside
         # its low/target hysteresis band; retain all ceilings and pose guards.
         slip_preload: true
+        # Only bounded unloading uses this lower contact floor; feed still
+        # requires the existing carrying/recovery force band.
+        unload_contact_force: 1.0
       # White part only: reduce the carrying recovery band, not the initial
       # 4 N closure gate or the base/pin support force settings.
       physical_move_hold_force_control:
@@ -222,6 +225,27 @@ profiles:
           retreat_speed_m_s: 0.03
       physical_junction_support:
         enabled: true
+        precision_hold:
+          # The two CAD frames must agree along both pin bores. Keep the
+          # original contact-capture reference as well, to catch slow creep.
+          reference_points_m:
+            - [-0.04, 0.0012658, 0.035]
+            - [-0.04, 0.0012658, 0.065]
+            - [-0.04, 0.0012658, 0.080]
+            - [0.04, 0.0012658, 0.035]
+            - [0.04, 0.0012658, 0.065]
+            - [0.04, 0.0012658, 0.080]
+          preload_drift_m: 0.000075
+          drift_limit_m: 0.00025
+          alignment_limit_m: 0.00035
+          minimum_force_N: 4.0
+          # This is the green body alone, not the cap + base jaw-force sum.
+          # Above the 4 N minimum and within the pose limits, this target
+          # requests preventive closure without pausing qualified motion.
+          # The 16 N total soft ceiling still wins over this target.
+          target_force_N: 7.0
+          stable_steps: 24
+          recovery_timeout_steps: 480
         # Left remains parked; the right hand directly regrips the seam.
         temporary_left_support: false
         # White-part drift from the fixed handover-start pose; base/cap keep
@@ -330,8 +354,10 @@ profiles:
           axis_alignment:
             shaft_origin_m: [-0.04, 0.0012658, 0.035]
             shaft_axis: [0.0, 0.0, 1.0]
-            radial_clearance_m: 0.00025
-            margin_m: 0.00002  # Keep 20 um inside the nominal 250 um radial clearance.
+            radial_clearance_m: 0.00025  # Actual mesh: 5.00 mm bore minus 4.75 mm shaft.
+            margin_m: 0.00002  # Feed only inside 0.230 mm; report threshold is independent.
+            alarm_tolerance_m: 0.0005
+            fit_strategy: minimax
             linear_speed: 0.002
             angular_speed: 0.04
             keep_grip_direction: true
@@ -373,8 +399,10 @@ profiles:
           axis_alignment:
             shaft_origin_m: [0.04, 0.0012658, 0.035]
             shaft_axis: [0.0, 0.0, 1.0]
-            radial_clearance_m: 0.00025
-            margin_m: 0.00002  # Keep 20 um inside the nominal 250 um radial clearance.
+            radial_clearance_m: 0.00025  # Actual mesh clearance, independent of alarm tolerance.
+            margin_m: 0.00002
+            alarm_tolerance_m: 0.0005
+            fit_strategy: minimax
             linear_speed: 0.002
             angular_speed: 0.04
             keep_grip_direction: true
@@ -429,3 +457,62 @@ profiles:
             free_space_joint_lookahead: 0.06
     metadata:
       precision_policy_status: pilot_not_release_validated
+  rl_marked_layout:
+    extends_profile: rl
+    task_name: fabrica_plumbers_block_ur5e_staged_rl_marked_layout
+    # Fixed placement from the marked top-view preview. Translate the entire
+    # fixture/part group and every pickup target together; preserve all rotations.
+    fabrica_canonical:
+      # Source origins make this preset work with geometric randomization both
+      # enabled and disabled. The board and robot bases keep their source poses.
+      pickup_origin: [0.289, -0.342, 0.0125]
+      assembly_origin: [0.680, -0.230, 0.0125]
+      pickup_translation_range:
+        x: [0.0, 0.0]
+        y: [0.0, 0.0]
+        z: [0.0, 0.0]
+      pickup_translation_minimum_planar_distance: 0.0
+      assembly_translation_range:
+        x: [0.0, 0.0]
+        y: [0.0, 0.0]
+        z: [0.0, 0.0]
+      assembly_translation_minimum_planar_distance: 0.0
+    domain_randomization:
+      enabled: true
+    collection:
+      layout_seeds: [20261117]
+    metadata:
+      layout_preset: marked_upper_left_pickup_lower_right_assembly
+      layout_id: layout_001
+      layout_validation: full_assembly_passed_single_seed
+      layout_validation_run: plumbers_readonly_full_20261114_211956
+  layout_000:
+    extends_profile: rl
+    task_name: fabrica_plumbers_block_ur5e_staged_layout_000
+    # Match the successful historical rollout's actual geometry, not the
+    # separately randomized seed-4906 preview. Freeze both placement groups.
+    fabrica_canonical:
+      pickup_origin: [0.350, -0.480, 0.0125]
+      assembly_origin: [0.700, -0.180, 0.0125]
+      pickup_translation_range:
+        x: [0.0, 0.0]
+        y: [0.0, 0.0]
+        z: [0.0, 0.0]
+      pickup_translation_minimum_planar_distance: 0.0
+      assembly_translation_range:
+        x: [0.0, 0.0]
+        y: [0.0, 0.0]
+        z: [0.0, 0.0]
+      assembly_translation_minimum_planar_distance: 0.0
+    domain_randomization:
+      enabled: false
+    collection:
+      layout_seeds: [4906]
+    metadata:
+      layout_id: layout_000
+      layout_preset: original_fixed_pickup_and_assembly
+      layout_validation: historical_full_assembly_passed_single_seed
+      layout_validation_run: plumbers_limited_release_full_20261110_142548
+  layout_001:
+    extends_profile: rl_marked_layout
+    task_name: fabrica_plumbers_block_ur5e_staged_layout_001
